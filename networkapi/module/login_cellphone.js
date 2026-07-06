@@ -1,4 +1,4 @@
-// 手机登录
+// 手机验证码登录
 const { cryptoAesDecrypt, cryptoAesEncrypt, cryptoRSAEncrypt, signParamsKey, isLite, randomString } = require('../util');
 
 let liteT2Key = 'fd14b35e3f81af3817a20ae7adae7020';
@@ -40,7 +40,7 @@ module.exports = (params, useAxios) => {
 
   return new Promise((resolve, reject) => {
     useAxios({
-      baseURL: 'http://115.29.236.96:5621',
+      baseURL: 'https://loginserviceretry.kugou.com',
       url: `/v7/login_by_verifycode`,
       method: 'POST',
       data: dataMap,

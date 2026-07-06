@@ -615,15 +615,22 @@ class KugouProvider extends ChangeNotifier {
   Future<void> generateQrCode() async {
     try {
       final qrKey = await _apiClient.getLoginQrKey();
-      if (qrKey == null || qrKey.qrcode == null) return;
+      if (qrKey == null || qrKey.qrcode == null) {
+        print('[LOGIN] getLoginQrKey returned null');
+        return;
+      }
       _qrKey = qrKey;
       notifyListeners();
       final qrData = await _apiClient.createLoginQr(qrKey.qrcode!);
       if (qrData != null) {
         _qrData = qrData;
         notifyListeners();
+      } else {
+        print('[LOGIN] createLoginQr returned null');
       }
-    } catch (_) {}
+    } catch (e) {
+      print('[LOGIN] generateQrCode error: $e');
+    }
   }
 
   Future<int?> checkQrCode() async {

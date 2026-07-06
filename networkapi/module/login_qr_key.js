@@ -1,10 +1,9 @@
 const { srcappid, appid } = require('../util');
 
-// 二维�?key 生成接口
 module.exports = (params, useAxios) => {
   return useAxios({
-    baseURL: 'http://115.29.236.96:5621',
-    url: '/login/qr/key',
+    baseURL: 'https://login-user.kugou.com',
+    url: '/v2/qrcode',
     method: 'GET',
     params: {
       appid: params?.type === 'web' ? 1014 : 1001,

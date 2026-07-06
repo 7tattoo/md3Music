@@ -44,6 +44,11 @@ class MainActivity : FlutterActivity() {
         // 将 FlutterEngine 传递给 AudioPlaybackService
         AudioPlaybackService.setFlutterEngine(flutterEngine)
 
+        // 初始化 Node.js 本地 API 服务器
+        android.util.Log.d("MainActivity", "Initializing NodeJsService...")
+        NodeJsService(this, flutterEngine)
+        android.util.Log.d("MainActivity", "NodeJsService initialized")
+
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FLOATING_CHANNEL)
         channel.setMethodCallHandler { call, result ->
             when (call.method) {

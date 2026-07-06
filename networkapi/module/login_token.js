@@ -3,10 +3,8 @@ const { cryptoAesDecrypt, cryptoAesEncrypt, cryptoRSAEncrypt, isLite } = require
 
 const key = '90b8382a1bb4ccdcf063102053fd75b8';
 const iv = 'f063102053fd75b8';
-
 const liteKey = 'c24f74ca2820225badc01946dba4fdf7';
 const liteIv = 'adc01946dba4fdf7';
-
 let liteT2Key = 'fd14b35e3f81af3817a20ae7adae7020';
 let liteT2Iv = '17a20ae7adae7020';
 let liteT1Key = '5e4ef500e9597fe004bd09a46d8add98';
@@ -38,16 +36,12 @@ module.exports = (params, useAxios) => {
     userid,
     clienttime_ms: dateNow,
   };
-
-  if (isLite) {
-    dataMap['dev'] = params.cookie?.KUGOU_API_DEV;
-  }
-  
+  if (isLite) dataMap['dev'] = params.cookie?.KUGOU_API_DEV;
 
   return new Promise((resolve, reject) => {
     useAxios({
-      baseURL: 'http://115.29.236.96:5621',
-      url: '/login/token',
+      baseURL: 'http://login.user.kugou.com',
+      url: `/v5/login_by_token`,
       method: 'POST',
       data: dataMap,
       cookie: params?.cookie,
@@ -65,7 +59,6 @@ module.exports = (params, useAxios) => {
               res.body.data['token'] = getToken;
             }
           }
-          
           res.cookie.push(`t1=${res.body.data['t1']}`);
           res.cookie.push(`token=${res.body.data['token']}`);
           res.cookie.push(`userid=${res.body.data?.userid || 0}`);

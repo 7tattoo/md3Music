@@ -18,10 +18,8 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# VS Code
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -29,41 +27,35 @@ migrate_working_dir/
 .dart_tool/
 .flutter-plugins-dependencies
 .pub-cache/
-.pub/
+/pub/
 /build/
 /coverage/
 
-# Node.js
+# Android
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+/android/.kotlin/errors/
+
+# Node.js SDK (nodejs-mobile) - third-party dependencies
+/android/app/src/main/cpp/include/
+/android/app/src/main/jniLibs/
 node_modules/
 kugou_api_server/node_modules/
+kugou_api_server/server.log
 
-# Symbolication related
-app.*.symbols
+# Temporary files
+_tmp*/
+*.tmp
+*.bak
+*.old
+native-libs.zip
 
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-_tmp2.json
-
-# IDE/AI tool configs
-.mimicode/
+# IDE/AI tool configs (local only)
+.mimocode/
 .trae/
 .workbuddy/
-.vscode/
 
-# Dev/test scripts (not for production)
-Run/
-start.bat
-stop.bat
-test_api.html
-package.json
-package-lock.json
-Run
-CHANGELOG.md
-DATA_ISOLATION_FIX.md
-.gitignore
-FIX_SUMMARY.md
+# OS files
+Thumbs.db
+.DS_Store

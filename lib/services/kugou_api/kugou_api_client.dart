@@ -35,12 +35,27 @@ class KugouApiClient {
   bool _isInitialized = false;
   Completer<void>? _initCompleter;
 
+  static const _loginPaths = {
+    '/login/qr/key', '/login/qr/create', '/login/qr/check',
+    '/login/cellphone', '/login/token', '/login',
+    '/login/wx/create', '/login/wx/check',
+    '/login/openplat', '/login/device', '/login/device/kick',
+    '/captcha/sent',
+  };
+
   void _onRequest(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
     if (!_isInitialized) {
       await _initCompleter?.future;
+    }
+
+    // 登录相关接口直接走云服务器，避免 local→cloud 双重签名
+    if (_loginPaths.contains(options.path)) {
+      options.baseUrl = 'http://115.29.236.96:5621';
+    } else {
+      options.baseUrl = KugouEndpoints.baseUrl;
     }
     
     // 关键修复：每次请求前验证用户身份
@@ -86,10 +101,13 @@ class KugouApiClient {
           return response.data as Map<String, dynamic>;
         }
       }
+      print('[API _get] Non-200 or non-map: status=${response.statusCode} data=${response.data}');
       return null;
-    } on DioException catch (_) {
+    } on DioException catch (e) {
+      print('[API _get] DioException: ${e.type} ${e.message} response=${e.response?.statusCode} ${e.response?.data}');
       return null;
-    } catch (_) {
+    } catch (e) {
+      print('[API _get] Error: $e');
       return null;
     }
   }

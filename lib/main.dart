@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'dart:io' show Platform;
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'core/services/desktop_lyric_service.dart';
 import 'core/services/media_notification_service.dart';
+import 'services/nodejs_server.dart';
 
 const String _kBatteryPromptShownKey = 'battery_prompt_shown';
 
@@ -21,7 +23,12 @@ Future<void> main() async {
   DesktopLyricService.instance.registerNativeCallbacks();
   await _requestPermissions();
   runApp(const MyApp());
-  // 自动续播已禁用：用户重启 app 不再自动继续播放。
+  // 启动本地 Node.js API 服务器
+  if (!kIsWeb && Platform.isAndroid) {
+    Future.delayed(const Duration(seconds: 2), () {
+      NodeJsServer.start();
+    });
+  }
 }
 
 Future<void> _requestPermissions() async {

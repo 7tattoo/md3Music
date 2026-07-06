@@ -7,8 +7,8 @@ module.exports = (params, useAxios) => {
   };
 
   return useAxios({
-    baseURL: 'http://115.29.236.96:5621',
-    url: '/captcha/sent',
+    baseURL: 'http://login.user.kugou.com',
+    url: '/v7/send_mobile_code',
     method: 'POST',
     data: dataMap,
     encryptType: 'android',

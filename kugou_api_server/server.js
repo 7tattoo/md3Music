@@ -68,7 +68,7 @@ async function registerDeviceAndGetDfid() {
   try {
     const axios = require('axios');
     
-    const response = await axios.get('http://127.0.0.1:3000/register/dev', {
+    const response = await axios.get('http://127.0.0.1:8080/register/dev', {
       timeout: 10000,
       headers: {
         'User-Agent': 'Android15-1070-11083-46-0-DiscoveryDRADProtocol-wifi'
@@ -213,6 +213,10 @@ if (fs.existsSync(envPath)) {
  * );
  */
 async function getModulesDefinitions(modulesPath, specificRoute, doRequire = true) {
+  if (!fs.existsSync(modulesPath)) {
+    console.log(`[BUNDLED] Module directory not found: ${modulesPath}, using bundled routes`);
+    return [];
+  }
   const files = await fs.promises.readdir(modulesPath);
 
   /**
@@ -429,7 +433,7 @@ async function consturctServer(moduleDefs) {
    * 如果未传入模块定义数组，则自动扫描 module/ 目录加载所有模块。
    * 遍历每个模块定义，为其注册 Express 路由处理器。
    */
-  const moduleDefinitions = moduleDefs || (await getModulesDefinitions(path.join(__dirname, 'module'), {}));
+  const moduleDefinitions = moduleDefs || global.__BUNDLED_MODULE_DEFS__ || (await getModulesDefinitions(path.join(__dirname, 'module'), {}));
 
   for (const moduleDef of moduleDefinitions) {
     app.use(moduleDef.route, async (req, res) => {
