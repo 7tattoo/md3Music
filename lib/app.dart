@@ -12,6 +12,7 @@ import 'main.dart' show appNavigatorKey;
 import 'modules/charts/charts_page.dart';
 import 'modules/discover/discover_page.dart';
 import 'modules/user/user_center_page.dart';
+import 'modules/user/favorites_page.dart';
 
 import 'modules/player/full_player.dart';
 import 'modules/player/mini_player.dart';
@@ -98,6 +99,7 @@ class _MainLayoutState extends State<_MainLayout> {
   final List<Widget> _pages = const [
     DiscoverPage(),
     ChartsPage(),
+    FavoritesPage(),
     PersonalFmPage(),
     UserCenterPage(),
   ];
@@ -148,6 +150,11 @@ class _MainLayoutState extends State<_MainLayout> {
       label: '排行',
     ),
     NavigationDestination(
+      icon: Icon(Icons.favorite_outline),
+      selectedIcon: Icon(Icons.favorite),
+      label: '我收藏',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.radio_outlined),
       selectedIcon: Icon(Icons.radio),
       label: '私人FM',
@@ -171,6 +178,11 @@ class _MainLayoutState extends State<_MainLayout> {
       label: Text('排行'),
     ),
     NavigationRailDestination(
+      icon: Icon(Icons.favorite_outline),
+      selectedIcon: Icon(Icons.favorite),
+      label: Text('我收藏'),
+    ),
+    NavigationRailDestination(
       icon: Icon(Icons.radio_outlined),
       selectedIcon: Icon(Icons.radio),
       label: Text('私人FM'),
@@ -192,6 +204,11 @@ class _MainLayoutState extends State<_MainLayout> {
       icon: Icon(Icons.trending_up_outlined),
       selectedIcon: Icon(Icons.trending_up),
       label: Text('排行'),
+    ),
+    NavigationDrawerDestination(
+      icon: Icon(Icons.favorite_outline),
+      selectedIcon: Icon(Icons.favorite),
+      label: Text('我收藏'),
     ),
     NavigationDrawerDestination(
       icon: Icon(Icons.radio_outlined),

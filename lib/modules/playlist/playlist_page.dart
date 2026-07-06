@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models/playlist.dart';
 import '../../data/models/song.dart';
+import '../../data/repositories/collected_playlist_store.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
@@ -35,9 +36,71 @@ class _PlaylistPageState extends State<PlaylistPage> {
     });
   }
 
+  // ==================== 收藏本地缓存（解决后端 user/playlist 列表 ~1-2 分钟缓存才同步的问题）====================
+
+  /// 尽量多路径地从 playlist/add 响应里解析出新建歌单的 listid
+  String? _parseListId(Map<String, dynamic>? result) {
+    if (result == null) return null;
+    final data = result['data'];
+    if (data is Map) {
+      for (final key in const ['listid', 'list_id', 'ListId', 'id']) {
+        final v = data[key];
+        if (v != null && v.toString().isNotEmpty) return v.toString();
+      }
+    }
+    for (final key in const ['listid', 'list_id', 'id']) {
+      final v = result[key];
+      if (v != null && v.toString().isNotEmpty) return v.toString();
+    }
+    return null;
+  }
+
+  /// 兜底：重新拉取用户歌单列表，按 gid/name 匹配出新收藏歌单的 listid
+  Future<String?> _findCollectedListId(KugouApiClient api) async {
+    try {
+      final result = await api.getUserPlaylist(pagesize: 50);
+      if (result == null) return null;
+      final data = result['data'];
+      List<dynamic>? list;
+      if (data is List) {
+        list = data;
+      } else if (data is Map<String, dynamic>) {
+        list = data['info'] as List<dynamic>?;
+        list ??= data['list'] as List<dynamic>?;
+      }
+      if (list == null) return null;
+      for (final item in list) {
+        if (item is Map<String, dynamic>) {
+          final gid = item['global_collection_id']?.toString() ?? '';
+          final name = item['name']?.toString() ?? '';
+          if (gid == widget.playlist.id || name == widget.playlist.name) {
+            return item['listid']?.toString();
+          }
+        }
+      }
+    } catch (e) {
+      // 忽略
+    }
+    return null;
+  }
+
   Future<void> _checkCollected() async {
     final api = KugouApiClient();
     if (!api.isLoggedIn) return;
+
+    // 1) 本地缓存优先：即时显示红心，不再等后端 1~2 分钟的缓存
+    final cached = await CollectedPlaylistStore.getListId(widget.playlist.id);
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _isCollected = true;
+          _collectedListId = cached;
+        });
+      }
+      return;
+    }
+
+    // 2) 本地无记录时回退到服务器查询（覆盖在官方 App / 其他端收藏的外部场景）
     try {
       final result = await api.getUserPlaylist(pagesize: 50);
       if (result == null || !mounted) return;
@@ -55,10 +118,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
           final gid = item['global_collection_id']?.toString() ?? '';
           final name = item['name']?.toString() ?? '';
           if (gid == widget.playlist.id || name == widget.playlist.name) {
+            final listid = item['listid']?.toString();
+            await CollectedPlaylistStore.setListId(widget.playlist.id, listid);
             if (mounted) {
               setState(() {
                 _isCollected = true;
-                _collectedListId = item['listid']?.toString();
+                _collectedListId = listid;
               });
             }
             return;
@@ -66,7 +131,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
         }
       }
     } catch (e) {
-          }
+      // 忽略：以本地判断为准
+    }
   }
 
   Future<void> _collectPlaylist() async {
@@ -89,15 +155,26 @@ class _PlaylistPageState extends State<PlaylistPage> {
           listCreateListid ??= parts[3];
         }
       }
-            final result = await api.createPlaylist(
+      final result = await api.createPlaylist(
         widget.playlist.name,
         type: 1,
         listCreateUserid: listCreateUserid,
         listCreateListid: listCreateListid,
         globalCollectionId: widget.playlist.id,
       );
-      if (result != null && mounted) {
-        final newId = result['data']?['listid']?.toString();
+      if (result == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('收藏失败，请重试'), behavior: SnackBarBehavior.floating),
+          );
+        }
+        return;
+      }
+      // 尽量解析新建歌单的 listid；解析不到再回退到服务器查询
+      String? newId = _parseListId(result);
+      newId ??= await _findCollectedListId(api);
+      await CollectedPlaylistStore.setListId(widget.playlist.id, newId);
+      if (mounted) {
         setState(() {
           _isCollected = true;
           _collectedListId = newId;
@@ -107,16 +184,36 @@ class _PlaylistPageState extends State<PlaylistPage> {
         );
       }
     } catch (e) {
-          }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('收藏失败'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
   }
 
   Future<void> _uncollectPlaylist() async {
     final api = KugouApiClient();
-    if (!api.isLoggedIn || _collectedListId == null) return;
+    if (!api.isLoggedIn) return;
+
+    // 优先取本地缓存 / 页面状态里的 listid，取不到再回查服务器
+    String? listId = await CollectedPlaylistStore.getListId(widget.playlist.id);
+    listId ??= _collectedListId;
+    listId ??= await _findCollectedListId(api);
+    if (listId == null || listId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('找不到收藏记录，无法取消'), behavior: SnackBarBehavior.floating),
+        );
+      }
+      return;
+    }
+
     try {
-      // 收藏的歌单在酷狗侧 list_create_userid 为原作者，删除需传 type:0（取消收藏）
-      final result = await api.deletePlaylist(_collectedListId!, type: 0);
+      // 收藏的歌单用 type=0 取消（与「我的收藏」页删除收藏歌单保持一致）
+      final result = await api.deletePlaylist(listId, type: 0);
       if (result != null && mounted) {
+        await CollectedPlaylistStore.remove(widget.playlist.id);
         setState(() {
           _isCollected = false;
           _collectedListId = null;
@@ -124,9 +221,18 @@ class _PlaylistPageState extends State<PlaylistPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('已取消收藏'), behavior: SnackBarBehavior.floating),
         );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('取消收藏失败，请重试'), behavior: SnackBarBehavior.floating),
+        );
       }
     } catch (e) {
-          }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('取消收藏失败'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
   }
 
   Future<void> _fetchSongs() async {

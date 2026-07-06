@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/song.dart';
+import '../../data/repositories/collected_playlist_store.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/song_list_item.dart';
-import '../player/mini_player.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -159,38 +159,55 @@ class _FavoritesPageState extends State<FavoritesPage> {
     try {
       final api = KugouApiClient();
       final globalId = playlist.globalCollectionId ?? playlist.id;
-      
-      KugouPlaylistSongs? result;
-      // 自己创建的歌单（包括"我喜欢"）：用 listid 接口（返回 data.info）
-      // 收藏的别人歌单：用 globalCollectionId 接口（返回 data.songs）
       final isCreated = _isCreated(playlist);
-      if (isCreated && playlist.listId.isNotEmpty) {
-        result = await api.getPlaylistSongsByListid(
-          listid: playlist.listId,
-          pagesize: 200,
-          noCache: noCache,
-        );
-      } else {
-        // 收藏的歌单：用原歌单的 globalCollectionId（listCreateGid）
-        // 因为用户的订阅版本（globalId）可能 count=0，需要用原歌单 ID
-        final targetGid = playlist.listCreateGid ?? globalId;
-                result = await api.getPlaylistSongs(
-          targetGid,
-          pagesize: 200,
-          noCache: noCache,
-        );
+      final targetGid = playlist.listCreateGid ?? globalId;
+
+      // 翻页聚合：歌单可能超过单页上限（原写死 pagesize:200 会导致超出的歌看不到）。
+      // Node 端 playlist_track_all 已支持 page 参数（begin_idx=(page-1)*pagesize），前端循环拉全。
+      const int pageSize = 200;
+      const int maxPages = 10; // 上限 2000 首，防止异常时无限循环
+      final List<Song> allSongs = [];
+      var page = 1;
+
+      while (page <= maxPages) {
+        KugouPlaylistSongs? result;
+        if (isCreated && playlist.listId.isNotEmpty) {
+          result = await api.getPlaylistSongsByListid(
+            listid: playlist.listId,
+            page: page,
+            pagesize: pageSize,
+            noCache: noCache && page == 1,
+          );
+        } else {
+          // 收藏的歌单：用原歌单的 globalCollectionId（listCreateGid）
+          // 因为用户的订阅版本（globalId）可能 count=0，需要用原歌单 ID
+          result = await api.getPlaylistSongs(
+            targetGid,
+            page: page,
+            pagesize: pageSize,
+            noCache: noCache && page == 1,
+          );
+        }
+        if (!mounted) return;
+        if (result == null) break;
+
+        final songs = result.songs.map((s) => s.toSong()).toList();
+        allSongs.addAll(songs);
+        // 不足一页，说明已拉完
+        if (songs.length < pageSize) break;
+        page++;
       }
+
       if (!mounted) return;
 
-      if (result != null && result.songs.isNotEmpty) {
-        final songs = result.songs.map((s) => s.toSong()).toList();
+      if (allSongs.isNotEmpty) {
         // 同步"我喜欢"歌单的歌曲 ID 到 FavoritesProvider
         if (isMyFav && mounted) {
           final favProvider = context.read<FavoritesProvider>();
-          favProvider.syncFavoriteIds(songs.map((s) => s.id).toSet());
+          favProvider.syncFavoriteIds(allSongs.map((s) => s.id).toSet());
         }
         setState(() {
-          _currentPlaylistSongs = songs;
+          _currentPlaylistSongs = allSongs;
           _isLoadingSongs = false;
         });
       } else {
@@ -281,6 +298,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
           } else {
             // 收藏的歌单：取消收藏，传 type=0
             await fav.deletePlaylist(p.listId, type: 0);
+            // 同步清除歌单详情页本地收藏缓存，避免重进仍残留红心
+            await CollectedPlaylistStore.remove(p.listCreateGid ?? p.globalCollectionId ?? p.id);
           }
         } catch (e) {
                   }
@@ -319,7 +338,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
         ],
       ),
       body: _selectedPlaylist != null ? _buildSongList() : _buildGroupedPlaylistList(),
-      bottomNavigationBar: const MiniPlayer(),
     );
   }
 
