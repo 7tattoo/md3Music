@@ -335,7 +335,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
       }
 
       setState(() {
-        _songs = all;
+        _songs = all.where((song) {
+          final validTitle = song.title.isNotEmpty && song.title != '-';
+          final validDuration = song.duration.inMilliseconds > 0;
+          return validTitle && validDuration;
+        }).toList();
       });
     } catch (e) {
       setState(() {
