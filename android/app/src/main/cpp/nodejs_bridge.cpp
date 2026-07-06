@@ -18,6 +18,10 @@ namespace {
     std::unique_ptr<node::MultiIsolatePlatform> platform;
 }
 
+// ========== JNI 共享状态（需在所有函数定义前声明） ==========
+static volatile int g_running = 0;
+static volatile int g_stop_requested = 0;
+
 class Args {
 public:
     Args() noexcept : p(nullptr), len(0) {}
@@ -117,12 +121,15 @@ void spinEventLoop() {
     bool more;
     do {
         uv_run(&loop, UV_RUN_DEFAULT);
+        // 收到停止请求时立即退出事件循环（uv_stop 已打断 uv_run）
+        if (g_stop_requested) break;
         platform->DrainTasks(isolate);
         more = uv_loop_alive(&loop);
         if (more) continue;
         node::EmitBeforeExit(env);
         more = uv_loop_alive(&loop);
     } while (more);
+    g_running = 0;
 }
 
 // ========== 执行 JS 脚本 ==========
@@ -159,16 +166,16 @@ int evalScript(const char* scriptPath) {
 }
 
 // ========== JNI 接口 ==========
-static volatile int g_running = 0;
-
 static void* node_thread(void *arg) {
     char* scriptPath = (char*)arg;
     g_running = 1;
+    g_stop_requested = 0;
     __android_log_print(ANDROID_LOG_INFO, ADBTAG, "Starting Node.js...");
 
     int result = evalScript(scriptPath);
 
     g_running = 0;
+    g_stop_requested = 0;
     __android_log_print(ANDROID_LOG_INFO, ADBTAG, "Node.js exited with code: %d", result);
 
     free(scriptPath);
@@ -218,4 +225,17 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_com_md3music_md3music_NodeJsService_nativeIsNodeRunning(
     JNIEnv *env, jobject thiz) {
     return g_running ? JNI_TRUE : JNI_FALSE;
+}
+
+// 显式停止 Node.js 事件循环：设置停止标志并打断 uv_run。
+// 由于 Node 运行在应用进程内的原生线程上，进程退出/被系统回收时 OS 也会一并销毁，
+// 这里提供确定性关闭，确保在确认退出或 Activity 销毁时能立即停止对外服务。
+extern "C" JNIEXPORT void JNICALL
+Java_com_md3music_md3music_NodeJsService_nativeStopNode(
+    JNIEnv *env, jobject thiz) {
+    if (!g_running) return;
+    g_stop_requested = 1;
+    // uv_stop 可从任意线程安全调用，会让正在运行的 uv_run 在下一次迭代前返回
+    uv_stop(&loop);
+    __android_log_print(ANDROID_LOG_INFO, ADBTAG, "Node.js stop requested");
 }

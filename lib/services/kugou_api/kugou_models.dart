@@ -208,6 +208,10 @@ class KugouPlaylistBrief {
   });
 
   factory KugouPlaylistBrief.fromJson(Map<String, dynamic> json) {
+    // 「我收藏」里每个歌单的 listid 是用户订阅后的版本（用于取完整歌曲）。
+    // list_create_listid 是原歌单 listid（不可用）。两者通常不同；
+    // 但部分场景下 server 只返回 listid，所以 listCreateListid 兜底用 listid。
+    final listid = _str(json['listid'] ?? '');
     return KugouPlaylistBrief(
       id: _str(
         json['specialid'] ?? json['id'] ?? json['global_collection_id'] ?? '',
@@ -220,9 +224,9 @@ class KugouPlaylistBrief {
         json['songcount'] ?? json['song_count'] ?? json['count'] ?? 0,
       ),
       globalCollectionId: _strNull(json['global_collection_id'] ?? json['gid']),
-      listId: _str(json['listid'] ?? ''),
+      listId: listid,
       listCreateUserid: _strNull(json['list_create_userid']),
-      listCreateListid: _strNull(json['list_create_listid']),
+      listCreateListid: _strNull(json['list_create_listid']) ?? listid,
       listCreateGid: _strNull(json['list_create_gid'] ?? json['list_create_gid']),
       type: _parseInt(json['type'] ?? 0),
       source: _parseInt(json['source'] ?? 0),
@@ -239,6 +243,7 @@ class KugouPlaylistBrief {
       listCreateUserid: listCreateUserid,
       listCreateListid: listCreateListid,
       listCreateGid: listCreateGid,
+      subscribedListId: listId, // 用户订阅版本的 listid，用于拉取歌曲
     );
   }
 }

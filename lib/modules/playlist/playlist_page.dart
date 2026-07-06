@@ -7,14 +7,21 @@ import '../../data/models/song.dart';
 import '../../data/repositories/collected_playlist_store.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../providers/playlist_collection_notifier.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../widgets/song_list_item.dart';
 import '../player/mini_player.dart';
 
 class PlaylistPage extends StatefulWidget {
   final Playlist playlist;
+  // 「我收藏」里的歌单：本身已是已收藏状态，不显示红心收藏按钮。
+  final bool isInMyFavorites;
 
-  const PlaylistPage({super.key, required this.playlist});
+  const PlaylistPage({
+    super.key,
+    required this.playlist,
+    this.isInMyFavorites = false,
+  });
 
   @override
   State<PlaylistPage> createState() => _PlaylistPageState();
@@ -24,6 +31,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
   bool _isLoading = true;
   List<Song> _songs = [];
   String? _error;
+  // 普通歌单（发现/热门/排行榜）的红心收藏状态
   bool _isCollected = false;
   String? _collectedListId;
 
@@ -31,12 +39,44 @@ class _PlaylistPageState extends State<PlaylistPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 只有普通歌单才需要查收藏状态。「我收藏」里进来的歌单跳过。
+      if (!widget.isInMyFavorites) {
+        _checkCollected();
+      }
       _fetchSongs();
-      _checkCollected();
     });
   }
 
   // ==================== 收藏本地缓存（解决后端 user/playlist 列表 ~1-2 分钟缓存才同步的问题）====================
+
+  /// 查询当前歌单是否已被收藏（仅供普通歌单「发现/热门/排行榜」用）。
+  /// 「我收藏」里点进来的歌单本身已是已收藏状态，不需要再查。
+  Future<void> _checkCollected() async {
+    final api = KugouApiClient();
+    if (!api.isLoggedIn) return;
+
+    // 1) 本地缓存优先：即时显示红心，不再等后端 1~2 分钟的缓存
+    final cached = await CollectedPlaylistStore.getListId(widget.playlist.id);
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _isCollected = true;
+          _collectedListId = cached;
+        });
+      }
+      return;
+    }
+
+    // 2) 本地无记录时回退到服务器查询（覆盖在官方 App / 其他端收藏的外部场景）
+    final listid = await _findCollectedListId(api);
+    if (listid != null && mounted) {
+      await CollectedPlaylistStore.setListId(widget.playlist.id, listid);
+      setState(() {
+        _isCollected = true;
+        _collectedListId = listid;
+      });
+    }
+  }
 
   /// 尽量多路径地从 playlist/add 响应里解析出新建歌单的 listid
   String? _parseListId(Map<String, dynamic>? result) {
@@ -84,63 +124,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
     return null;
   }
 
-  Future<void> _checkCollected() async {
-    final api = KugouApiClient();
-    if (!api.isLoggedIn) return;
-
-    // 1) 本地缓存优先：即时显示红心，不再等后端 1~2 分钟的缓存
-    final cached = await CollectedPlaylistStore.getListId(widget.playlist.id);
-    if (cached != null) {
-      if (mounted) {
-        setState(() {
-          _isCollected = true;
-          _collectedListId = cached;
-        });
-      }
-      return;
-    }
-
-    // 2) 本地无记录时回退到服务器查询（覆盖在官方 App / 其他端收藏的外部场景）
-    try {
-      final result = await api.getUserPlaylist(pagesize: 50);
-      if (result == null || !mounted) return;
-      final data = result['data'];
-      List<dynamic>? list;
-      if (data is List) {
-        list = data;
-      } else if (data is Map<String, dynamic>) {
-        list = data['info'] as List<dynamic>?;
-        list ??= data['list'] as List<dynamic>?;
-      }
-      if (list == null) return;
-      for (final item in list) {
-        if (item is Map<String, dynamic>) {
-          final gid = item['global_collection_id']?.toString() ?? '';
-          final name = item['name']?.toString() ?? '';
-          if (gid == widget.playlist.id || name == widget.playlist.name) {
-            final listid = item['listid']?.toString();
-            await CollectedPlaylistStore.setListId(widget.playlist.id, listid);
-            if (mounted) {
-              setState(() {
-                _isCollected = true;
-                _collectedListId = listid;
-              });
-            }
-            return;
-          }
-        }
-      }
-    } catch (e) {
-      // 忽略：以本地判断为准
-    }
-  }
-
   Future<void> _collectPlaylist() async {
     final api = KugouApiClient();
     if (!api.isLoggedIn) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请先登录'), behavior: SnackBarBehavior.floating),
+          const SnackBar(
+            content: Text('请先登录'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
       return;
@@ -148,7 +140,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
     try {
       String? listCreateUserid = widget.playlist.listCreateUserid;
       String? listCreateListid = widget.playlist.listCreateListid;
-      if ((listCreateUserid == null || listCreateListid == null) && widget.playlist.id.contains('_')) {
+      if ((listCreateUserid == null || listCreateListid == null) &&
+          widget.playlist.id.contains('_')) {
         final parts = widget.playlist.id.split('_');
         if (parts.length >= 4) {
           listCreateUserid ??= parts[2];
@@ -165,7 +158,10 @@ class _PlaylistPageState extends State<PlaylistPage> {
       if (result == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('收藏失败，请重试'), behavior: SnackBarBehavior.floating),
+            const SnackBar(
+              content: Text('收藏失败，请重试'),
+              behavior: SnackBarBehavior.floating,
+            ),
           );
         }
         return;
@@ -179,14 +175,22 @@ class _PlaylistPageState extends State<PlaylistPage> {
           _isCollected = true;
           _collectedListId = newId;
         });
+        // 通知「我的收藏」tab 立即刷新（绕过本地代理 2 分钟缓存）
+        context.read<PlaylistCollectionNotifier>().notifyChanged();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('收藏成功'), behavior: SnackBarBehavior.floating),
+          const SnackBar(
+            content: Text('收藏成功'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('收藏失败'), behavior: SnackBarBehavior.floating),
+          const SnackBar(
+            content: Text('收藏失败'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -203,7 +207,10 @@ class _PlaylistPageState extends State<PlaylistPage> {
     if (listId == null || listId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('找不到收藏记录，无法取消'), behavior: SnackBarBehavior.floating),
+          const SnackBar(
+            content: Text('找不到收藏记录，无法取消'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
       return;
@@ -218,18 +225,29 @@ class _PlaylistPageState extends State<PlaylistPage> {
           _isCollected = false;
           _collectedListId = null;
         });
+        // 通知「我的收藏」tab 立即刷新（绕过本地代理 2 分钟缓存）
+        context.read<PlaylistCollectionNotifier>().notifyChanged();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已取消收藏'), behavior: SnackBarBehavior.floating),
+          const SnackBar(
+            content: Text('已取消收藏'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('取消收藏失败，请重试'), behavior: SnackBarBehavior.floating),
+          const SnackBar(
+            content: Text('取消收藏失败，请重试'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('取消收藏失败'), behavior: SnackBarBehavior.floating),
+          const SnackBar(
+            content: Text('取消收藏失败'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -241,10 +259,83 @@ class _PlaylistPageState extends State<PlaylistPage> {
       _error = null;
     });
     try {
-      await context.read<KugouProvider>().getPlaylistTrackAll(id: widget.playlist.id);
-      final fetchedSongs = context.read<KugouProvider>().currentPlaylistSongs;
+      // 「我的收藏」里的歌单（listid 是用户订阅的版本）走 listid 接口拿完整歌曲；
+      // 其它歌单（发现页、排行榜、热门歌单）走 globalCollectionId。
+      // 两种情况都强制 forceRefresh，绕过本地代理 2 分钟 apicache，
+      // 避免"换个歌单回来老歌单不刷新"。
+      final api = KugouApiClient();
+      final isLoggedIn = api.isLoggedIn;
+      // 拉取歌曲的 listid 优先级：
+      // 1. subscribedListId（用户订阅/收藏版本的 listid，调 /playlist/track/all/new）
+      // 2. listCreateListid（仅自己创建的歌单有效，收藏别人的歌单这个是原作者的 id）
+      final fetchListid =
+          widget.playlist.subscribedListId ?? widget.playlist.listCreateListid;
+
+      List<Song> all = [];
+      if (isLoggedIn && fetchListid != null && fetchListid.isNotEmpty) {
+        // 已登录 + 有 listid：用 /playlist/track/all/new 拉（仅支持用户创建/收藏的歌单）
+        const int pageSize = 200;
+        const int maxPages = 10;
+        for (int page = 1; page <= maxPages; page++) {
+          final r = await api.getPlaylistSongsByListid(
+            listid: fetchListid,
+            page: page,
+            pagesize: pageSize,
+            noCache: true,
+          );
+          if (!mounted) return;
+          if (r == null) break;
+          final batch = r.songs.map((s) => s.toSong()).toList();
+          all.addAll(batch);
+          if (batch.length < pageSize) break;
+        }
+        // listid 接口拉不到歌曲时，回退到用原始歌单的 global_collection_id 拉取
+        // （收藏的歌单 listid 有时失效，用原始歌单的 listCreateGid 才能正确拉取
+        final fallbackGid =
+            widget.playlist.listCreateGid ??
+            (widget.playlist.listCreateListid != null
+                ? null
+                : widget.playlist.id);
+        if (all.isEmpty && fallbackGid != null && fallbackGid.isNotEmpty) {
+          await context.read<KugouProvider>().getPlaylistTrackAll(
+            id: fallbackGid,
+            forceRefresh: true,
+          );
+          if (!mounted) return;
+          all = context
+              .read<KugouProvider>()
+              .currentPlaylistSongs
+              .map((e) => e.toSong())
+              .toList();
+        }
+      } else if (widget.playlist.id.isNotEmpty) {
+        // 未登录 或 无 listid：用 global_collection_id 调 /playlist/track/all 拉
+        await context.read<KugouProvider>().getPlaylistTrackAll(
+          id: widget.playlist.id,
+          forceRefresh: true,
+        );
+        if (!mounted) return;
+        all = context
+            .read<KugouProvider>()
+            .currentPlaylistSongs
+            .map((e) => e.toSong())
+            .toList();
+      } else {
+        // 普通歌单（未登录）：走 KugouProvider 的分页聚合（/playlist/track/all，30 一次翻页拉全）
+        await context.read<KugouProvider>().getPlaylistTrackAll(
+          id: widget.playlist.id,
+          forceRefresh: true,
+        );
+        if (!mounted) return;
+        all = context
+            .read<KugouProvider>()
+            .currentPlaylistSongs
+            .map((e) => e.toSong())
+            .toList();
+      }
+
       setState(() {
-        _songs = fetchedSongs.map((e) => e.toSong()).toList();
+        _songs = all;
       });
     } catch (e) {
       setState(() {
@@ -266,178 +357,212 @@ class _PlaylistPageState extends State<PlaylistPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _buildError(context, colorScheme)
-              : Column(
-                  children: [
-                    Expanded(
-                      child: CustomScrollView(
-                        slivers: [
-                          SliverAppBar(
-                            expandedHeight: 280,
-                            pinned: true,
-                            flexibleSpace: FlexibleSpaceBar(
-                              background: Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      colorScheme.primaryContainer,
-                                      colorScheme.surface,
-                                    ],
-                                  ),
-                                ),
-                                child: SafeArea(
-                                  child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(24, 48, 24, 16),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: SizedBox(
-                                            width: 140,
-                                            height: 140,
-                                            child: displayPlaylist.artworkUri != null
-                                                ? CachedNetworkImage(
-                                                    imageUrl: displayPlaylist.artworkUri!,
-                                                    fit: BoxFit.cover,
-                                                    placeholder: (_, _) => Container(
-                                                      color: colorScheme.surfaceContainerHighest,
-                                                      child: Icon(
-                                                        Icons.queue_music,
-                                                        size: 48,
-                                                        color: colorScheme.onSurfaceVariant,
-                                                      ),
-                                                    ),
-                                                    errorWidget: (_, _, _) => Container(
-                                                      color: colorScheme.surfaceContainerHighest,
-                                                      child: Icon(
-                                                        Icons.queue_music,
-                                                        size: 48,
-                                                        color: colorScheme.onSurfaceVariant,
-                                                      ),
-                                                    ),
-                                                  )
-                                                : Container(
-                                                    color: colorScheme.surfaceContainerHighest,
-                                                    child: Icon(
-                                                      Icons.queue_music,
-                                                      size: 48,
-                                                      color: colorScheme.onSurfaceVariant,
-                                                    ),
-                                                  ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 20),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisAlignment: MainAxisAlignment.end,
-                                            children: [
-                                              Text(
-                                                displayPlaylist.name,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: textTheme.headlineSmall?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              if (displayPlaylist.description != null) ...[
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  displayPlaylist.description!,
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: textTheme.bodySmall?.copyWith(
-                                                    color: colorScheme.onSurfaceVariant,
-                                                  ),
-                                                ),
-                                              ],
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                '${displayPlaylist.creator ?? ''} · ${_songs.length} 首',
-                                                style: textTheme.labelMedium?.copyWith(
-                                                  color: colorScheme.onSurfaceVariant,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: FilledButton.icon(
-                                      onPressed: () {
-                                        if (_songs.isNotEmpty) {
-                                          context
-                                              .read<PlayerProvider>()
-                                              .playOnlinePlaylist(_songs, 0);
-                                        }
-                                      },
-                                      icon: const Icon(Icons.play_arrow),
-                                      label: const Text('播放全部'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () {
-                                        if (_songs.isNotEmpty) {
-                                          final shuffled = List<Song>.from(_songs)..shuffle();
-                                          context
-                                              .read<PlayerProvider>()
-                                              .playOnlinePlaylist(shuffled, 0);
-                                        }
-                                      },
-                                      icon: const Icon(Icons.shuffle),
-                                      label: const Text('随机播放'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  IconButton.filledTonal(
-                                    onPressed: _isCollected ? _uncollectPlaylist : _collectPlaylist,
-                                    icon: Icon(
-                                      _isCollected ? Icons.favorite : Icons.favorite_border,
-                                      color: _isCollected ? colorScheme.error : null,
-                                    ),
-                                  ),
+          ? _buildError(context, colorScheme)
+          : Column(
+              children: [
+                Expanded(
+                  child: CustomScrollView(
+                    slivers: [
+                      SliverAppBar(
+                        expandedHeight: 280,
+                        pinned: true,
+                        flexibleSpace: FlexibleSpaceBar(
+                          background: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  colorScheme.primaryContainer,
+                                  colorScheme.surface,
                                 ],
                               ),
                             ),
-                          ),
-                          SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                return SongListItem(
-                                  song: _songs[index],
-                                  onTap: () {
-                                    context
-                                        .read<PlayerProvider>()
-                                        .playOnlinePlaylist(_songs, index);
-                                  },
-                                  onMoreTap: () {},
-                                );
-                              },
-                              childCount: _songs.length,
+                            child: SafeArea(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  24,
+                                  48,
+                                  24,
+                                  16,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: SizedBox(
+                                        width: 140,
+                                        height: 140,
+                                        child:
+                                            displayPlaylist.artworkUri != null
+                                            ? CachedNetworkImage(
+                                                imageUrl:
+                                                    displayPlaylist.artworkUri!,
+                                                fit: BoxFit.cover,
+                                                placeholder: (_, _) => Container(
+                                                  color: colorScheme
+                                                      .surfaceContainerHighest,
+                                                  child: Icon(
+                                                    Icons.queue_music,
+                                                    size: 48,
+                                                    color: colorScheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                                ),
+                                                errorWidget: (_, _, _) =>
+                                                    Container(
+                                                      color: colorScheme
+                                                          .surfaceContainerHighest,
+                                                      child: Icon(
+                                                        Icons.queue_music,
+                                                        size: 48,
+                                                        color: colorScheme
+                                                            .onSurfaceVariant,
+                                                      ),
+                                                    ),
+                                              )
+                                            : Container(
+                                                color: colorScheme
+                                                    .surfaceContainerHighest,
+                                                child: Icon(
+                                                  Icons.queue_music,
+                                                  size: 48,
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 20),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            displayPlaylist.name,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: textTheme.headlineSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                          if (displayPlaylist.description !=
+                                              null) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              displayPlaylist.description!,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: colorScheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                            ),
+                                          ],
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${displayPlaylist.creator ?? ''} · ${_songs.length} 首',
+                                            style: textTheme.labelMedium
+                                                ?.copyWith(
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                    const MiniPlayer(),
-                  ],
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: () {
+                                    if (_songs.isNotEmpty) {
+                                      context
+                                          .read<PlayerProvider>()
+                                          .playOnlinePlaylist(_songs, 0);
+                                    }
+                                  },
+                                  icon: const Icon(Icons.play_arrow),
+                                  label: const Text('播放全部'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    if (_songs.isNotEmpty) {
+                                      final shuffled = List<Song>.from(_songs)
+                                        ..shuffle();
+                                      context
+                                          .read<PlayerProvider>()
+                                          .playOnlinePlaylist(shuffled, 0);
+                                    }
+                                  },
+                                  icon: const Icon(Icons.shuffle),
+                                  label: const Text('随机播放'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // 红心收藏按钮：仅在「发现/热门歌单」等普通歌单显示
+                              // （「我的收藏」里的歌单已是已收藏状态，外部「我的收藏」页有批量删除，
+                              // 不需要再展示冗余的红心按钮）。
+                              if (!widget.isInMyFavorites)
+                                IconButton.filledTonal(
+                                  onPressed: _isCollected
+                                      ? _uncollectPlaylist
+                                      : _collectPlaylist,
+                                  icon: Icon(
+                                    _isCollected
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: _isCollected
+                                        ? colorScheme.error
+                                        : null,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          return SongListItem(
+                            song: _songs[index],
+                            onTap: () {
+                              context.read<PlayerProvider>().playOnlinePlaylist(
+                                _songs,
+                                index,
+                              );
+                            },
+                            onMoreTap: () {},
+                          );
+                        }, childCount: _songs.length),
+                      ),
+                    ],
+                  ),
                 ),
+                const MiniPlayer(),
+              ],
+            ),
     );
   }
 
@@ -457,22 +582,19 @@ class _PlaylistPageState extends State<PlaylistPage> {
             Text(
               '加载失败',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               _error ?? '未知错误',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            FilledButton.tonal(
-              onPressed: _fetchSongs,
-              child: const Text('重试'),
-            ),
+            FilledButton.tonal(onPressed: _fetchSongs, child: const Text('重试')),
           ],
         ),
       ),

@@ -23,6 +23,21 @@ class MainActivity : FlutterActivity() {
         // 静态引用：让 Service 也能调用 MethodChannel（无 FlutterEngine 缓存时走这里）
         private var cachedEngine: FlutterEngine? = null
         private var cachedChannel: MethodChannel? = null
+        // NodeJsService 单例引用，便于 Activity onDestroy / onTrimMemory 时确定性关停
+        @Volatile private var nodeJsService: NodeJsService? = null
+
+        fun setNodeJsService(service: NodeJsService?) {
+            nodeJsService = service
+        }
+
+        /** Activity 销毁或被系统回收时调用，尽力通知 Node.js 停止事件循环 */
+        fun shutdownNodeJs() {
+            try {
+                nodeJsService?.stopServer()
+            } catch (_: Exception) {
+                // 进程即将销毁，吞掉异常
+            }
+        }
 
         fun sendDesktopLyricAction(action: String) {
             cachedChannel?.invokeMethod("desktopLyricAction", action)
@@ -46,7 +61,8 @@ class MainActivity : FlutterActivity() {
 
         // 初始化 Node.js 本地 API 服务器
         android.util.Log.d("MainActivity", "Initializing NodeJsService...")
-        NodeJsService(this, flutterEngine)
+        val nodeSvc = NodeJsService(this, flutterEngine)
+        setNodeJsService(nodeSvc)
         android.util.Log.d("MainActivity", "NodeJsService initialized")
 
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FLOATING_CHANNEL)
@@ -181,6 +197,9 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        // Activity 销毁（含应用从最近任务划掉时系统先回调 onDestroy 再杀进程）
+        // 同步通知 Node.js 停止 libuv 事件循环，释放 8080 端口
+        shutdownNodeJs()
         cachedEngine = null
         cachedChannel = null
         super.onDestroy()

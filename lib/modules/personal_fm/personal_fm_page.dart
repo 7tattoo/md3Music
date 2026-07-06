@@ -100,7 +100,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
         _updateVinylAnimation(player.isPlaying);
       }
     } catch (e) {
-          } finally {
+    } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -173,7 +173,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
         }
       }
     } catch (e) {
-          } finally {
+    } finally {
       if (mounted) {
         setState(() => _isAppending = false);
       }
@@ -240,7 +240,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
     try {
       await Provider.of<KugouProvider>(context, listen: false).getPersonalFm();
     } catch (e) {
-          } finally {
+    } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -285,18 +285,30 @@ class _PersonalFmPageState extends State<PersonalFmPage>
     }
 
     return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '私人 FM',
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.only(
+        padding: const EdgeInsets.only(
           left: 16,
           right: 16,
-          top: MediaQuery.of(context).padding.top + 10,
+          top: 16,
           bottom: 16,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(textTheme, cs),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
+            Text(
+              '实时推荐会根据你的反馈持续更新',
+              style: textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.58),
+              ),
+            ),
+            const SizedBox(height: 16),
             if (isLoggedIn) _buildToolbar(cs, textTheme),
             const SizedBox(height: 18),
             isLoggedIn
@@ -315,28 +327,6 @@ class _PersonalFmPageState extends State<PersonalFmPage>
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildHeader(TextTheme textTheme, ColorScheme cs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '私人 FM',
-          style: textTheme.headlineLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.04,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '实时推荐会根据你的反馈持续更新',
-          style: textTheme.bodySmall?.copyWith(
-            color: cs.onSurfaceVariant.withValues(alpha: 0.58),
-          ),
-        ),
-      ],
     );
   }
 

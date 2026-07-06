@@ -98,7 +98,7 @@ class _FullPlayerState extends State<FullPlayer>
         });
       }
     } catch (e) {
-            if (mounted) {
+      if (mounted) {
         setState(() {
           _isLoadingLyrics = false;
           _lyrics = '';
@@ -607,37 +607,49 @@ class _FullPlayerState extends State<FullPlayer>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        IconButton(
-          icon: Icon(
-            isFavorited ? Icons.favorite : Icons.favorite_border,
-            color: isFavorited
-                ? colorScheme.error
-                : colorScheme.onSurfaceVariant,
-          ),
-          onPressed: song != null
-              ? () => context.read<FavoritesProvider>().toggleFavorite(song)
-              : null,
+        Row(
+          children: [
+            IconButton(
+              icon: Icon(
+                isFavorited ? Icons.favorite : Icons.favorite_border,
+                color: isFavorited
+                    ? colorScheme.error
+                    : colorScheme.onSurfaceVariant,
+              ),
+              onPressed: song != null
+                  ? () => context.read<FavoritesProvider>().toggleFavorite(song)
+                  : null,
+            ),
+            IconButton(
+              icon: const Icon(Icons.download),
+              onPressed: song != null ? () => _downloadSong(song) : null,
+            ),
+            IconButton(
+              icon: const Icon(Icons.volume_up),
+              onPressed: () => _showVolumeDialog(playerProvider),
+            ),
+          ],
         ),
-        IconButton(
-          icon: const Icon(Icons.download),
-          onPressed: song != null ? () => _downloadSong(song) : null,
-        ),
-        IconButton(
-          icon: const Icon(Icons.volume_up),
-          onPressed: () => _showVolumeDialog(playerProvider),
-        ),
-        TextButton(
-          onPressed: () => _showSpeedDialog(playerProvider),
-          child: Text(
-            '${playerProvider.speed}x',
-            style: TextStyle(fontSize: isExpanded ? 12 : 14),
-          ),
-        ),
-        TextButton(
-          onPressed: () => _showQualityDialog(playerProvider),
-          child: Text(
-            playerProvider.audioQualityLabel,
-            style: TextStyle(fontSize: isExpanded ? 12 : 14),
+        Expanded(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton(
+                onPressed: () => _showSpeedDialog(playerProvider),
+                child: Text(
+                  '${playerProvider.speed}x',
+                  style: TextStyle(fontSize: isExpanded ? 12 : 14),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => _showQualityDialog(playerProvider),
+                child: Text(
+                  playerProvider.audioQualityLabel,
+                  style: TextStyle(fontSize: isExpanded ? 12 : 14),
+                ),
+              ),
+            ],
           ),
         ),
         IconButton(
@@ -706,7 +718,7 @@ class _FullPlayerState extends State<FullPlayer>
       context: context,
       builder: (context) {
         return SimpleDialog(
-          title: const Text('播放速度'),
+          title: const Center(child: Text('播放速度')),
           children: speeds.map((speed) {
             return SimpleDialogOption(
               onPressed: () {
@@ -715,6 +727,7 @@ class _FullPlayerState extends State<FullPlayer>
               },
               child: Text(
                 speed == 1.0 ? '1.0x (正常)' : '${speed}x',
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   color: playerProvider.speed == speed
                       ? Theme.of(context).colorScheme.primary
@@ -733,7 +746,7 @@ class _FullPlayerState extends State<FullPlayer>
       context: context,
       builder: (context) {
         return SimpleDialog(
-          title: const Text('音质选择'),
+          title: const Center(child: Text('音质选择')),
           children: _audioQualities.map((quality) {
             return SimpleDialogOption(
               onPressed: () {
@@ -742,6 +755,7 @@ class _FullPlayerState extends State<FullPlayer>
               },
               child: Text(
                 quality.label,
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   color: playerProvider.audioQuality == quality
                       ? Theme.of(context).colorScheme.primary
@@ -835,9 +849,9 @@ class _FullPlayerState extends State<FullPlayer>
                 onTap: () {
                   Navigator.pop(context);
                   // TODO: 实现分享功能
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('分享功能开发中')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('分享功能开发中')));
                 },
               ),
             ],
@@ -851,7 +865,10 @@ class _FullPlayerState extends State<FullPlayer>
     final api = KugouApiClient();
     if (!api.isLoggedIn) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先登录'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text('请先登录'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -893,7 +910,8 @@ class _FullPlayerState extends State<FullPlayer>
             if (data is List) {
               rawPlaylists = data;
             } else if (data is Map) {
-              rawPlaylists = data['info'] ?? data['list'] ?? data['special_list'] ?? [];
+              rawPlaylists =
+                  data['info'] ?? data['list'] ?? data['special_list'] ?? [];
             }
 
             // 使用 KugouPlaylistBrief 模型解析，确保字段名映射正确
@@ -938,13 +956,16 @@ class _FullPlayerState extends State<FullPlayer>
                   itemCount: playlists.length,
                   itemBuilder: (context, index) {
                     final playlist = playlists[index];
-                    final name = (playlist['name'] ?? playlist['specialname'] ?? '未知歌单').toString();
+                    final name =
+                        (playlist['name'] ?? playlist['specialname'] ?? '未知歌单')
+                            .toString();
                     // 优先使用模型解析后的 songCount，再尝试原始字段
-                    final songCount = playlist['songCount']
-                        ?? playlist['songcount']
-                        ?? playlist['song_count']
-                        ?? playlist['count']
-                        ?? 0;
+                    final songCount =
+                        playlist['songCount'] ??
+                        playlist['songcount'] ??
+                        playlist['song_count'] ??
+                        playlist['count'] ??
+                        0;
 
                     return ListTile(
                       leading: const Icon(Icons.queue_music),
@@ -977,12 +998,16 @@ class _FullPlayerState extends State<FullPlayer>
     Map<String, dynamic> playlist,
   ) async {
     final api = KugouApiClient();
-    final listid = playlist['listid']?.toString() ?? playlist['list_id']?.toString() ?? '';
+    final listid =
+        playlist['listid']?.toString() ?? playlist['list_id']?.toString() ?? '';
 
     if (listid.isEmpty) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('歌单ID无效'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text('歌单ID无效'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -998,25 +1023,29 @@ class _FullPlayerState extends State<FullPlayer>
     );
 
     // 构造歌曲数据 — 酷狗API要求的格式：歌名|hash|albumId|albumAudioId
-    final songData = '${song.title}|${song.id}|${song.albumId ?? 0}|${int.tryParse(song.albumAudioId ?? '') ?? 0}';
+    final songData =
+        '${song.title}|${song.id}|${song.albumId ?? 0}|${int.tryParse(song.albumAudioId ?? '') ?? 0}';
 
     // 后台同步，不阻塞 UI
-    api.addPlaylistTracks(listid, songData).then((result) {
-      // 同步失败时提示用户（静默失败，不影响已显示的乐观更新）
-      if (result == null) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('同步到服务器失败，将在下次启动时重试'),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    }).catchError((_) {
-      // 网络错误等，同样静默处理
-    });
+    api
+        .addPlaylistTracks(listid, songData)
+        .then((result) {
+          // 同步失败时提示用户（静默失败，不影响已显示的乐观更新）
+          if (result == null) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('同步到服务器失败，将在下次启动时重试'),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          }
+        })
+        .catchError((_) {
+          // 网络错误等，同样静默处理
+        });
   }
 
   void _showPlaylist(PlayerProvider playerProvider) {
@@ -1025,7 +1054,7 @@ class _FullPlayerState extends State<FullPlayer>
       builder: (dialogContext) {
         final playlist = playerProvider.playlist;
         return AlertDialog(
-          title: const Text('播放列表'),
+          title: const Center(child: Text('播放列表')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

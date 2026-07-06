@@ -71,7 +71,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '2.2.0';
+          _appVersion = '3.0.0';
         });
       }
     }
@@ -86,11 +86,14 @@ class _SettingsPageState extends State<SettingsPage> {
     final url = _apiServerController.text.trim();
 
     try {
-      final response = await http.get(Uri.parse('$url/server/now'))
+      final response = await http
+          .get(Uri.parse('$url/server/now'))
           .timeout(const Duration(seconds: 5));
       final success = response.statusCode == 200;
       setState(() {
-        _connectionResult = success ? '连接成功' : '连接失败: HTTP ${response.statusCode}';
+        _connectionResult = success
+            ? '连接成功'
+            : '连接失败: HTTP ${response.statusCode}';
       });
       if (success) {
         await _settingsRepository.setApiServerUrl(url);
@@ -387,7 +390,7 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         ListTile(
           title: const Text('应用版本'),
-          subtitle: Text(_appVersion.isEmpty ? '2.2.0' : _appVersion),
+          subtitle: Text(_appVersion.isEmpty ? '3.0.0' : _appVersion),
           leading: const Icon(Icons.info_outline),
         ),
         ListTile(
@@ -404,7 +407,7 @@ class _SettingsPageState extends State<SettingsPage> {
             showLicensePage(
               context: context,
               applicationName: 'MD3Music',
-              applicationVersion: '1.0.0',
+              applicationVersion: _appVersion.isEmpty ? '3.0.0' : _appVersion,
             );
           },
         ),

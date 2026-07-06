@@ -110,4 +110,20 @@ class NodeJsServer {
       return false;
     }
   }
+
+  /// 显式停止本地 Node.js 服务器。要求在确认退出 / Activity onDestroy / 进程被销毁前
+  /// 调用，让 libuv 事件循环立即退出，释放 8080 端口，避免下一次冷启动时端口冲突
+  /// （cpp 端的 nativeStartNode 会因为 g_running=1 直接拒绝启动）。
+  ///
+  /// 注意：Android 在后台直接划掉应用时，进程会被系统直接 kill，libuv 线程会随之
+  /// 终止；这里仍然调用是为了「确认退出」和「系统通知 Activity 销毁」这两种温和
+  /// 退出场景能确定性关停。
+  static Future<void> stop() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod('stopServer');
+    } catch (e) {
+      print('NodeJsServer stop error: $e');
+    }
+  }
 }

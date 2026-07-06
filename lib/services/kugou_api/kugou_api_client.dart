@@ -57,7 +57,7 @@ class KugouApiClient {
     } else {
       options.baseUrl = KugouEndpoints.baseUrl;
     }
-    
+
     // 关键修复：每次请求前验证用户身份
     if (_token != null && _userid != null) {
       // 把 vip_token 一并写入 Authorization，服务端的 cookieToJson
@@ -67,7 +67,7 @@ class KugouApiClient {
         authParts.add('vip_token=$_vipToken');
       }
       options.headers['Authorization'] = authParts.join(';');
-      
+
       // 调试日志：打印请求的用户身份（生产环境可移除）
       print('🌐 [API Request] User: $_userid, URL: ${options.path}');
           } else {
@@ -75,10 +75,28 @@ class KugouApiClient {
       options.headers.remove('Authorization');
       print('⚠️ [API Request] 未登录状态, URL: ${options.path}');
           }
-          
+
     if (_dfid != null) {
       options.queryParameters['dfid'] = _dfid;
     }
+
+    // 调用方通过 options.extra['noCache'] = true 标记需要绕过 server_android 的 apicache。
+    // server_android 的 apicache 中间件认 x-apicache-bypass / x-apicache-force-fetch 头
+    // （util/apicache.js L596-597）。这样"我的收藏"新增/取消后下拉刷新能立刻拿到新数据，
+    // 不必等 2 分钟过期。
+    final extra = options.extra;
+    if (extra['noCache'] == true) {
+      options.headers['x-apicache-bypass'] = '1';
+      options.headers['Cache-Control'] = 'no-cache';
+      // 同时给查询参数加 t= 戳，避免部分路径在 cache 命中时跳过参数比对
+      if (options.queryParameters['t'] == null) {
+        options.queryParameters['t'] = DateTime.now().millisecondsSinceEpoch;
+      }
+    } else {
+      options.headers.remove('x-apicache-bypass');
+      options.headers.remove('Cache-Control');
+    }
+
     handler.next(options);
   }
 
@@ -93,9 +111,14 @@ class KugouApiClient {
   Future<Map<String, dynamic>?> _get(
     String path, {
     Map<String, dynamic>? queryParameters,
+    bool noCache = false,
   }) async {
     try {
-      final response = await _dio.get(path, queryParameters: queryParameters);
+      final response = await _dio.get(
+        path,
+        queryParameters: queryParameters,
+        options: Options(extra: {'noCache': noCache}),
+      );
       if (response.statusCode == 200) {
         if (response.data is Map<String, dynamic>) {
           return response.data as Map<String, dynamic>;
@@ -116,12 +139,14 @@ class KugouApiClient {
     String path, {
     Map<String, dynamic>? data,
     Map<String, dynamic>? queryParameters,
+    bool noCache = false,
   }) async {
     try {
       final response = await _dio.post(
         path,
         data: data,
         queryParameters: queryParameters,
+        options: Options(extra: {'noCache': noCache}),
       );
       if (response.statusCode == 200) {
         if (response.data is Map<String, dynamic>) {
@@ -951,12 +976,10 @@ class KugouApiClient {
       'page': page,
       'pagesize': pagesize,
     };
-    if (noCache) {
-      params['t'] = DateTime.now().millisecondsSinceEpoch;
-    }
     final json = await _get(
       KugouEndpoints.playlistTrackAll,
       queryParameters: params,
+      noCache: noCache,
     );
     if (json == null) return null;
     try {
@@ -977,12 +1000,10 @@ class KugouApiClient {
       'page': page,
       'pagesize': pagesize,
     };
-    if (noCache) {
-      params['t'] = DateTime.now().millisecondsSinceEpoch;
-    }
     final json = await _get(
       KugouEndpoints.playlistTrackAllNew,
       queryParameters: params,
+      noCache: noCache,
     );
     if (json == null) return null;
     try {
@@ -1555,6 +1576,7 @@ class KugouApiClient {
     int page = 1,
     int pagesize = 30,
     int? type, // 0=歌单, 1=专辑
+    bool noCache = false,
   }) async {
     final params = <String, dynamic>{
       'page': page,
@@ -1565,6 +1587,7 @@ class KugouApiClient {
     return await _get(
       KugouEndpoints.userPlaylist,
       queryParameters: params,
+      noCache: noCache,
     );
   }
 

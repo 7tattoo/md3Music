@@ -21,6 +21,7 @@ class NodeJsService(private val context: Context, flutterEngine: FlutterEngine) 
     private val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
     private external fun nativeStartNode(args: Array<String>, modulesPath: String): Int
     private external fun nativeIsNodeRunning(): Boolean
+    private external fun nativeStopNode()
 
     private var nodeProjectPath: String = ""
 
@@ -44,6 +45,17 @@ class NodeJsService(private val context: Context, flutterEngine: FlutterEngine) 
                 }
                 "isRunning" -> {
                     result.success(nativeIsNodeRunning())
+                }
+                "stopServer" -> {
+                    Thread {
+                        try {
+                            stopServer()
+                            result.success(true)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to stop Node.js", e)
+                            result.error("STOP_FAILED", e.message, null)
+                        }
+                    }.start()
                 }
                 else -> result.notImplemented()
             }
@@ -102,6 +114,11 @@ class NodeJsService(private val context: Context, flutterEngine: FlutterEngine) 
             }
         }
         Log.e(TAG, "Failed to copy asset, tried paths: $possiblePaths")
+    }
+
+    fun stopServer() {
+        Log.d(TAG, "Stopping Node.js server...")
+        nativeStopNode()
     }
 
     private fun killOldNodeProcesses() {

@@ -82,7 +82,10 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MD3Music'),
+        title: Text(
+          'MD3Music',
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
         actions: [
           Consumer<KugouProvider>(
             builder: (context, kugouProvider, child) {

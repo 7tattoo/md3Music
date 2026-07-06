@@ -12,6 +12,10 @@ class Playlist {
   final String? listCreateUserid;
   final String? listCreateListid;
   final String? listCreateGid;
+  /// 用户订阅/收藏后的版本 listid（用于拉取歌曲列表）。
+  /// 收藏别人歌单时，listCreateListid 是原作者的 listid（无权拉取），
+  /// 而本字段是用户自己订阅后分配的 listid（可正常拉取歌曲）。
+  final String? subscribedListId;
 
   const Playlist({
     required this.id,
@@ -25,6 +29,7 @@ class Playlist {
     this.listCreateUserid,
     this.listCreateListid,
     this.listCreateGid,
+    this.subscribedListId,
   });
 
   factory Playlist.fromJson(Map<String, dynamic> json) {
@@ -54,6 +59,7 @@ class Playlist {
       'songs': songs.map((e) => e.toJson()).toList(),
       'isLocal': isLocal,
       'listCreateGid': listCreateGid,
+      'subscribedListId': subscribedListId,
     };
   }
 
@@ -69,6 +75,7 @@ class Playlist {
     String? listCreateUserid,
     String? listCreateListid,
     String? listCreateGid,
+    String? subscribedListId,
   }) {
     return Playlist(
       id: id ?? this.id,
@@ -82,6 +89,7 @@ class Playlist {
       listCreateUserid: listCreateUserid ?? this.listCreateUserid,
       listCreateListid: listCreateListid ?? this.listCreateListid,
       listCreateGid: listCreateGid ?? this.listCreateGid,
+      subscribedListId: subscribedListId ?? this.subscribedListId,
     );
   }
 

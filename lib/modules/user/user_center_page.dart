@@ -37,7 +37,10 @@ class _UserCenterPageState extends State<UserCenterPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('我的'),
+        title: Text(
+          '我的',
+          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),

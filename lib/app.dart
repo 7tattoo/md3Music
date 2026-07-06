@@ -27,7 +27,9 @@ import 'providers/favorites_provider.dart';
 import 'providers/kugou_provider.dart';
 import 'providers/library_provider.dart';
 import 'providers/player_provider.dart';
+import 'providers/playlist_collection_notifier.dart';
 import 'providers/theme_provider.dart';
+import 'services/nodejs_server.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -42,6 +44,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => KugouProvider()),
         ChangeNotifierProvider(create: (_) => FavoritesProvider()),
         ChangeNotifierProvider(create: (_) => DownloadsProvider()),
+        // 跨页面广播「收藏的歌单」变更（详情页 → 我的收藏 tab 立即刷新）
+        ChangeNotifierProvider(create: (_) => PlaylistCollectionNotifier()),
       ],
       child: const _AppView(),
     );
@@ -93,7 +97,7 @@ class _MainLayout extends StatefulWidget {
   State<_MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<_MainLayout> {
+class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = const [
@@ -109,6 +113,25 @@ class _MainLayoutState extends State<_MainLayout> {
     super.initState();
     // 未登录时尝试播放联网歌曲,弹出登录提示
     context.read<PlayerProvider>().onLoginRequired = _showLoginRequiredDialog;
+    // 监听应用生命周期：detached（进程被系统销毁前的最后窗口）时尝试关停本地 Node.js
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 当系统即将销毁应用进程时（包含后台划掉 / 系统回收），Flutter 会先收到 detached。
+    // 此时同步触发 Node.js 关闭：若进程随之被 kill 也无副作用；若进程仍存活则关闭 libuv。
+    if (state == AppLifecycleState.detached) {
+      // 同步触发即可，Dart 端很快；不 await，避免阻塞 framework 销毁流程
+      // ignore: discarded_futures
+      NodeJsServer.stop();
+    }
   }
 
   void _showLoginRequiredDialog() {
@@ -224,10 +247,17 @@ class _MainLayoutState extends State<_MainLayout> {
 
   @override
   Widget build(BuildContext context) {
+    // 让系统返回键先走 Navigator 栈（关掉 sub-page / pop dialog），
+    // 栈空了再弹"退出应用"确认对话框，避免在子页面按返回就直接弹退出。
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
+        final nav = appNavigatorKey.currentState;
+        if (nav != null && nav.canPop()) {
+          nav.pop();
+          return;
+        }
         _showExitDialog();
       },
       child: ResponsiveScaffold(
@@ -290,6 +320,9 @@ class _MainLayoutState extends State<_MainLayout> {
     if (kIsWeb) {
       SystemNavigator.pop();
     } else {
+      // 先让本地 Node.js 服务器停止监听（释放 8080 端口），再杀进程
+      // ignore: discarded_futures
+      NodeJsServer.stop();
       // 立即杀进程，关闭所有后台服务（如 audio_service）
       exit(0);
     }

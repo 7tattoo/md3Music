@@ -33,13 +33,17 @@ class _LibraryPageState extends State<LibraryPage>
   Widget build(BuildContext context) {
     final libraryProvider = context.watch<LibraryProvider>();
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final hasMusic = libraryProvider.songs.isNotEmpty ||
         libraryProvider.albums.isNotEmpty ||
         libraryProvider.artists.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('音乐库'),
+        title: Text(
+          '音乐库',
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [

@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/models/song.dart';
 import '../../data/repositories/collected_playlist_store.dart';
 import '../../providers/favorites_provider.dart';
-import '../../providers/player_provider.dart';
+import '../../providers/playlist_collection_notifier.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
-import '../../widgets/song_list_item.dart';
+import '../playlist/playlist_page.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -18,10 +17,7 @@ class FavoritesPage extends StatefulWidget {
 
 class _FavoritesPageState extends State<FavoritesPage> {
   List<KugouPlaylistBrief> _playlists = [];
-  List<Song> _currentPlaylistSongs = [];
-  KugouPlaylistBrief? _selectedPlaylist;
   bool _isLoadingPlaylists = true;
-  bool _isLoadingSongs = false;
 
   // 分组折叠状态
   bool _createdExpanded = true;
@@ -36,14 +32,21 @@ class _FavoritesPageState extends State<FavoritesPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadPlaylists();
-      context.read<FavoritesProvider>().addListener(_onFavoritesChanged);
+      // 监听跨页面的「收藏的歌单」变更：歌单详情页收藏/取消收藏后立即刷新
+      context.read<PlaylistCollectionNotifier>().addListener(_onCollectionChanged);
     });
   }
 
   @override
   void dispose() {
-    context.read<FavoritesProvider>().removeListener(_onFavoritesChanged);
+    context.read<PlaylistCollectionNotifier>().removeListener(_onCollectionChanged);
     super.dispose();
+  }
+
+  /// 歌单详情页的收藏/取消收藏被通知时，强制无缓存重新拉一次列表
+  void _onCollectionChanged() {
+    if (!mounted) return;
+    _loadPlaylists(forceNoCache: true);
   }
 
   String? get _currentUserId => KugouApiClient().userid;
@@ -78,22 +81,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
   List<KugouPlaylistBrief> get _collectedPlaylists =>
       _playlists.where((p) => !_isCreated(p)).toList();
 
-  void _onFavoritesChanged() {
-    if (!mounted) return;
-    final selected = _selectedPlaylist;
-    if (selected != null) {
-      // 统一重新加载，让 _loadPlaylistSongs 内部处理"我喜欢"的逻辑
-      _loadPlaylistSongs(selected, noCache: true);
-    }
-  }
-
-  Future<void> _loadPlaylists() async {
+  Future<void> _loadPlaylists({bool forceNoCache = false}) async {
     if (!mounted) return;
     setState(() => _isLoadingPlaylists = true);
 
     try {
       final api = KugouApiClient();
-      final result = await api.getUserPlaylist(pagesize: 50);
+      // 走本地 Node 代理 apicache 缓存 2 分钟；forceNoCache 时带 x-apicache-bypass 头绕过
+      final result = await api.getUserPlaylist(pagesize: 50, noCache: forceNoCache);
       if (!mounted) return;
 
       if (result != null) {
@@ -140,84 +135,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
     }
   }
 
-  bool _isMyFavoritePlaylist(KugouPlaylistBrief playlist) {
-    final gid = playlist.globalCollectionId ?? playlist.id;
-    return gid.contains('_2_') || playlist.name == '我喜欢';
-  }
-
-  Future<void> _loadPlaylistSongs(KugouPlaylistBrief playlist, {bool noCache = false}) async {
-    if (!mounted) return;
-    setState(() {
-      _isLoadingSongs = true;
-      _selectedPlaylist = playlist;
-      _currentPlaylistSongs = [];
-    });
-
-    // "我喜欢"歌单：始终从 API 加载完整列表，本地 favorites 只用于红心状态
-    final isMyFav = _isMyFavoritePlaylist(playlist);
-
-    try {
-      final api = KugouApiClient();
-      final globalId = playlist.globalCollectionId ?? playlist.id;
-      final isCreated = _isCreated(playlist);
-      final targetGid = playlist.listCreateGid ?? globalId;
-
-      // 翻页聚合：歌单可能超过单页上限（原写死 pagesize:200 会导致超出的歌看不到）。
-      // Node 端 playlist_track_all 已支持 page 参数（begin_idx=(page-1)*pagesize），前端循环拉全。
-      const int pageSize = 200;
-      const int maxPages = 10; // 上限 2000 首，防止异常时无限循环
-      final List<Song> allSongs = [];
-      var page = 1;
-
-      while (page <= maxPages) {
-        KugouPlaylistSongs? result;
-        if (isCreated && playlist.listId.isNotEmpty) {
-          result = await api.getPlaylistSongsByListid(
-            listid: playlist.listId,
-            page: page,
-            pagesize: pageSize,
-            noCache: noCache && page == 1,
-          );
-        } else {
-          // 收藏的歌单：用原歌单的 globalCollectionId（listCreateGid）
-          // 因为用户的订阅版本（globalId）可能 count=0，需要用原歌单 ID
-          result = await api.getPlaylistSongs(
-            targetGid,
-            page: page,
-            pagesize: pageSize,
-            noCache: noCache && page == 1,
-          );
-        }
-        if (!mounted) return;
-        if (result == null) break;
-
-        final songs = result.songs.map((s) => s.toSong()).toList();
-        allSongs.addAll(songs);
-        // 不足一页，说明已拉完
-        if (songs.length < pageSize) break;
-        page++;
-      }
-
-      if (!mounted) return;
-
-      if (allSongs.isNotEmpty) {
-        // 同步"我喜欢"歌单的歌曲 ID 到 FavoritesProvider
-        if (isMyFav && mounted) {
-          final favProvider = context.read<FavoritesProvider>();
-          favProvider.syncFavoriteIds(allSongs.map((s) => s.id).toSet());
-        }
-        setState(() {
-          _currentPlaylistSongs = allSongs;
-          _isLoadingSongs = false;
-        });
-      } else {
-        setState(() => _isLoadingSongs = false);
-      }
-    } catch (e) {
-            if (mounted) setState(() => _isLoadingSongs = false);
-    }
-  }
-
   Future<void> _showCreatePlaylistDialog() async {
     final controller = TextEditingController();
     final result = await showDialog<String>(
@@ -243,7 +160,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
           content: Text(resp != null ? '创建成功' : '创建失败，请重试'),
           behavior: SnackBarBehavior.floating,
         ));
-        _loadPlaylists();
+        // 新建后立即看到新歌单，强制绕过本地代理缓存
+        _loadPlaylists(forceNoCache: true);
       }
     }
     controller.dispose();
@@ -307,7 +225,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
     }
 
     _toggleManageMode(false);
-    _loadPlaylists();
+    // 批量删除（自己创建 / 取消收藏）后立即看到列表变化，强制绕过本地代理缓存
+    _loadPlaylists(forceNoCache: true);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -319,17 +238,15 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectedPlaylist?.name ?? '我的收藏'),
+        title: Text(
+          '我的收藏',
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
         actions: [
-          if (_selectedPlaylist != null)
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: '返回',
-              onPressed: () => setState(() => _selectedPlaylist = null),
-            ),
-          if (_selectedPlaylist == null && !_isManaging)
+          if (!_isManaging)
             IconButton(
               icon: const Icon(Icons.add),
               tooltip: '新建歌单',
@@ -337,7 +254,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
             ),
         ],
       ),
-      body: _selectedPlaylist != null ? _buildSongList() : _buildGroupedPlaylistList(),
+      body: _buildGroupedPlaylistList(),
     );
   }
 
@@ -353,7 +270,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final collected = _collectedPlaylists;
 
     return RefreshIndicator(
-      onRefresh: _loadPlaylists,
+      onRefresh: () => _loadPlaylists(forceNoCache: true),
       child: ListView(
         children: [
           // 我创建的歌单
@@ -499,63 +416,18 @@ class _FavoritesPageState extends State<FavoritesPage> {
       title: Text(playlist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text('${playlist.songCount} 首', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       trailing: _isManaging ? null : const Icon(Icons.chevron_right),
-      onTap: _isManaging ? () => _toggleSelection(index, baseIndex) : () => _loadPlaylistSongs(playlist),
-      onLongPress: _isManaging ? null : () => _toggleManageMode(true),
-    );
-  }
-
-  // ==================== 歌曲列表 ====================
-
-  Widget _buildSongList() {
-    if (_isLoadingSongs) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_currentPlaylistSongs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.music_note, size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
-            const SizedBox(height: 12),
-            Text('歌单暂无歌曲', style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ],
-        ),
-      );
-    }
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Text('共 ${_currentPlaylistSongs.length} 首',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: () => context.read<PlayerProvider>().playOnlinePlaylist(_currentPlaylistSongs, 0),
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('播放全部'),
+      onTap: _isManaging
+          ? () => _toggleSelection(index, baseIndex)
+          // 复用热门歌单子页的 UI：封面/标题/播放全部/随机播放/左上返回箭头
+          : () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PlaylistPage(
+                    playlist: playlist.toPlaylist(),
+                    isInMyFavorites: true,
+                  ),
+                ),
               ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _currentPlaylistSongs.length,
-            itemBuilder: (context, index) {
-              final song = _currentPlaylistSongs[index];
-              return SongListItem(
-                song: song,
-                forceFavorited: _isMyFavoritePlaylist(_selectedPlaylist!),
-                onTap: () => context.read<PlayerProvider>().playOnlinePlaylist(_currentPlaylistSongs, index),
-              );
-            },
-          ),
-        ),
-      ],
+      onLongPress: _isManaging ? null : () => _toggleManageMode(true),
     );
   }
 
