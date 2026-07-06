@@ -59,7 +59,11 @@ const moduleDefs = Object.entries(modules)
     identifier: name,
     route: `/${name.replace(/_/g, '/')}`,
     module: mod,
-  }));
+  }))
+  // 倒序：确保更具体的路由（如 /search/suggest、/search/album）先于通用路由 /search 注册。
+  // Express 的 app.use 是前缀匹配，若不倒序，/search 会拦截 /search/suggest 等子路由，
+  // 导致联想词、专辑/歌单搜索错误地返回歌曲搜索结果。
+  .reverse();
 
 // Now start the server with pre-built module definitions
 const { startService, getModulesDefinitions } = require('./server');

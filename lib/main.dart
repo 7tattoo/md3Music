@@ -22,13 +22,18 @@ Future<void> main() async {
   MediaNotificationService.initCallbacks();
   DesktopLyricService.instance.registerNativeCallbacks();
   await _requestPermissions();
-  runApp(const MyApp());
-  // 启动本地 Node.js API 服务器
+
+  // 先启动本地 Node.js API 服务器，确保就绪后再运行 App
+  // 否则发现页 post-frame callback 发出的请求会因服务器未启动而全部失败
   if (!kIsWeb && Platform.isAndroid) {
-    Future.delayed(const Duration(seconds: 2), () {
-      NodeJsServer.start();
-    });
+    try {
+      await NodeJsServer.start();
+    } catch (e) {
+      print('Node.js server start error: $e');
+    }
   }
+
+  runApp(const MyApp());
 }
 
 Future<void> _requestPermissions() async {

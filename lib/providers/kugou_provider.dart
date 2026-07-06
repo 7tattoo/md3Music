@@ -385,7 +385,7 @@ class KugouProvider extends ChangeNotifier {
   Future<void> getLyric(
     String hash, {
     String? songName,
-    String fmt = 'krc',
+    String fmt = 'lrc',
   }) async {
     _beginLoading();
     _error = null;

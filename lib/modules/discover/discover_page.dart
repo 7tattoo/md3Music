@@ -46,7 +46,25 @@ class _DiscoverPageState extends State<DiscoverPage> {
       // 跨天：重置标志，让 _loadAllData 重新拉
       kugou.resetDiscoverLoadedFlag();
     }
-    await _loadAllData();
+
+    // 自动重试：首次启动时 Node.js 服务器可能尚未完全就绪
+    int retryCount = 0;
+    while (retryCount < 3) {
+      await _loadAllData();
+
+      // 检查是否真的加载到了数据
+      if (kugou.playlistList.isNotEmpty ||
+          kugou.rankList != null ||
+          kugou.recommendSongs.isNotEmpty ||
+          kugou.sceneData != null) {
+        break;  // 有数据了，退出重试
+      }
+
+      retryCount++;
+      if (retryCount < 3 && mounted) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
   }
 
   String _todayString() {
@@ -76,10 +94,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
         kugou.getIpHome(forceRefresh: hasExistingData),
         kugou.getPersonalFm(forceRefresh: hasExistingData),
       ]);
-      kugou.markDiscoverLoaded();
-      // 任何一次加载成功都把日期标记为今天
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kDiscoverLastDateKey, _todayString());
+
+      // 只有确实加载到数据时才标记为已加载
+      final hasAnyData = kugou.playlistList.isNotEmpty ||
+          kugou.rankList != null ||
+          kugou.recommendSongs.isNotEmpty ||
+          kugou.sceneData != null ||
+          kugou.themePlaylistData.isNotEmpty;
+      if (hasAnyData) {
+        kugou.markDiscoverLoaded();
+        // 任何一次加载成功都把日期标记为今天
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_kDiscoverLastDateKey, _todayString());
+      }
     } catch (e) {
       _error = e.toString();
     }

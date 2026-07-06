@@ -732,7 +732,7 @@ class KugouApiClient {
     String hash, {
     String? accesskey,
     String? songName,
-    String fmt = 'krc',
+    String fmt = 'lrc',
     bool decode = true,
   }) async {
     String? lyricId;

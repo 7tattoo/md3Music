@@ -114,7 +114,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final api = KugouApiClient();
     if (!api.isLoggedIn || _collectedListId == null) return;
     try {
-      final result = await api.deletePlaylist(_collectedListId!);
+      // 收藏的歌单在酷狗侧 list_create_userid 为原作者，删除需传 type:0（取消收藏）
+      final result = await api.deletePlaylist(_collectedListId!, type: 0);
       if (result != null && mounted) {
         setState(() {
           _isCollected = false;
