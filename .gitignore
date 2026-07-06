@@ -18,24 +18,15 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# VS Code
-.vscode/
-
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
 .flutter-plugins-dependencies
 .pub-cache/
-/pub/
+.pub/
 /build/
 /coverage/
-
-# Android
-/android/app/debug/
-/android/app/profile/
-/android/app/release/
-/android/.kotlin/errors/
 
 # Node.js SDK (nodejs-mobile) - third-party dependencies
 /android/app/src/main/cpp/include/
@@ -44,6 +35,17 @@ node_modules/
 kugou_api_server/node_modules/
 kugou_api_server/server.log
 
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
 # Temporary files
 _tmp*/
 *.tmp
@@ -51,11 +53,9 @@ _tmp*/
 *.old
 native-libs.zip
 
-# IDE/AI tool configs (local only)
-.mimocode/
+# IDE/AI tool configs
+.mimicode/
 .trae/
 .workbuddy/
-
-# OS files
-Thumbs.db
-.DS_Store
+.vscode/
+.mimocode/plans/1783171865901-quick-cactus.md
