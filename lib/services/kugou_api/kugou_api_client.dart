@@ -41,6 +41,7 @@ class KugouApiClient {
     '/login/wx/create', '/login/wx/check',
     '/login/openplat', '/login/device', '/login/device/kick',
     '/captcha/sent',
+    '/youth/day/vip', '/youth/day/vip/upgrade', '/youth/month/vip/record',
   };
 
   void _onRequest(
@@ -153,10 +154,13 @@ class KugouApiClient {
           return response.data as Map<String, dynamic>;
         }
       }
+      print('[API _post] Non-200 or non-map: status=${response.statusCode} data=${response.data}');
       return null;
-    } on DioException catch (_) {
+    } on DioException catch (e) {
+      print('[API _post] DioException: ${e.type} ${e.message} response=${e.response?.statusCode} ${e.response?.data}');
       return null;
-    } catch (_) {
+    } catch (e) {
+      print('[API _post] Error: $e');
       return null;
     }
   }
@@ -2042,9 +2046,12 @@ class KugouApiClient {
   }
 
   Future<Map<String, dynamic>?> claimDayVip(String receiveDay) async {
-        return await _post(
-      KugouEndpoints.youthDayVip,
-      data: {'receive_day': receiveDay},
+    // 酷狗已将 /youth/day/vip 改为返回 error_code 20028（停用），
+    // 改用可用的 /youth/vip（文档标注“目前不可使用”但实测 status:1 正常领取）。
+    // /youth/vip 自动领取当天，无需 receive_day 参数。
+    return await _post(
+      KugouEndpoints.youthVip,
+      data: {},
     );
   }
 

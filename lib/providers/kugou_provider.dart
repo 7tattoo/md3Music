@@ -765,16 +765,19 @@ class KugouProvider extends ChangeNotifier {
     }
 
     try {
-      final serverNow = await _apiClient.getServerNow();
-      if (serverNow == null) {
-        return;
-      }
-
-      final timestamp =
-          (serverNow['data'] as Map?)?['timestamp'] as int? ??
-          serverNow['timestamp'] as int?;
-      if (timestamp == null) {
-        return;
+      int timestamp;
+      try {
+        final serverNow = await _apiClient.getServerNow();
+        final ts =
+            (serverNow?['data'] as Map?)?['timestamp'] as int? ??
+            serverNow?['timestamp'] as int?;
+        if (ts != null && ts > 0) {
+          timestamp = ts;
+        } else {
+          timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        }
+      } catch (_) {
+        timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       }
 
       final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
@@ -806,35 +809,94 @@ class KugouProvider extends ChangeNotifier {
     _manualSignInRunning = true;
     notifyListeners();
     try {
-      final serverNow = await _apiClient.getServerNow();
-      final ts =
-          (serverNow?['data'] as Map?)?['timestamp'] as int? ??
-          serverNow?['timestamp'] as int?;
-      if (ts == null) return (false, '获取服务器时间失败');
+      // 获取服务器时间，失败则降级用本地时间
+      int ts;
+      try {
+        final serverNow = await _apiClient.getServerNow();
+        final serverTs =
+            (serverNow?['data'] as Map?)?['timestamp'] as int? ??
+            serverNow?['timestamp'] as int?;
+        if (serverTs != null && serverTs > 0) {
+          ts = serverTs;
+        } else {
+          ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          print('[SIGN_IN] getServerNow 返回无效，降级使用本地时间');
+        }
+      } catch (e) {
+        ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        print('[SIGN_IN] getServerNow 异常，降级使用本地时间: $e');
+      }
+
       final date = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
       final receiveDay =
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      print('[SIGN_IN] receiveDay: $receiveDay');
 
+      // 1. 领取 VIP
       final claim = await _apiClient.claimDayVip(receiveDay);
+      print('[SIGN_IN] claim 完整响应: $claim');
 
+      // 2. 尝试升级 VIP（领取后升级）
+      try {
+        final upgrade = await _apiClient.upgradeDayVip();
+        print('[SIGN_IN] upgrade 响应: $upgrade');
+      } catch (e) {
+        print('[SIGN_IN] upgrade 异常（非致命）: $e');
+      }
+
+      // 3. 刷新用户信息和打卡记录
       try {
         await _fetchUserInfo();
+      } catch (e) {
+        print('[SIGN_IN] 刷新用户信息异常: $e');
+      }
+      try {
         await getVipMonthRecord();
-      } catch (_) {}
+      } catch (e) {
+        print('[SIGN_IN] 刷新打卡记录异常: $e');
+      }
 
-      final claimOk = claim?['status'] == 1;
+      // 判定结果：兼容酷狗多种返回格式
+      if (claim == null) {
+        return (false, '签到请求无响应，请检查网络');
+      }
+
+      final status = claim['status'];
+      final errorCode = claim['error_code'];
+      final errorMsg = claim['error_msg']?.toString() ?? claim['msg']?.toString() ?? '';
+
+      // status=1 成功，或 error_code=0 也视为成功
+      final claimOk = (status == 1 || errorCode == 0);
+
       if (claimOk) {
         return (true, '签到成功');
+      } else if (errorMsg.isNotEmpty) {
+        return (false, errorMsg);
       } else {
-        final err = claim?['error_msg']?.toString() ?? '今日已签到';
-        return (false, err);
+        // 打印完整响应用于排查
+        final mapped = _mapYouthVipError(errorCode, status);
+        return (false, mapped);
       }
     } catch (e) {
+      print('[SIGN_IN] 异常: $e');
       return (false, '网络异常: $e');
     } finally {
       _manualSignInRunning = false;
       notifyListeners();
     }
+  }
+
+  /// 将酷狗 youth vip 相关错误码映射成可读中文提示
+  String _mapYouthVipError(int? errorCode, dynamic status) {
+    const map = <int, String>{
+      20006: '签名错误，请重新登录后重试',
+      20010: '参数错误（receive_day 格式或 source_id 不对）',
+      20028: '酷狗拒绝领取：账号可能不符合青年VIP资格，或该功能已停用',
+    };
+    if (errorCode != null && map.containsKey(errorCode)) {
+      return map[errorCode]!;
+    }
+    return '签到失败(状态:$status 错误码:$errorCode)';
   }
 
   Future<void> getRankSongs({
@@ -1113,11 +1175,17 @@ class KugouProvider extends ChangeNotifier {
   Future<void> getVipMonthRecord() async {
     try {
       final r = await _apiClient.getYouthMonthVipRecord();
+      print('[VIP_RECORD] getYouthMonthVipRecord response: $r');
       if (r != null) {
         _vipMonthRecord = r;
+        final data = r['data'];
+        final list = data?['list'] ?? data?['record_list'] ?? r['list'];
+        print('[VIP_RECORD] 解析到 ${list is List ? list.length : 0} 条记录');
         notifyListeners();
       }
-    } catch (_) {}
+    } catch (e) {
+      print('[VIP_RECORD] 异常: $e');
+    }
   }
 
   Future<void> getUserHistory() async {

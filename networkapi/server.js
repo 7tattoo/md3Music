@@ -41,6 +41,9 @@ const moduleFiles = [
   'user_detail',
   'user_vip_detail',
   'user_playlist',
+  'youth_day_vip',
+  'youth_day_vip_upgrade',
+  'youth_month_vip_record',
 ];
 
 const moduleDefs = [];
