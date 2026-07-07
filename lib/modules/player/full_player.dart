@@ -775,10 +775,13 @@ class _FullPlayerState extends State<FullPlayer>
   IconData _getLoopModeIcon(AppLoopMode mode) {
     switch (mode) {
       case AppLoopMode.off:
-        return Icons.repeat;
+        // 不循环：空心箭头
+        return Icons.repeat_outlined;
       case AppLoopMode.one:
+        // 单曲循环：带数字1
         return Icons.repeat_one;
       case AppLoopMode.all:
+        // 列表循环：实心箭头，播完回到第一首
         return Icons.repeat;
     }
   }

@@ -651,16 +651,13 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> toggleLoopMode() async {
     switch (_loopMode) {
       case AppLoopMode.off:
-        _loopMode = AppLoopMode.one;
-        await _audioService?.setLoopMode(just_audio.LoopMode.one);
-        break;
-      case AppLoopMode.one:
         _loopMode = AppLoopMode.all;
-        await _audioService?.setLoopMode(just_audio.LoopMode.all);
         break;
       case AppLoopMode.all:
+        _loopMode = AppLoopMode.one;
+        break;
+      case AppLoopMode.one:
         _loopMode = AppLoopMode.off;
-        await _audioService?.setLoopMode(just_audio.LoopMode.off);
         break;
     }
     notifyListeners();

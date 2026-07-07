@@ -35,6 +35,7 @@ class AudioService {
   double get speed => _player.speed;
 
   Future<void> init() async {
+    await _player.setLoopMode(LoopMode.off);
     await _configureAudioSession();
   }
 
