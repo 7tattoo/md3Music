@@ -3,6 +3,14 @@ import '../../data/models/artist.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/song.dart';
 
+/// 归一化时长：酷狗不同接口返回的时长单位不一致（秒 / 毫秒）。
+/// 超过 10000 秒（约 2.8 小时）视为毫秒，统一转换为秒。
+int _normalizeDuration(int raw) {
+  if (raw <= 0) return 0;
+  if (raw > 10000) return raw ~/ 1000;
+  return raw;
+}
+
 class KugouSearchResult {
   final List<KugouSongDetail> songs;
   final List<KugouArtistBrief> artists;
@@ -343,27 +351,31 @@ class KugouSongDetail {
             json['filename'] ??
             '',
       ),
-      duration: _parseInt(
-        json['time_length'] ??
-            json['HQDuration'] ??
-            json['Duration'] ??
-            json['duration'] ??
-            json['SuperDuration'] ??
-            json['timelength'] ??
-            (() {
-              final tl = json['timelen'];
-              if (tl != null) return (tl as int) ~/ 1000; // 歌单API的timelen单位为毫秒
-              final ai = json['audio_info'] as Map<String, dynamic>?;
-              if (ai != null) {
-                final d =
-                    ai['duration_flac'] as int? ??
-                    ai['duration_320'] as int? ??
-                    ai['duration_high'] as int? ??
-                    ai['duration_128'] as int?;
-                if (d != null) return d ~/ 1000; // 排行榜API单位为毫秒
-              }
-              return null;
-            })(),
+      // 不同时长字段单位不统一：部分接口（如搜索）返回毫秒，部分返回秒。
+      // 统一归一化：原始值 > 10000 视为毫秒，除以 1000。
+      duration: _normalizeDuration(
+        _parseInt(
+          json['time_length'] ??
+              json['HQDuration'] ??
+              json['Duration'] ??
+              json['duration'] ??
+              json['SuperDuration'] ??
+              json['timelength'] ??
+              (() {
+                final tl = json['timelen'];
+                if (tl != null) return (tl as int) ~/ 1000;
+                final ai = json['audio_info'] as Map<String, dynamic>?;
+                if (ai != null) {
+                  final d =
+                      ai['duration_flac'] as int? ??
+                      ai['duration_320'] as int? ??
+                      ai['duration_high'] as int? ??
+                      ai['duration_128'] as int?;
+                  if (d != null) return d ~/ 1000;
+                }
+                return null;
+              })(),
+        ),
       ),
       sqHash: _strNull(
         json['hash_flac'] ??
@@ -421,9 +433,18 @@ class KugouSongDetail {
   }
 
   Song toSong() {
+    // 清理 title：API 的 filename/songname 常返回 "歌手 - 歌曲名" 格式，
+    // 去掉前缀，只保留纯歌曲名（subtitle 已单独显示歌手和专辑）。
+    var cleanTitle = songName;
+    if (artistName != null && artistName!.isNotEmpty) {
+      final prefix = '$artistName - ';
+      if (cleanTitle.startsWith(prefix)) {
+        cleanTitle = cleanTitle.substring(prefix.length);
+      }
+    }
     return Song(
       id: hash,
-      title: songName,
+      title: cleanTitle,
       artist: artistName ?? '',
       album: albumName ?? '',
       duration: Duration(seconds: duration),

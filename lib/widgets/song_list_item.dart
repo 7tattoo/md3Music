@@ -147,119 +147,126 @@ class SongListItem extends StatelessWidget {
     final isFavorited = forceFavorited || favoritesProvider.isFavorite(song.id);
     final colorScheme = Theme.of(context).colorScheme;
 
-    return ListTile(
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: song.artworkUri != null
-            ? CachedNetworkImage(
-                imageUrl: song.artworkUri!,
-                width: 48,
-                height: 48,
-                fit: BoxFit.cover,
-                placeholder: (_, _) => Container(
-                  width: 48,
-                  height: 48,
-                  color: colorScheme.surfaceContainerHighest,
-                  child: Icon(
-                    Icons.music_note,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                errorWidget: (_, _, _) => Container(
-                  width: 48,
-                  height: 48,
-                  color: colorScheme.surfaceContainerHighest,
-                  child: Icon(
-                    Icons.music_note,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              )
-            : Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.music_note,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-      ),
-      title: Text(
-        song.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: isCurrentSong ? colorScheme.primary : null,
-        ),
-      ),
-      subtitle: Text(
-        '${song.artist} - ${song.album}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 12,
-          color: isCurrentSong
-              ? colorScheme.primary.withValues(alpha: 0.7)
-              : colorScheme.onSurfaceVariant,
-        ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isCurrentSong && playerProvider.isPlaying)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colorScheme.primary,
-                ),
-              ),
-            )
-          else if (isCurrentSong)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Icon(
-                Icons.equalizer,
-                size: 16,
-                color: colorScheme.primary,
-              ),
-            ),
-          if (showDuration)
-            Text(
-              song.displayDuration,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          IconButton(
-            icon: Icon(
-              isFavorited ? Icons.favorite : Icons.favorite_border,
-              size: 20,
-              color: isFavorited
-                  ? colorScheme.error
-                  : colorScheme.onSurfaceVariant,
-            ),
-            onPressed: () => favoritesProvider.toggleFavorite(song),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, size: 20),
-            onPressed: () => _showMoreMenu(context),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          ),
-        ],
-      ),
+    const imgSize = 52.0; // 正方形封面，不被 ListTile 压缩
+
+    return InkWell(
       onTap: onTap,
-      selected: isCurrentSong,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          children: [
+            // 封面图 —— 固定正方形
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: imgSize,
+                height: imgSize,
+                child: song.artworkUri != null
+                    ? CachedNetworkImage(
+                        imageUrl: song.artworkUri!,
+                        width: imgSize,
+                        height: imgSize,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => Container(
+                          color: colorScheme.surfaceContainerHighest,
+                          child: Icon(Icons.music_note, color: colorScheme.onSurfaceVariant),
+                        ),
+                        errorWidget: (_, _, _) => Container(
+                          color: colorScheme.surfaceContainerHighest,
+                          child: Icon(Icons.music_note, color: colorScheme.onSurfaceVariant),
+                        ),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.music_note, color: colorScheme.onSurfaceVariant),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // 标题 + 副标题
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isCurrentSong ? colorScheme.primary : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${song.artist} - ${song.album}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isCurrentSong
+                          ? colorScheme.primary.withValues(alpha: 0.7)
+                          : colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 右侧操作区：时长 / 红心 / 三点
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (isCurrentSong && playerProvider.isPlaying)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: SizedBox(
+                      width: 13, height: 13,
+                      child: CircularProgressIndicator(strokeWidth: 1.5, color: colorScheme.primary),
+                    ),
+                  )
+                else if (isCurrentSong)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: Icon(Icons.equalizer, size: 13, color: colorScheme.primary),
+                  ),
+                if (showDuration)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(song.displayDuration, style: const TextStyle(fontSize: 11)),
+                  ),
+                GestureDetector(
+                  onTap: () => favoritesProvider.toggleFavorite(song),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                    child: Icon(
+                      isFavorited ? Icons.favorite : Icons.favorite_border,
+                      size: 18,
+                      color: isFavorited ? colorScheme.error : colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => _showMoreMenu(context),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                    child: Icon(Icons.more_vert, size: 18, color: colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
