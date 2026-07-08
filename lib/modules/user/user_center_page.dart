@@ -368,6 +368,15 @@ class _UserCenterPageState extends State<UserCenterPage> {
         }
       }
     }
+    // 本地兜底：服务端记录不及时时，合并本地已签日期，保证今天立即打勾
+    for (final key in kugou.localSignedDays) {
+      final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(key);
+      if (m != null &&
+          int.parse(m.group(1)!) == curYear &&
+          int.parse(m.group(2)!) == curMonth) {
+        receivedDays.add(int.parse(m.group(3)!));
+      }
+    }
     final monthLabel = DateFormat('yyyy 年 M 月', 'zh_CN').format(now);
     final daysInMonth = DateTime(curYear, curMonth + 1, 0).day;
     // weekday: Mon=1..Sun=7 → 周一开头 0 个前导

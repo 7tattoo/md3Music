@@ -14,7 +14,31 @@ class KugouProvider extends ChangeNotifier {
   final KugouApiClient _apiClient = KugouApiClient();
 
   KugouProvider() {
+    _loadLocalSignedDays();
     _autoConnect();
+  }
+
+  Future<void> _loadLocalSignedDays() async {
+    try {
+      final days = await SettingsRepository().getSignedDays();
+      if (days.isNotEmpty) {
+        _localSignedDays.addAll(days);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  /// 打卡成功后标记今天已签（本地兜底，保证日历立即打勾并持久化）
+  Future<void> _markSignedToday() async {
+    final now = DateTime.now();
+    final key =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    if (_localSignedDays.add(key)) {
+      notifyListeners();
+      try {
+        await SettingsRepository().setSignedDays(_localSignedDays);
+      } catch (_) {}
+    }
   }
 
   Future<void> _autoConnect() async {
@@ -68,6 +92,9 @@ class KugouProvider extends ChangeNotifier {
   Map<String, dynamic>? _topSongData;
   KugouUserVipDetail? _vipInfo;
   Map<String, dynamic>? _vipMonthRecord;
+  // 本地打卡兜底：服务端 /youth/month/vip/record 有时不及时返回当天记录，
+  // 用本地集合保证“今天签到后日历立即打勾”，并持久化跨重启。
+  final Set<String> _localSignedDays = {};
   Map<String, dynamic>? _userHistoryData;
   Map<String, dynamic>? _brushData;
   Map<String, dynamic>? _aiRecommendData;
@@ -209,6 +236,7 @@ class KugouProvider extends ChangeNotifier {
   Map<String, dynamic>? get topSongData => _topSongData;
   KugouUserVipDetail? get vipInfo => _vipInfo;
   Map<String, dynamic>? get vipMonthRecord => _vipMonthRecord;
+  Set<String> get localSignedDays => _localSignedDays;
   Map<String, dynamic>? get userHistoryData => _userHistoryData;
   Map<String, dynamic>? get brushData => _brushData;
   Map<String, dynamic>? get aiRecommendData => _aiRecommendData;
@@ -785,7 +813,12 @@ class KugouProvider extends ChangeNotifier {
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
       try {
-        await _apiClient.claimDayVip(receiveDay);
+        final autoClaim = await _apiClient.claimDayVip(receiveDay);
+        final autoOk = autoClaim != null &&
+            (autoClaim['status'] == 1 || autoClaim['error_code'] == 0);
+        if (autoOk) {
+          await _markSignedToday();
+        }
       } catch (_) {}
 
       try {
@@ -836,15 +869,7 @@ class KugouProvider extends ChangeNotifier {
       final claim = await _apiClient.claimDayVip(receiveDay);
       print('[SIGN_IN] claim 完整响应: $claim');
 
-      // 2. 尝试升级 VIP（领取后升级）
-      try {
-        final upgrade = await _apiClient.upgradeDayVip();
-        print('[SIGN_IN] upgrade 响应: $upgrade');
-      } catch (e) {
-        print('[SIGN_IN] upgrade 异常（非致命）: $e');
-      }
-
-      // 3. 刷新用户信息和打卡记录
+      // 2. 刷新用户信息和打卡记录（原项目架构：领取后刷新，无需再调 upgrade）
       try {
         await _fetchUserInfo();
       } catch (e) {
@@ -869,6 +894,7 @@ class KugouProvider extends ChangeNotifier {
       final claimOk = (status == 1 || errorCode == 0);
 
       if (claimOk) {
+        await _markSignedToday();
         return (true, '签到成功');
       } else if (errorMsg.isNotEmpty) {
         return (false, errorMsg);
@@ -1174,8 +1200,12 @@ class KugouProvider extends ChangeNotifier {
 
   Future<void> getVipMonthRecord() async {
     try {
-      final r = await _apiClient.getYouthMonthVipRecord();
-      print('[VIP_RECORD] getYouthMonthVipRecord response: $r');
+      // 传入当前年月，否则接口默认返回最早月份（如 4 月）的记录，导致当月打卡不显示
+      final now = DateTime.now();
+      final month =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}';
+      final r = await _apiClient.getYouthMonthVipRecord(month: month);
+      print('[VIP_RECORD] getYouthMonthVipRecord($month) response: $r');
       if (r != null) {
         _vipMonthRecord = r;
         final data = r['data'];

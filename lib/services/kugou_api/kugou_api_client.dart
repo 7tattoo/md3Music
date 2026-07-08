@@ -2046,20 +2046,37 @@ class KugouApiClient {
   }
 
   Future<Map<String, dynamic>?> claimDayVip(String receiveDay) async {
-    // 酷狗已将 /youth/day/vip 改为返回 error_code 20028（停用），
-    // 改用可用的 /youth/vip（文档标注“目前不可使用”但实测 status:1 正常领取）。
-    // /youth/vip 自动领取当天，无需 receive_day 参数。
-    return await _post(
-      KugouEndpoints.youthVip,
-      data: {},
+    // 还原到最初项目的签到架构：优先调用 /youth/day/vip（需传 receive_day）。
+    // 若该接口已被酷狗停用（error_code 20028 等拒领码）或请求失败，
+    // 自动回退到可用的 /youth/vip，保证手动/自动签到仍能完成。
+    final primary = await _post(
+      KugouEndpoints.youthDayVip,
+      data: {'receive_day': receiveDay},
     );
+    final errCode = primary?['error_code'] as int?;
+    final isRefusedOrFailed = primary == null || errCode == 20028;
+    if (!isRefusedOrFailed) {
+      return primary; // 成功 / 今日已签到 等正常响应，直接返回
+    }
+    try {
+      final fallback = await _post(KugouEndpoints.youthVip, data: {});
+      if (fallback != null) return fallback;
+    } catch (_) {}
+    return primary; // 回退也失败，返回原始响应供上层提示
   }
 
   Future<Map<String, dynamic>?> upgradeDayVip() async {
         return await _post(KugouEndpoints.youthDayVipUpgrade);
   }
 
-  Future<Map<String, dynamic>?> getYouthMonthVipRecord() async {
-    return await _get(KugouEndpoints.youthMonthVipRecord);
+  Future<Map<String, dynamic>?> getYouthMonthVipRecord({String? month}) async {
+    final query = <String, dynamic>{};
+    if (month != null && month.isNotEmpty) {
+      query['month'] = month;
+    }
+    return await _get(
+      KugouEndpoints.youthMonthVipRecord,
+      queryParameters: query.isNotEmpty ? query : null,
+    );
   }
 }

@@ -9,6 +9,20 @@ class SettingsRepository {
   static const String _keyShowLyrics = 'settings_show_lyrics';
   static const String _keyAutoReceiveVip = 'settings_auto_receive_vip';
   static const String _keyApiServerUrl = 'settings_api_server_url';
+  static const String _keySignedDays = 'settings_signed_days';
+
+  /// 读取本地打卡日期集合（格式 yyyy-MM-dd）
+  Future<Set<String>> getSignedDays() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_keySignedDays);
+    return list != null ? Set<String>.from(list) : {};
+  }
+
+  /// 持久化本地打卡日期集合
+  Future<void> setSignedDays(Set<String> days) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_keySignedDays, days.toList());
+  }
 
   Future<String> getApiServerUrl() async {
     final prefs = await SharedPreferences.getInstance();
