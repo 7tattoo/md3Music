@@ -883,7 +883,7 @@ class KugouProvider extends ChangeNotifier {
 
       // 判定结果：兼容酷狗多种返回格式
       if (claim == null) {
-        return (false, '签到请求无响应，请检查网络');
+        return (false, '签到请求无响应，请勿重复签到');
       }
 
       final status = claim['status'];
