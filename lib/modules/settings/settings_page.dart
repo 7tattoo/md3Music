@@ -71,7 +71,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '3.0.0';
+          _appVersion = '3.1.0';
         });
       }
     }
@@ -390,7 +390,7 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         ListTile(
           title: const Text('应用版本'),
-          subtitle: Text(_appVersion.isEmpty ? '3.0.0' : _appVersion),
+          subtitle: Text(_appVersion.isEmpty ? '3.1.0' : _appVersion),
           leading: const Icon(Icons.info_outline),
         ),
         ListTile(
@@ -407,7 +407,7 @@ class _SettingsPageState extends State<SettingsPage> {
             showLicensePage(
               context: context,
               applicationName: 'MD3Music',
-              applicationVersion: _appVersion.isEmpty ? '3.0.0' : _appVersion,
+              applicationVersion: _appVersion.isEmpty ? '3.1.0' : _appVersion,
             );
           },
         ),
