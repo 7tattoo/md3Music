@@ -34,8 +34,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   /// 每天只自动加载一次：内存有数据且是同一天则跳过，否则拉取
   Future<void> _initIfNeeded() async {
+    if (!mounted) return;
     final kugou = context.read<KugouProvider>();
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final lastDate = prefs.getString(_kDiscoverLastDateKey);
     final today = _todayString();
     if (kugou.hasLoadedDiscoverData && lastDate == today) {
@@ -51,6 +53,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
     int retryCount = 0;
     while (retryCount < 3) {
       await _loadAllData();
+      if (!mounted) return;
 
       // 检查是否真的加载到了数据
       if (kugou.playlistList.isNotEmpty ||
@@ -73,6 +76,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   Future<void> _loadAllData() async {
+    if (!mounted) return; // 页面已销毁则放弃，避免访问 context 触发 null check 崩溃
     final kugou = context.read<KugouProvider>();
     final hasExistingData = kugou.hasLoadedDiscoverData;
     // 已有数据时直接展示，后台静默刷新
@@ -101,13 +105,16 @@ class _DiscoverPageState extends State<DiscoverPage> {
           kugou.recommendSongs.isNotEmpty ||
           kugou.sceneData != null ||
           kugou.themePlaylistData.isNotEmpty;
+      if (!mounted) return;
       if (hasAnyData) {
         kugou.markDiscoverLoaded();
         // 任何一次加载成功都把日期标记为今天
         final prefs = await SharedPreferences.getInstance();
+        if (!mounted) return;
         await prefs.setString(_kDiscoverLastDateKey, _todayString());
       }
     } catch (e) {
+      if (!mounted) return;
       _error = e.toString();
     }
     if (mounted) {

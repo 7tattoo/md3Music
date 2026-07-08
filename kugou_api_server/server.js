@@ -543,18 +543,22 @@ async function consturctServer(moduleDefs) {
         // 异常处理：模块内部错误会被封装为包含 status 和 body 的错误对象抛出
         const moduleResponse = e;
 
-        // 错误日志
-        console.log('[ERR]', decode(req.originalUrl), {
+        // 错误日志：打印真实异常信息，便于排查上游（kugou）请求失败原因
+        // （如 DNS 解析失败 ENOTFOUND / 超时 ETIMEDOUT / TLS 握手失败等）
+        console.error('[ERR]', decode(req.originalUrl), {
+          message: e?.message || String(e),
           status: moduleResponse.status,
           body: moduleResponse.body,
         });
+        if (e?.stack) console.error(e.stack);
 
-        // 如果错误对象没有 body，返回通用 404 响应
+        // 如果错误对象没有 body，返回通用 404 响应（带真实错误信息，便于客户端定位）
         if (!moduleResponse.body) {
           res.status(404).send({
             code: 404,
             data: null,
             msg: 'Not Found',
+            error: e?.message ? String(e.message) : String(e),
           });
           return;
         }

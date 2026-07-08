@@ -21,7 +21,13 @@ Future<void> main() async {
   // 注册通知栏/悬浮窗回调（悬浮窗内按钮 → DesktopLyricService；通知栏桌面歌词按钮 → toggle）
   MediaNotificationService.initCallbacks();
   DesktopLyricService.instance.registerNativeCallbacks();
-  await _requestPermissions();
+  // 权限请求包裹 try/catch：在部分设备/早期阶段 permission_handler 可能抛
+  // "Unable to detect current Android Activity"，不能让它中断启动流程。
+  try {
+    await _requestPermissions();
+  } catch (e) {
+    print('Request permissions error (ignored): $e');
+  }
 
   // 先启动本地 Node.js API 服务器，确保就绪后再运行 App
   // 否则发现页 post-frame callback 发出的请求会因服务器未启动而全部失败
@@ -42,11 +48,19 @@ Future<void> _requestPermissions() async {
 
   // Android 13+ 通知权限
   if (await Permission.notification.isDenied) {
-    await Permission.notification.request();
+    try {
+      await Permission.notification.request();
+    } catch (e) {
+      print('Notification permission request failed: $e');
+    }
   }
   // Android 14+ 媒体权限
   if (await Permission.audio.isDenied) {
-    await Permission.audio.request();
+    try {
+      await Permission.audio.request();
+    } catch (e) {
+      print('Audio permission request failed: $e');
+    }
   }
   // 忽略电池优化：只弹一次（不管用户选什么都标记为已弹）
   try {

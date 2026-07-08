@@ -126,6 +126,8 @@ class _FullPlayerState extends State<FullPlayer>
       body: ResponsiveLayout(
         compact: (_) =>
             _buildCompactLayout(playerProvider, currentSong, colorScheme),
+        medium: (_) =>
+            _buildLandscapeLayout(playerProvider, currentSong, colorScheme),
         expanded: (_) =>
             _buildExpandedLayout(playerProvider, currentSong, colorScheme),
       ),
@@ -179,6 +181,119 @@ class _FullPlayerState extends State<FullPlayer>
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: _buildControls(playerProvider, colorScheme),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 手机横屏 / 小尺寸宽屏布局：左侧封面，右侧信息+歌词/评论+控制栏
+  Widget _buildLandscapeLayout(
+    PlayerProvider playerProvider,
+    dynamic currentSong,
+    ColorScheme colorScheme,
+  ) {
+    return SafeArea(
+      child: Row(
+        children: [
+          // ── 左侧：封面 ──
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // 横屏时封面最大不超过可用宽度，保持正方形
+                  final size = constraints.maxWidth.clamp(120.0, 300.0);
+                  return Center(
+                    child: SizedBox(
+                      width: size,
+                      height: size,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: currentSong.artworkUri != null
+                            ? CachedNetworkImage(
+                                imageUrl: currentSong.artworkUri!,
+                                fit: BoxFit.cover,
+                                placeholder: (_, _) => Container(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  child: Icon(Icons.music_note,
+                                    size: 48, color: colorScheme.onSurfaceVariant),
+                                ),
+                                errorWidget: (_, _, _) => Container(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  child: Icon(Icons.music_note,
+                                    size: 48, color: colorScheme.onSurfaceVariant),
+                                ),
+                              )
+                            : Container(
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Icon(Icons.music_note,
+                                  size: 48, color: colorScheme.onSurfaceVariant),
+                              ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          // ── 右侧：Tab + 内容 + 控制 ──
+          Expanded(
+            flex: 6,
+            child: Column(
+              children: [
+                // 标签栏（封面/歌词/评论）
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: TabBar(
+                    controller: _tabController,
+                    tabs: const [Tab(text: '封面'), Tab(text: '歌词'), Tab(text: '评论')],
+                    labelStyle: Theme.of(context).textTheme.labelMedium,
+                    indicatorSize: TabBarIndicatorSize.label,
+                    isScrollable: false,
+                    tabAlignment: TabAlignment.center,
+                  ),
+                ),
+
+                // 内容区（歌曲信息 / 歌词 / 评论）
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _tabController.animateTo(1),
+                        behavior: HitTestBehavior.opaque,
+                        child: _buildSongInfo(playerProvider, currentSong, colorScheme),
+                      ),
+                      _isLoadingLyrics
+                          ? const Center(child: CircularProgressIndicator())
+                          : LyricsView(
+                              key: _lyricsKey,
+                              lyrics: _lyrics,
+                              position: playerProvider.position,
+                              onSeek: (position) {
+                                playerProvider.seek(position);
+                              },
+                            ),
+                      CommentsView(
+                        songHash: currentSong.id,
+                        albumAudioId: currentSong.albumAudioId,
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 控制区
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _buildControls(playerProvider, colorScheme, isExpanded: true),
+                ),
+              ],
+            ),
           ),
         ],
       ),
