@@ -3,7 +3,23 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  static const Color _seedColor = Color(0xFF6750A4);
+  /// 8 个预设种子色，取自 Material 3 官方 Theme Builder 的 key tone 40。
+  /// 顺序：色环顺序（紫→蓝→青→绿→黄→橙→红→粉）。
+  /// 索引 0 是默认色，与 [defaultSeedColor] 保持一致。
+  static const List<Color> presetSeedColors = [
+    Color(0xFF6750A4), // 紫（M3 默认）
+    Color(0xFF0061A4), // 蓝
+    Color(0xFF006A6A), // 青绿
+    Color(0xFF386A20), // 绿
+    Color(0xFF7E5700), // 黄
+    Color(0xFF8C4A00), // 橙
+    Color(0xFFB3261E), // 红
+    Color(0xFF984061), // 粉
+  ];
+
+  /// 默认种子色（紫色），用于未启用系统主题色且未手动选择时的兜底。
+  /// 必须独立定义为 const，不能引用 [presetSeedColors] 的索引（非常量表达式）。
+  static const Color defaultSeedColor = Color(0xFF6750A4);
 
   // CJK 字体回退链 - 按平台优先级排序:
   // 1) Web 浏览器(Windows + Edge) 优先用系统自带的 "Microsoft YaHei" (无需下载)
@@ -29,7 +45,7 @@ class AppTheme {
 
   static ThemeData get lightTheme {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
+      seedColor: defaultSeedColor,
       brightness: Brightness.light,
     );
     return _buildTheme(colorScheme, Brightness.light);
@@ -37,9 +53,47 @@ class AppTheme {
 
   static ThemeData get darkTheme {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
+      seedColor: defaultSeedColor,
       brightness: Brightness.dark,
     );
+    return _buildTheme(colorScheme, Brightness.dark);
+  }
+
+  /// 根据传入的种子色构建浅色主题。
+  ///
+  /// 用于「莫奈色」开关启用时，由 ThemeProvider 传入系统提取的主色。
+  static ThemeData lightThemeFromSeed(Color seedColor) {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: Brightness.light,
+    );
+    return _buildTheme(colorScheme, Brightness.light);
+  }
+
+  /// 根据传入的种子色构建深色主题。
+  ///
+  /// [useOledBlack] 为 true 时启用 OLED 纯黑变体：
+  /// 将 [ColorScheme] 的 surface 系列覆盖为 [Colors.black] / 极深灰，
+  /// 保留 onSurface 等前景色不变（保证对比度），
+  /// surfaceContainerHigh/Highest 用极深灰保留卡片层级感。
+  static ThemeData darkThemeFromSeed(Color seedColor, {bool useOledBlack = false}) {
+    var colorScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: Brightness.dark,
+    );
+    if (useOledBlack) {
+      colorScheme = colorScheme.copyWith(
+        surface: Colors.black,
+        surfaceContainerLowest: Colors.black,
+        surfaceContainerLow: Colors.black,
+        surfaceContainer: Colors.black,
+        // High/Highest 保留极深灰，让卡片/底栏仍有微妙层级感
+        surfaceContainerHigh: const Color(0xFF111111),
+        surfaceContainerHighest: const Color(0xFF1A1A1A),
+        // onSurface 等前景色保持不变，确保文字对比度
+        // inverseSurface 保持不变，确保 Snackbar 反色正常
+      );
+    }
     return _buildTheme(colorScheme, Brightness.dark);
   }
 

@@ -1,8 +1,4 @@
-import 'dart:io' show exit;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:provider/provider.dart';
 
 import 'core/layout/responsive_layout.dart';
@@ -15,6 +11,7 @@ import 'modules/user/user_center_page.dart';
 import 'modules/user/favorites_page.dart';
 
 import 'modules/player/full_player.dart';
+import 'modules/player/full_player_route.dart';
 import 'modules/player/mini_player.dart';
 import 'modules/playlist/playlist_page.dart';
 import 'modules/search/search_page.dart';
@@ -30,6 +27,65 @@ import 'providers/player_provider.dart';
 import 'providers/playlist_collection_notifier.dart';
 import 'providers/theme_provider.dart';
 import 'services/nodejs_server.dart';
+
+/// 主页（`/`）专用的 [MaterialPageRoute] 子类。
+///
+/// 重写 [buildTransitions]：当 FullPlayer 在栈顶（[isFullPlayerOnTop] == true）
+/// 且 [secondaryAnimation] 驱动时，让 _MainLayout 向上偏移 15% + 淡出
+/// （Apple Music 经典效果）；其他路由 push 时走默认 transitions。
+///
+/// 通过 [isFullPlayerOnTop] 全局 ValueNotifier 限制只对 FullPlayer 生效，
+/// 避免 /search /settings /playlist 等也触发 up-fade。
+class _UpFadeMainRoute<T> extends MaterialPageRoute<T> {
+  _UpFadeMainRoute({required super.builder});
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // 入场动画走默认（_MainLayout 是 initialRoute，入场无动画）
+    // 离场动画（被覆盖）：监听 isFullPlayerOnTop，true 时 up-fade，false 时默认
+    return AnimatedBuilder(
+      animation: Listenable.merge([secondaryAnimation, isFullPlayerOnTop]),
+      builder: (context, _) {
+        if (!isFullPlayerOnTop.value) {
+          return super.buildTransitions(
+            context,
+            animation,
+            secondaryAnimation,
+            child,
+          );
+        }
+        // FullPlayer 在栈顶：_MainLayout 向上偏移 15% + 淡出
+        final offset = Tween<Offset>(
+          begin: Offset.zero,
+          end: const Offset(0, -0.15),
+        ).animate(
+          CurvedAnimation(
+            parent: secondaryAnimation,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+        final fade = Tween<double>(
+          begin: 1.0,
+          end: 0.0,
+        ).animate(
+          CurvedAnimation(
+            parent: secondaryAnimation,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+        return FadeTransition(
+          opacity: fade,
+          child: SlideTransition(position: offset, child: child),
+        );
+      },
+    );
+  }
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -62,19 +118,34 @@ class _AppView extends StatelessWidget {
     return MaterialApp(
       title: 'MD3Music',
       debugShowCheckedModeBanner: false,
-      darkTheme: AppTheme.darkTheme,
+      // 同时传 theme 和 darkTheme，并根据 ThemeProvider.effectiveSeedColor
+      // 动态生成（支持「莫奈色」开关切换系统主色）。
+      // darkTheme 额外接收 useOledBlack 开关，开启时 surface 系列覆盖为纯黑。
+      theme: AppTheme.lightThemeFromSeed(themeProvider.effectiveSeedColor),
+      darkTheme: AppTheme.darkThemeFromSeed(
+        themeProvider.effectiveSeedColor,
+        useOledBlack: themeProvider.useOledBlack,
+      ),
       themeMode: themeProvider.themeMode,
       navigatorKey: appNavigatorKey,
       initialRoute: '/',
       routes: {
-        '/': (_) => const _MainLayout(),
+        // '/' 不在 routes 注册，改在 onGenerateRoute 用 _UpFadeMainRoute 创建，
+        // 以便 push FullPlayer 时主页面向上淡出（仅 FullPlayer 生效）
         '/search': (_) => const SearchPage(),
         '/library': (_) => const LibraryPage(),
         '/settings': (_) => const SettingsPage(),
+        // 发现页右上角头像点击跳转入口（push 独立路由，与底部 tab 中的实例并存无冲突）
+        '/user': (_) => const UserCenterPage(),
         '/player': (_) => const FullPlayer(),
         '/personal_fm': (_) => const PersonalFmPage(),
       },
       onGenerateRoute: (settings) {
+        if (settings.name == '/') {
+          return _UpFadeMainRoute<void>(
+            builder: (_) => const _MainLayout(),
+          );
+        }
         if (settings.name == '/playlist') {
           final playlist = settings.arguments as Playlist;
           return PageRouteBuilder(
@@ -247,84 +318,42 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // 让系统返回键先走 Navigator 栈（关掉 sub-page / pop dialog），
-    // 栈空了再弹"退出应用"确认对话框，避免在子页面按返回就直接弹退出。
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        final nav = appNavigatorKey.currentState;
-        if (nav != null && nav.canPop()) {
-          nav.pop();
-          return;
-        }
-        _showExitDialog();
+    // 预测返回手势由 AndroidManifest 的 enableOnBackInvokedCallback 控制（编译时静态），
+    // 应用无法运行时关闭系统预测动画。栈空时直接退出 App（系统默认行为）。
+    return ResponsiveScaffold(
+      destinations: _destinations,
+      railDestinations: _railDestinations,
+      drawerDestinations: _drawerDestinations,
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (index) {
+        setState(() {
+          _selectedIndex = index;
+        });
       },
-      child: ResponsiveScaffold(
-        destinations: _destinations,
-        railDestinations: _railDestinations,
-        drawerDestinations: _drawerDestinations,
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        body: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        compactBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        mediumBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        expandedBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
+      body: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
       ),
-    );
-  }
-
-  Future<void> _showExitDialog() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('退出应用'),
-        content: const Text('确定要退出 MD3Music 吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确定'),
-          ),
+      compactBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
+      ),
+      mediumBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
+      ),
+      expandedBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
         ],
       ),
     );
-    if (ok != true) return;
-    if (kIsWeb) {
-      SystemNavigator.pop();
-    } else {
-      // 先让本地 Node.js 服务器停止监听（释放 8080 端口），再杀进程
-      // ignore: discarded_futures
-      NodeJsServer.stop();
-      // 立即杀进程，关闭所有后台服务（如 audio_service）
-      exit(0);
-    }
   }
 }
