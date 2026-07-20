@@ -25,10 +25,31 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   String? _error;
   KugouAlbumDetail? _albumDetail;
 
+  // 顶栏 fade-in 用的滚动监听：与 playlist_page.dart 保持一致的实现风格
+  final ScrollController _scrollController = ScrollController();
+  double _scrollOffset = 0;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => _fetchAlbum());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 滚动监听：阈值 0.5px 防抖，避免过度 setState。
+  void _onScroll() {
+    if (!mounted) return;
+    final offset = _scrollController.offset;
+    if ((offset - _scrollOffset).abs() > 0.5) {
+      setState(() => _scrollOffset = offset);
+    }
   }
 
   Future<void> _fetchAlbum() async {
@@ -75,10 +96,34 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                   children: [
                     Expanded(
                       child: CustomScrollView(
+                        controller: _scrollController,
                         slivers: [
                           SliverAppBar(
                             expandedHeight: 280,
                             pinned: true,
+                            // pinned 后顶栏背景色：滚动到 expandedHeight - kToolbarHeight
+                            // 之后从透明渐变到 surface（与 playlist_page 一致）
+                            backgroundColor: Color.lerp(
+                              Colors.transparent,
+                              colorScheme.surface,
+                              (_scrollOffset - (280 - kToolbarHeight))
+                                  .clamp(0.0, 60.0) / 60,
+                            )!,
+                            surfaceTintColor: Colors.transparent,
+                            scrolledUnderElevation: 0,
+                            // pinned 后顶栏标题：滚动超过阈值后 fade-in 显示专辑名称
+                            title: Opacity(
+                              opacity: ((_scrollOffset - (280 - kToolbarHeight)) /
+                                      60.0)
+                                  .clamp(0.0, 1.0),
+                              child: Text(
+                                displayAlbum.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            ),
                             flexibleSpace: FlexibleSpaceBar(
                               background: Container(
                                 decoration: BoxDecoration(

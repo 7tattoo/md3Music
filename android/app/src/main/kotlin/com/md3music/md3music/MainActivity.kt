@@ -8,12 +8,14 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 import com.md3music.md3music.AudioPlaybackService
 import com.md3music.md3music.FloatingLyricService
+import io.github.proify.lyricon.lyric.model.Song
 
 class MainActivity : FlutterActivity() {
     private val FLOATING_CHANNEL = "com.md3music.md3music/floating_lyric"
@@ -88,6 +90,7 @@ class MainActivity : FlutterActivity() {
                         action = FloatingLyricService.ACTION_UPDATE_LYRIC
                         putExtra(FloatingLyricService.EXTRA_LYRIC, call.argument<String>("lyric") ?: "")
                         putExtra(FloatingLyricService.EXTRA_NEXT_LYRIC, call.argument<String>("nextLyric") ?: "")
+                        putExtra(FloatingLyricService.EXTRA_SUNG_CHAR_COUNT, call.argument<Int>("sungCharCount") ?: -1)
                     }
                     startService(intent)
                     result.success(true)
@@ -190,6 +193,108 @@ class MainActivity : FlutterActivity() {
                     }
                     startService(intent)
                     result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 注册 Lyricon Provider MethodChannel，让 Dart 端能控制 Lyricon 播放器
+        val lyriconChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.md3music.md3music/lyricon"
+        )
+        AudioPlaybackService.setLyriconChannel(lyriconChannel)
+        lyriconChannel.setMethodCallHandler { call, result ->
+            val provider = AudioPlaybackService.getLyriconProvider()
+            when (call.method) {
+                "setEnabled" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    try {
+                        if (enabled) provider?.register() else provider?.unregister()
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+                "setSong" -> {
+                    val arg = call.argument<Map<String, Any?>>("song")
+                    if (arg == null) {
+                        try {
+                            // SDK 的 setSong 不接受 null，传一个空 Song 表示清空
+                            provider?.player?.setSong(Song())
+                            result.success(true)
+                        } catch (_: Exception) {
+                            result.success(false)
+                        }
+                    } else {
+                        try {
+                            val song = AudioPlaybackService.buildLyriconSong(arg)
+                            provider?.player?.setSong(song)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("BUILD_SONG_FAILED", e.message, null)
+                        }
+                    }
+                }
+                "sendText" -> {
+                    val text = call.argument<String>("text")
+                    try {
+                        provider?.player?.sendText(text)
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+                "setPosition" -> {
+                    val pos = call.argument<Number>("positionMs")?.toLong() ?: 0L
+                    try {
+                        provider?.player?.setPosition(pos)
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+                "setPlaybackState" -> {
+                    val state = call.argument<Number>("state")?.toInt()
+                        ?: PlaybackStateCompat.STATE_NONE
+                    val pos = call.argument<Number>("position")?.toLong() ?: 0L
+                    // SDK 的 setPlaybackState 接受 Boolean，从 PlaybackStateCompat 状态码推导 isPlaying
+                    val isPlaying = state == PlaybackStateCompat.STATE_PLAYING
+                    try {
+                        // 位置通过 setPosition 同步（原本打包在 PlaybackStateCompat 中）
+                        provider?.player?.setPosition(pos)
+                        provider?.player?.setPlaybackState(isPlaying)
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+                "seekTo" -> {
+                    val pos = call.argument<Number>("positionMs")?.toLong() ?: 0L
+                    try {
+                        provider?.player?.seekTo(pos)
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+                "setDisplayTranslation" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    try {
+                        provider?.player?.setDisplayTranslation(enabled)
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+                "setDisplayRoma" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    try {
+                        provider?.player?.setDisplayRoma(enabled)
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
                 }
                 else -> result.notImplemented()
             }
