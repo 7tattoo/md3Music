@@ -37,6 +37,17 @@ class Song {
     return '$minutes:$seconds';
   }
 
+  /// 用于 UI 显示的标题——剥离常见音频文件扩展名后缀。
+  ///
+  /// 酷狗 API 返回的 `songname`/`FileName` 字段有时带 `.mp3`/`.flac` 等后缀，
+  /// 在 UI 显示时应当剥离。原始 [title] 字段保持不变用于搜索/收藏 key 等场景。
+  /// 支持的扩展名：mp3, flac, wav, ape, m4a, ogg, aac, wma, opus（大小写不敏感）。
+  String get displayName {
+    final pattern = RegExp(r'\.(mp3|flac|wav|ape|m4a|ogg|aac|wma|opus)$',
+        caseSensitive: false);
+    return title.replaceFirst(pattern, '');
+  }
+
   factory Song.fromJson(Map<String, dynamic> json) {
     return Song(
       id: json['id'] as String,
