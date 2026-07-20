@@ -7,6 +7,7 @@ import '../providers/downloads_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/kugou_api/kugou_api_client.dart';
+import 'playing_spectrum_indicator.dart';
 
 class SongListItem extends StatelessWidget {
   final Song song;
@@ -34,7 +35,7 @@ class SongListItem extends StatelessWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.music_note),
-              title: Text(song.title, style: const TextStyle(fontSize: 14)),
+              title: Text(song.displayName, style: const TextStyle(fontSize: 14)),
               subtitle: Text(song.artist, style: const TextStyle(fontSize: 12)),
             ),
             const Divider(height: 1),
@@ -93,7 +94,7 @@ class SongListItem extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('下载: ${song.title}'),
+        title: Text('下载: ${song.displayName}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -194,7 +195,7 @@ class SongListItem extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    song.title,
+                    song.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -224,18 +225,17 @@ class SongListItem extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (isCurrentSong && playerProvider.isPlaying)
+                if (isCurrentSong)
                   Padding(
                     padding: const EdgeInsets.only(right: 2),
-                    child: SizedBox(
-                      width: 13, height: 13,
-                      child: CircularProgressIndicator(strokeWidth: 1.5, color: colorScheme.primary),
+                    // 频谱动画标识：3 根粒度柱 sin 波动
+                    // 暂停时 isPlaying=false → ticker 停止，保留最后一帧
+                    // 继续播放时 isPlaying=true → ticker 恢复，动画继续
+                    child: PlayingSpectrumIndicator(
+                      color: colorScheme.primary,
+                      size: 14,
+                      isPlaying: playerProvider.isPlaying,
                     ),
-                  )
-                else if (isCurrentSong)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 2),
-                    child: Icon(Icons.equalizer, size: 13, color: colorScheme.primary),
                   ),
                 if (showDuration)
                   Padding(
