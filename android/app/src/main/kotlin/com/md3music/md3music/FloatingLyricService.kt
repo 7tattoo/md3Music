@@ -76,6 +76,8 @@ class FloatingLyricService : Service() {
         const val ACTION_TOGGLE_LOCK = "com.md3music.md3music.TOGGLE_LOCK"
         const val EXTRA_LYRIC = "lyric"
         const val EXTRA_NEXT_LYRIC = "nextLyric"
+        // 当前行已唱字数（KRC 逐字）。-1 表示无逐字（LRC/纯文本），原生侧整行渐变色
+        const val EXTRA_SUNG_CHAR_COUNT = "sungCharCount"
         const val EXTRA_TITLE = "title"
         const val EXTRA_POSITION = "position"
         const val EXTRA_DURATION = "duration"
@@ -110,7 +112,8 @@ class FloatingLyricService : Service() {
             ACTION_UPDATE_LYRIC -> {
                 val lyric = intent.getStringExtra(EXTRA_LYRIC) ?: ""
                 val next = intent.getStringExtra(EXTRA_NEXT_LYRIC)
-                updateLyric(lyric, next)
+                val sungCount = intent.getIntExtra(EXTRA_SUNG_CHAR_COUNT, -1)
+                updateLyric(lyric, next, sungCount)
             }
             ACTION_UPDATE_TITLE -> {}
             ACTION_UPDATE_PROGRESS -> {
@@ -195,6 +198,9 @@ class FloatingLyricService : Service() {
 
         lyricText1?.setGradient(gradientStart, gradientEnd)
         lyricText2?.setGradient(gradientStart, gradientEnd)
+        // 同步未唱色给文本视图（KRC 逐字二分色模式下未唱部分用此色）
+        lyricText1?.setUnplayedColor(unplayedColor)
+        lyricText2?.setUnplayedColor(unplayedColor)
 
         // Background opacity
         val bgAlpha = (opacity * 255 / 100).coerceIn(0, 255)
@@ -208,12 +214,19 @@ class FloatingLyricService : Service() {
         lyricText2?.setOpacityForContrast(opacity)
 
         progressBar?.setGradient(gradientStart, gradientEnd, unplayedColor)
-        updateLyric(lyricText1?.text?.toString() ?: "", lyricText2?.text?.toString())
+        updateLyric(lyricText1?.text?.toString() ?: "", lyricText2?.text?.toString(), -1)
     }
 
-    private fun updateLyric(lyric: String, nextLyric: String?) {
+    /// 更新悬浮窗歌词文本 + 逐字进度。
+    ///
+    /// - [sungCharCount] >= 0：KRC 逐字模式，[lyricText1] 用 clipRect 二分色
+    ///   （已唱部分渐变色 + 未唱部分灰色）
+    /// - [sungCharCount] == -1：LRC/纯文本，[lyricText1] 整行渐变色（保持原行为）
+    /// - [lyricText2]（下一行预览）始终整行渐变色，不参与逐字
+    private fun updateLyric(lyric: String, nextLyric: String?, sungCharCount: Int = -1) {
         val safeLyric = lyric.ifEmpty { "歌词加载中..." }
         lyricText1?.text = safeLyric
+        lyricText1?.setSungCharCount(sungCharCount)
         if (doubleLine) {
             lyricText2?.text = nextLyric ?: ""
             lyricText2?.visibility = if (nextLyric.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
@@ -680,10 +693,19 @@ class FloatingLyricService : Service() {
 }
 
 /// Gradient text view with contrast optimization for low opacity
+///
+/// 逐字二分色支持（KRC）：
+/// - [sungCharCount] >= 0：当前行有 KRC 字级时间戳，onDraw 中先画整行灰色（未唱色），
+///   再 clipRect 已唱宽度画渐变色，实现"已唱渐变 / 未唱灰"的二分色效果
+/// - [sungCharCount] == -1：LRC/纯文本，整行渐变色（保持原行为）
 class GradientTextView(context: Context) : TextView(context) {
     private var startColor = 0xFF00E5FF.toInt()
     private var endColor = 0xFFFF00FF.toInt()
     private var bgOpacity = 80
+    // 未唱色（灰色），用于逐字二分色模式下绘制未唱部分
+    private var unplayedColor = 0xFF666666.toInt()
+    // 当前行已唱字数；-1 表示无逐字（整行渐变色）
+    private var sungCharCount = -1
 
     init {
         setTextColor(Color.WHITE)
@@ -695,9 +717,24 @@ class GradientTextView(context: Context) : TextView(context) {
         invalidate()
     }
 
+    fun setUnplayedColor(color: Int) {
+        unplayedColor = color
+        invalidate()
+    }
+
     fun setOpacityForContrast(opacity: Int) {
         bgOpacity = opacity
         invalidate()
+    }
+
+    /// 设置已唱字数（KRC 逐字模式）。
+    /// - count >= 0：启用逐字二分色
+    /// - count == -1：禁用逐字，整行渐变色
+    fun setSungCharCount(count: Int) {
+        if (sungCharCount != count) {
+            sungCharCount = count
+            invalidate()
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -732,13 +769,52 @@ class GradientTextView(context: Context) : TextView(context) {
             paint.clearShadowLayer()
         }
 
-        if (width > 0) {
-            paint.shader = LinearGradient(
-                0f, 0f, width, 0f,
-                startColor, endColor, Shader.TileMode.CLAMP
-            )
+        val text = text?.toString() ?: ""
+        val enableKrcMode = sungCharCount >= 0 && text.isNotEmpty()
+
+        if (enableKrcMode) {
+            // KRC 逐字二分色：先画整行灰色（未唱色），再 clipRect 已唱宽度画渐变色
+            // 1. 计算已唱像素宽度（用 paint 测量前 sungCharCount 个字符）
+            val safeCount = sungCharCount.coerceIn(0, text.length)
+            val sungWidth = if (safeCount > 0) {
+                paint.measureText(text, 0, safeCount)
+            } else 0f
+
+            // 2. 先画整行灰色（未唱色）
+            //    注意：TextView.onDraw 会用 currentTextColor 覆盖 paint.color，
+            //    所以必须用 setTextColor 切换，不能直接设 paint.color
+            val savedTextColor = currentTextColor
+            setTextColor(unplayedColor)
+            paint.shader = null
+            super.onDraw(canvas)
+
+            // 3. clipRect 已唱宽度，画渐变色覆盖已唱部分
+            //    shader 优先于 color，渐变色会盖住灰色
+            if (sungWidth > 0 && width > 0) {
+                canvas.save()
+                canvas.clipRect(0f, 0f, sungWidth, height.toFloat())
+                paint.shader = LinearGradient(
+                    0f, 0f, width, 0f,
+                    startColor, endColor, Shader.TileMode.CLAMP
+                )
+                // 已唱部分不要 shadow（避免双重 shadow），清掉再画
+                paint.clearShadowLayer()
+                super.onDraw(canvas)
+                canvas.restore()
+            }
+
+            // 恢复 textColor（下次 onDraw 用）
+            setTextColor(savedTextColor)
+        } else {
+            // LRC/纯文本：整行渐变色（原行为）
+            if (width > 0) {
+                paint.shader = LinearGradient(
+                    0f, 0f, width, 0f,
+                    startColor, endColor, Shader.TileMode.CLAMP
+                )
+            }
+            super.onDraw(canvas)
         }
-        super.onDraw(canvas)
 
         // Reset shadow after draw to avoid affecting other draws
         paint.clearShadowLayer()
