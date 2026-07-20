@@ -209,31 +209,37 @@ class _FullPlayerState extends State<FullPlayer>
                     child: SizedBox(
                       width: size,
                       height: size,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: currentSong.artworkUri != null
-                            ? CachedNetworkImage(
-                                imageUrl: currentSong.artworkUri!,
-                                fit: BoxFit.cover,
-                                placeholder: (_, _) => Container(
-                                  color: colorScheme.surfaceContainerHighest,
+                      // 暂停缩放动画（与 AM 风格统一：播放 1.0 / 暂停 0.85 带回弹）
+                      child: AnimatedScale(
+                        scale: playerProvider.isPlaying ? 1.0 : 0.85,
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOutBack,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: currentSong.artworkUri != null
+                              ? CachedNetworkImage(
+                                  imageUrl: currentSong.artworkUri!,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, _) => Container(
+                                    color: colorScheme.surfaceContainerHighest,
+                                    child: Icon(Icons.music_note,
+                                      size: 48, color: colorScheme.onSurfaceVariant),
+                                  ),
+                                  errorWidget: (_, _, _) => Container(
+                                    color: colorScheme.surfaceContainerHighest,
+                                    child: Icon(Icons.music_note,
+                                      size: 48, color: colorScheme.onSurfaceVariant),
+                                  ),
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
                                   child: Icon(Icons.music_note,
                                     size: 48, color: colorScheme.onSurfaceVariant),
                                 ),
-                                errorWidget: (_, _, _) => Container(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  child: Icon(Icons.music_note,
-                                    size: 48, color: colorScheme.onSurfaceVariant),
-                                ),
-                              )
-                            : Container(
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Icon(Icons.music_note,
-                                  size: 48, color: colorScheme.onSurfaceVariant),
-                              ),
+                        ),
                       ),
                     ),
                   );
@@ -417,40 +423,46 @@ class _FullPlayerState extends State<FullPlayer>
                   ),
                   child: AspectRatio(
                     aspectRatio: 1,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: currentSong.artworkUri != null
-                          ? CachedNetworkImage(
-                              imageUrl: currentSong.artworkUri!,
-                              fit: BoxFit.cover,
-                              placeholder: (_, _) => Container(
-                                color: colorScheme.surfaceContainerHighest,
+                    // 暂停缩放动画（与 AM 风格统一：播放 1.0 / 暂停 0.85 带回弹）
+                    child: AnimatedScale(
+                      scale: playerProvider.isPlaying ? 1.0 : 0.85,
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOutBack,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: currentSong.artworkUri != null
+                            ? CachedNetworkImage(
+                                imageUrl: currentSong.artworkUri!,
+                                fit: BoxFit.cover,
+                                placeholder: (_, _) => Container(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  child: Icon(
+                                    Icons.music_note,
+                                    size: iconSize,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                errorWidget: (_, _, _) => Container(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  child: Icon(
+                                    Icons.music_note,
+                                    size: iconSize,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                                 child: Icon(
                                   Icons.music_note,
                                   size: iconSize,
                                   color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                              errorWidget: (_, _, _) => Container(
-                                color: colorScheme.surfaceContainerHighest,
-                                child: Icon(
-                                  Icons.music_note,
-                                  size: iconSize,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Icon(
-                                Icons.music_note,
-                                size: iconSize,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
+                      ),
                     ),
                   ),
                 );
@@ -461,40 +473,46 @@ class _FullPlayerState extends State<FullPlayer>
             Expanded(
               child: AspectRatio(
                 aspectRatio: 1,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: currentSong.artworkUri != null
-                      ? CachedNetworkImage(
-                          imageUrl: currentSong.artworkUri!,
-                          fit: BoxFit.cover,
-                          placeholder: (_, _) => Container(
-                            color: colorScheme.surfaceContainerHighest,
+                // 暂停缩放动画（与 AM 风格统一：播放 1.0 / 暂停 0.85 带回弹）
+                child: AnimatedScale(
+                  scale: playerProvider.isPlaying ? 1.0 : 0.85,
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOutBack,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: currentSong.artworkUri != null
+                        ? CachedNetworkImage(
+                            imageUrl: currentSong.artworkUri!,
+                            fit: BoxFit.cover,
+                            placeholder: (_, _) => Container(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: Icon(
+                                Icons.music_note,
+                                size: iconSize,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            errorWidget: (_, _, _) => Container(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: Icon(
+                                Icons.music_note,
+                                size: iconSize,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                             child: Icon(
                               Icons.music_note,
                               size: iconSize,
                               color: colorScheme.onSurfaceVariant,
                             ),
                           ),
-                          errorWidget: (_, _, _) => Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: Icon(
-                              Icons.music_note,
-                              size: iconSize,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        )
-                      : Container(
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(
-                            Icons.music_note,
-                            size: iconSize,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
+                  ),
                 ),
               ),
             ),
