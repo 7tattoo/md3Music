@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
+import '../../widgets/scroll_aware_app_bar.dart';
 
 class PersonalFmPage extends StatefulWidget {
   const PersonalFmPage({super.key});
@@ -21,6 +22,9 @@ class _PersonalFmPageState extends State<PersonalFmPage>
   final int _visibleSideCount = 3;
   late AnimationController _vinylRotationController;
   late AnimationController _slideController;
+
+  /// 顶栏渐变 ScrollController：与 ScrollAwareAppBar 共享
+  final ScrollController _scrollController = ScrollController();
 
   final List<Map<String, dynamic>> _modeOptions = [
     {'value': 'normal', 'label': '红心'},
@@ -79,6 +83,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
     } catch (_) {}
     _vinylRotationController.dispose();
     _slideController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -285,13 +290,12 @@ class _PersonalFmPageState extends State<PersonalFmPage>
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '私人 FM',
-          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-        ),
+      appBar: ScrollAwareAppBar(
+        title: '私人 FM',
+        scrollController: _scrollController,
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.only(
           left: 16,
           right: 16,
