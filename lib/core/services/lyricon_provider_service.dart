@@ -1,0 +1,245 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
+import '../../data/models/song.dart';
+import '../../widgets/apple_lyrics/models/lyric_line.dart';
+
+/// Lyricon 设备桥接服务：作为 Dart 与 Kotlin（MainActivity MethodChannel
+/// `com.md3music.md3music/lyricon`）之间的中间层，负责向 Lyricon 实时歌词
+/// 提供方推送歌曲信息、播放进度、播放状态以及用户偏好（翻译 / 罗马音），
+/// 并接收 Kotlin 侧反向回调的连接状态变更，通知 UI 刷新。
+///
+/// 设计参考 [DesktopLyricService]：单例 + `addListener` 通知模式，
+/// 所有 MethodChannel 调用均 try-catch 静默吞异常，避免桥接失败影响主播放流程。
+enum LyriconConnectionState {
+  /// 未启用
+  disabled,
+
+  /// 连接中
+  connecting,
+
+  /// 已连接
+  connected,
+
+  /// 已断开
+  disconnected,
+
+  /// 连接超时
+  timeout,
+}
+
+class LyriconProviderService {
+  static final LyriconProviderService instance =
+      LyriconProviderService._();
+  LyriconProviderService._();
+
+  static const _channel = MethodChannel('com.md3music.md3music/lyricon');
+
+  LyriconConnectionState _state = LyriconConnectionState.disabled;
+  LyriconConnectionState get state => _state;
+
+  bool get enabled => _state != LyriconConnectionState.disabled;
+
+  // 通知外部状态变化（让 UI 可以监听刷新连接状态指示）
+  final List<VoidCallback> _listeners = [];
+  void addListener(VoidCallback cb) => _listeners.add(cb);
+  void removeListener(VoidCallback cb) => _listeners.remove(cb);
+  void _notify() {
+    for (final cb in List.of(_listeners)) {
+      cb();
+    }
+  }
+
+  /// 在 main.dart 启动时调用一次：注册 Kotlin 反向回调 handler。
+  Future<void> initialize() async {
+    _channel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'onConnectionStateChanged':
+          _onConnectionStateChanged(call.arguments as String?);
+          break;
+      }
+    });
+  }
+
+  void _onConnectionStateChanged(String? state) {
+    switch (state) {
+      case 'connected':
+      case 'reconnected':
+        _state = LyriconConnectionState.connected;
+        break;
+      case 'disconnected':
+        _state = LyriconConnectionState.disconnected;
+        break;
+      case 'timeout':
+        _state = LyriconConnectionState.timeout;
+        break;
+      default:
+        return;
+    }
+    _notify();
+  }
+
+  /// 启用 / 禁用 Lyricon 提供方。
+  ///
+  /// 启用前先本地切到 connecting 态，禁用立刻切到 disabled 态，
+  /// 让 UI 无需等待原生回调即可反馈。
+  Future<void> setEnabled(bool enabled) async {
+    if (enabled) {
+      _state = LyriconConnectionState.connecting;
+    } else {
+      _state = LyriconConnectionState.disabled;
+    }
+    _notify();
+    try {
+      await _channel.invokeMethod('setEnabled', {'enabled': enabled});
+    } catch (_) {}
+  }
+
+  /// 推送当前歌曲 + 完整歌词列表给 Kotlin。
+  ///
+  /// 字段映射（已与模型源码核对）：
+  /// - Song.title → songMap['name']（Kotlin 侧期望 name）
+  /// - Song.artist → songMap['artist']
+  /// - Song.duration 是 Duration，需 .inMilliseconds 转 int
+  /// - LyricLine.startTime / endTime 均为 int（毫秒），endTime 是 getter
+  /// - LyricWord.startTime 是 int（毫秒），无 endTime getter，用 startTime + duration
+  /// - LyricLine.translation 是 String?，原样透传
+  Future<void> setSong(Song? song, List<LyricLine> lines) async {
+    if (song == null) {
+      try {
+        await _channel.invokeMethod('setSong', {'song': null});
+      } catch (_) {}
+      return;
+    }
+    // 预处理：为每行计算一个合法的 end。
+    // LRC 解析器输出的 duration=0，导致 endTime==startTime，会被 SDK 的
+    // Song.normalize() 过滤（条件 begin < end 失败）。兜底策略：
+    // - LRC 行（duration==0）：end = 下一行 startTime；末行 end = begin + 5000
+    // - KRC 行（duration>0）：原样使用 endTime
+    // 同时过滤 text 为空白的行（normalize 也会过滤，提前过滤避免无意义传输）。
+    final List<Map<String, dynamic>> lyricMaps = [];
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      if (line.text.trim().isEmpty) continue;
+      final int begin = line.startTime;
+      final int end;
+      if (line.endTime > begin) {
+        end = line.endTime;
+      } else if (i + 1 < lines.length && lines[i + 1].startTime > begin) {
+        end = lines[i + 1].startTime;
+      } else {
+        end = begin + 5000; // 末行兜底 5 秒
+      }
+      lyricMaps.add(<String, dynamic>{
+        'begin': begin,
+        'end': end,
+        'text': line.text,
+        if (line.translation != null) 'translation': line.translation,
+        'words': line.words
+            .map((w) => <String, dynamic>{
+                  'text': w.text,
+                  'begin': w.startTime,
+                  'end': w.startTime + w.duration,
+                })
+            .toList(),
+      });
+    }
+
+    final songMap = <String, dynamic>{
+      'id': song.id,
+      // 用 displayName 剥离 .mp3/.flac 等后缀，避免 Lyricon 标题显示带后缀
+      'name': song.displayName,
+      'artist': song.artist,
+      'duration': song.duration.inMilliseconds,
+      'lyrics': lyricMaps,
+    };
+    try {
+      await _channel.invokeMethod('setSong', {'song': songMap});
+    } catch (_) {}
+  }
+
+  /// 由 PlayerProvider 在切歌时调用。
+  ///
+  /// Lyricon 推荐调用顺序（文档 6.8）：setSong → setPosition → setPlaybackState。
+  /// 只调 setSong 不调后两个，Lyricon 中心服务无法确定当前播放进度和状态，
+  /// 会导致歌词不渲染、回退显示"作者-歌名"。
+  Future<void> onSongChanged(
+    Song? song,
+    List<LyricLine> lines, {
+    int positionMs = 0,
+    bool isPlaying = false,
+  }) async {
+    if (!enabled) return;
+    await setSong(song, lines);
+    try {
+      await _channel.invokeMethod('setPosition', {'positionMs': positionMs});
+      await _channel.invokeMethod(
+        'setPlaybackState',
+        {
+          // 必须用 PlaybackStateCompat 常量：STATE_PLAYING=3, STATE_PAUSED=2
+          // Kotlin 端判断 state==3 推导 isPlaying，传 1 会被当成 STATE_STOPPED→isPlaying=false
+          'state': isPlaying ? 3 : 2,
+          'position': positionMs,
+          'speed': 1.0,
+        },
+      );
+    } catch (_) {}
+  }
+
+  /// 推送一段纯文本（如临时提示）。
+  Future<void> sendText(String text) async {
+    try {
+      await _channel.invokeMethod('sendText', {'text': text});
+    } catch (_) {}
+  }
+
+  /// 推送当前播放位置（毫秒）。
+  Future<void> setPosition(int positionMs) async {
+    try {
+      // key 必须与 Kotlin 端 MainActivity.kt 的 "setPosition" handler 对齐（期望 "positionMs"）
+      await _channel.invokeMethod('setPosition', {'positionMs': positionMs});
+    } catch (_) {}
+  }
+
+  /// 推送播放状态。
+  ///
+  /// state 必须用 PlaybackStateCompat 常量：STATE_PLAYING=3, STATE_PAUSED=2。
+  /// Kotlin 端判断 state==3 推导 isPlaying，传其他值会被当成 paused。
+  Future<void> setPlaybackState({
+    required int state,
+    required int position,
+    required double speed,
+  }) async {
+    try {
+      await _channel.invokeMethod('setPlaybackState', {
+        'state': state,
+        'position': position,
+        'speed': speed,
+      });
+    } catch (_) {}
+  }
+
+  /// 用户拖动进度条时通知 Lyricon 跳转。
+  Future<void> seekTo(int positionMs) async {
+    try {
+      // key 必须与 Kotlin 端 MainActivity.kt 的 "seekTo" handler 对齐（期望 "positionMs"）
+      await _channel.invokeMethod('seekTo', {'positionMs': positionMs});
+    } catch (_) {}
+  }
+
+  /// 切换翻译显示。
+  Future<void> setDisplayTranslation(bool enabled) async {
+    try {
+      await _channel.invokeMethod('setDisplayTranslation', {'enabled': enabled});
+    } catch (_) {}
+  }
+
+  /// 切换罗马音显示。
+  Future<void> setDisplayRoma(bool enabled) async {
+    try {
+      await _channel.invokeMethod('setDisplayRoma', {'enabled': enabled});
+    } catch (_) {}
+  }
+}

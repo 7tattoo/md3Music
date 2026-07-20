@@ -1,0 +1,268 @@
+import 'package:fake_async/fake_async.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:md3music/widgets/apple_lyrics/controllers/lyric_scroll_controller.dart';
+import 'package:md3music/widgets/apple_lyrics/layout/lyric_layout.dart';
+
+/// LyricScrollController 单元测试
+///
+/// 覆盖 spec.md "Requirement: 弹簧物理动画引擎" 与 tasks.md Task 11 的全部子任务：
+/// 1. 初始状态
+/// 2. setCurrentLine 后 spring target 改变且收敛
+/// 3. targetYForLine 公式
+/// 4. seeking 模式切换为固定参数 (90, 15)
+/// 5. 普通模式动态参数（interval 100ms→220, 800ms→170）
+/// 6. onUserScroll 直接修改 posY
+/// 7. onUserScrollEnd 后 5000ms 自动回弹（fakeAsync）
+/// 8. isClickGesture 阈值判定
+/// 9. tick 在稳定后返回 false
+/// 10. dispose 不崩溃
+void main() {
+  group('LyricScrollController', () {
+    test('1. 初始状态：posY = 0，currentLineIndex = -1', () {
+      final controller = LyricScrollController();
+      expect(controller.posY, equals(0));
+      expect(controller.currentLineIndex, equals(-1));
+      expect(controller.viewportHeight, equals(0));
+      controller.dispose();
+    });
+
+    test('2. setCurrentLine 后 Spring target 改变，posY 经 tick 收敛到目标', () {
+      final controller = LyricScrollController();
+      controller.setViewportSize(const Size(400, 600));
+      // 第 0 行，行高 40，对齐位置 0.35
+      // targetY = -(0 + 20 - 600*0.35) = -(0 + 20 - 210) = 190
+      controller.setCurrentLine(
+        0,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 500,
+      );
+
+      // setTarget 后 spring 应处于待运动状态
+      expect(controller.currentTarget, closeTo(190, 1e-9));
+      // 初始 posY 仍为 0，待 tick 推进
+      expect(controller.posY, equals(0));
+
+      // 模拟 5 秒（每步 16ms），应收敛到 target
+      bool needsRepaint = true;
+      for (int i = 0; i < 300; i++) {
+        needsRepaint = controller.tick(0.016);
+      }
+      expect(controller.posY, closeTo(190, 0.5));
+      expect(needsRepaint, isFalse);
+      controller.dispose();
+    });
+
+    test('3. targetYForLine：viewport=600, lineHeight=40, lineIndex=0 → 190', () {
+      final controller = LyricScrollController();
+      controller.setViewportSize(const Size(400, 600));
+      // lineIndex=0: -(0 + 20 - 210) = 190
+      expect(controller.targetYForLine(0, 40), closeTo(190, 1e-9));
+      // lineIndex=1: -(40 + 20 - 210) = 150
+      expect(controller.targetYForLine(1, 40), closeTo(150, 1e-9));
+      // lineIndex=5: -(200 + 20 - 210) = -10
+      expect(controller.targetYForLine(5, 40), closeTo(-10, 1e-9));
+      controller.dispose();
+    });
+
+    test('4. setSeekingMode(true) 后弹簧参数为 stiffness=90, damping=15', () {
+      final controller = LyricScrollController();
+      // 初始默认为 seeking 参数
+      expect(controller.currentStiffness, equals(LyricLayout.posYSeekingStiffness));
+      expect(controller.currentDamping, equals(LyricLayout.posYSeekingDamping));
+
+      // 切换到普通模式（intervalMs=500，中间值）
+      controller.setCurrentLine(
+        0,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 500,
+      );
+      // 普通模式 stiffness 在 [170, 220] 之间
+      expect(controller.currentStiffness,
+          allOf(greaterThanOrEqualTo(170), lessThanOrEqualTo(220)));
+      expect(controller.currentStiffness, isNot(equals(90)));
+
+      // 切换到 seeking 模式
+      controller.setSeekingMode(true);
+      expect(controller.currentStiffness, equals(90));
+      expect(controller.currentDamping, equals(15));
+      controller.dispose();
+    });
+
+    test('5. 普通模式动态参数：interval 100ms→stiffness=220，800ms→stiffness=170', () {
+      final controller = LyricScrollController();
+      controller.setViewportSize(const Size(400, 600));
+
+      // 间隔 100ms（密集）→ stiffness=220（最灵敏）
+      controller.setCurrentLine(
+        0,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 100,
+      );
+      expect(controller.currentStiffness, closeTo(220, 1e-3));
+      // damping = sqrt(220) * 2.2
+      expect(controller.currentDamping,
+          closeTo(LyricLayout.posYNormalDamping(220), 1e-9));
+
+      // 间隔 800ms（稀疏）→ stiffness=170（最迟缓）
+      controller.setCurrentLine(
+        1,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 800,
+      );
+      expect(controller.currentStiffness, closeTo(170, 1e-3));
+      expect(controller.currentDamping,
+          closeTo(LyricLayout.posYNormalDamping(170), 1e-9));
+
+      // 超出 clamp 范围：50ms 应等价于 100ms（→ 220）
+      controller.setCurrentLine(
+        2,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 50,
+      );
+      expect(controller.currentStiffness, closeTo(220, 1e-3));
+
+      // 超出 clamp 范围：2000ms 应等价于 800ms（→ 170）
+      controller.setCurrentLine(
+        3,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 2000,
+      );
+      expect(controller.currentStiffness, closeTo(170, 1e-3));
+      controller.dispose();
+    });
+
+    test('6. onUserScroll 直接修改 posY：拖动 50px 后 posY 变化', () {
+      final controller = LyricScrollController();
+      controller.setViewportSize(const Size(400, 600));
+      // 先设置当前行让 posY 有一个基准
+      controller.setCurrentLine(
+        0,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 500,
+      );
+      // 推进到稳定
+      for (int i = 0; i < 300; i++) {
+        controller.tick(0.016);
+      }
+      final double stableY = controller.posY;
+      expect(stableY, closeTo(190, 0.5));
+
+      // 用户向下拖动 50px（posY 增大）
+      controller.onUserScroll(50);
+      expect(controller.posY, closeTo(stableY + 50, 1e-9));
+
+      // 继续拖动 -30px
+      controller.onUserScroll(-30);
+      expect(controller.posY, closeTo(stableY + 20, 1e-9));
+      controller.dispose();
+    });
+
+    test('7. onUserScrollEnd 后 5000ms 自动回弹（fakeAsync 模拟时间）', () {
+      fakeAsync((async) {
+        final controller = LyricScrollController();
+        controller.setViewportSize(const Size(400, 600));
+        controller.setCurrentLine(
+          0,
+          isSeeking: false,
+          lineHeight: 40,
+          intervalMs: 500,
+        );
+        // 推进到稳定
+        for (int i = 0; i < 300; i++) {
+          controller.tick(0.016);
+        }
+        final double stableY = controller.posY;
+        expect(stableY, closeTo(190, 0.5));
+
+        // 用户拖动 80px
+        controller.onUserScroll(80);
+        expect(controller.posY, closeTo(stableY + 80, 1e-9));
+
+        // 手势结束，开始 5000ms 倒计时
+        controller.onUserScrollEnd();
+
+        // 模拟时间推进 4999ms（每 16ms tick 一次），不应回弹
+        // 4999 / 16 ≈ 312 次
+        for (int i = 0; i < 312; i++) {
+          controller.tick(0.016);
+          async.elapse(const Duration(milliseconds: 16));
+        }
+        // posY 仍应接近 stableY + 80（未回弹）
+        expect(controller.posY, closeTo(stableY + 80, 1.0));
+
+        // 继续推进到 5000ms+，应触发回弹
+        for (int i = 0; i < 600; i++) {
+          controller.tick(0.016);
+          async.elapse(const Duration(milliseconds: 16));
+        }
+        // 回弹后应收敛回 stableY
+        expect(controller.posY, closeTo(stableY, 1.0));
+        controller.dispose();
+      });
+    });
+
+    test('8. isClickGesture：5px→true，15px→false', () {
+      final controller = LyricScrollController();
+      // 阈值 10px：< 10 视为点击
+      expect(controller.isClickGesture(5), isTrue);
+      expect(controller.isClickGesture(-5), isTrue); // 绝对值判定
+      expect(controller.isClickGesture(0), isTrue);
+      expect(controller.isClickGesture(15), isFalse);
+      expect(controller.isClickGesture(-15), isFalse);
+      // 边界：10px 不视为点击（< 10 才是）
+      expect(controller.isClickGesture(10), isFalse);
+      expect(controller.isClickGesture(9.99), isTrue);
+      controller.dispose();
+    });
+
+    test('9. tick 在稳定后返回 false（无需重绘）', () {
+      final controller = LyricScrollController();
+      controller.setViewportSize(const Size(400, 600));
+      controller.setCurrentLine(
+        0,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 500,
+      );
+
+      // 运动 1 步后应返回 true（仍需重绘）
+      bool needsRepaint = controller.tick(0.016);
+      expect(needsRepaint, isTrue);
+
+      // 推进到稳定
+      for (int i = 0; i < 500; i++) {
+        needsRepaint = controller.tick(0.016);
+      }
+      // 稳定后应返回 false
+      expect(needsRepaint, isFalse);
+      controller.dispose();
+    });
+
+    test('10. dispose 释放资源不崩溃', () {
+      final controller = LyricScrollController();
+      controller.setViewportSize(const Size(400, 600));
+      controller.setCurrentLine(
+        0,
+        isSeeking: false,
+        lineHeight: 40,
+        intervalMs: 500,
+      );
+      controller.onUserScroll(30);
+      controller.tick(0.016);
+
+      // dispose 应不抛异常
+      controller.dispose();
+
+      // 多次 dispose 也不应崩溃
+      controller.dispose();
+    });
+  });
+}
