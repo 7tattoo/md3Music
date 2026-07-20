@@ -114,18 +114,15 @@ jobs:
 
       - name: Set up Android SDK & NDK
         uses: android-actions/setup-android@v3
-        with:
-          # android-actions/setup-android@v3 已废弃 android-version/ndk-version/build-tools-version
-          # 必须用 packages 参数显式指定所有组件
-          packages: |
-            cmdline-tools;latest
-            platforms;android-36
-            build-tools;36.0.0
-            ndk;28.2.13676358
-            cmake;3.22.1
-        env:
-          # 自动接受 Android SDK 许可
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "cmdline-tools;latest" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
