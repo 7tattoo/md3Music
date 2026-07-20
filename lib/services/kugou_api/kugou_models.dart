@@ -670,11 +670,13 @@ class KugouComment {
 class KugouLyric {
   final String content;
   final String? decodedContent;
+  final String? decodedKrcContent;
   final String? translatedContent;
 
   const KugouLyric({
     required this.content,
     this.decodedContent,
+    this.decodedKrcContent,
     this.translatedContent,
   });
 
@@ -686,13 +688,26 @@ class KugouLyric {
       decodedContent: _strNull(
         json['decodeContent'] ?? json['decoded_content'] ?? json['lrcContent'],
       ),
+      // KRC 明文（Node 侧解码后），多字段名降级以兼容不同上游
+      decodedKrcContent: _strNull(
+        json['decodeKrcContent'] ??
+            json['decoded_krc_content'] ??
+            json['krcContent'],
+      ),
       translatedContent: _strNull(
         json['translated_content'] ?? json['trans'] ?? json['lrcContentChi'],
       ),
     );
   }
 
-  String get displayLyric => decodedContent ?? content;
+  /// 优先返回 KRC 明文（逐字），降级 LRC 明文，最后降级原始 content
+  String get displayLyric => decodedKrcContent ?? decodedContent ?? content;
+
+  /// 仅返回 KRC 明文（可空）
+  String? get displayKrcLyric => decodedKrcContent;
+
+  /// 仅返回 LRC 明文（可空）
+  String? get displayLrcLyric => decodedContent;
 }
 
 class KugouArtistDetail {
