@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:provider/provider.dart';
 
 import 'core/layout/responsive_layout.dart';
@@ -61,17 +60,19 @@ class _UpFadeMainRoute<T> extends MaterialPageRoute<T> {
           );
         }
         // FullPlayer 在栈顶：_MainLayout 向上偏移 15% + 淡出
-        final offset =
-            Tween<Offset>(
-              begin: Offset.zero,
-              end: const Offset(0, -0.15),
-            ).animate(
-              CurvedAnimation(
-                parent: secondaryAnimation,
-                curve: Curves.easeOutCubic,
-              ),
-            );
-        final fade = Tween<double>(begin: 1.0, end: 0.0).animate(
+        final offset = Tween<Offset>(
+          begin: Offset.zero,
+          end: const Offset(0, -0.15),
+        ).animate(
+          CurvedAnimation(
+            parent: secondaryAnimation,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+        final fade = Tween<double>(
+          begin: 1.0,
+          end: 0.0,
+        ).animate(
           CurvedAnimation(
             parent: secondaryAnimation,
             curve: Curves.easeOutCubic,
@@ -141,7 +142,9 @@ class _AppView extends StatelessWidget {
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/') {
-          return _UpFadeMainRoute<void>(builder: (_) => const _MainLayout());
+          return _UpFadeMainRoute<void>(
+            builder: (_) => const _MainLayout(),
+          );
         }
         if (settings.name == '/playlist') {
           final playlist = settings.arguments as Playlist;
@@ -315,91 +318,40 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // 一级页面返回拦截：
-    // 1) PopScope 拦截系统返回手势 / 物理返回键，canPop=false → 触发 onPopInvoked
-    // 2) 弹"退出 App"确认对话框
-    // 3) 确认后顺序关停：暂停播放 → 关停本地 Node.js → SystemNavigator.pop 杀进程
-    //    任务栈为空时系统默认行为是退出 App，但不会主动关停 Node.js server 和
-    //    audio service，端口会被占用（下一次冷启动会冲突），通知栏会残留。
-    //    因此需要这个拦截 + 手动 cleanup。
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        _showExitConfirmDialog();
+    // 预测返回手势由 AndroidManifest 的 enableOnBackInvokedCallback 控制（编译时静态），
+    // 应用无法运行时关闭系统预测动画。栈空时直接退出 App（系统默认行为）。
+    return ResponsiveScaffold(
+      destinations: _destinations,
+      railDestinations: _railDestinations,
+      drawerDestinations: _drawerDestinations,
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (index) {
+        setState(() {
+          _selectedIndex = index;
+        });
       },
-      child: ResponsiveScaffold(
-        destinations: _destinations,
-        railDestinations: _railDestinations,
-        drawerDestinations: _drawerDestinations,
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        body: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        compactBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        mediumBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        expandedBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
+      body: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
       ),
-    );
-  }
-
-  /// 显示"退出 App"确认对话框。
-  ///
-  /// 点击退出按钮会触发：
-  /// 1) `PlayerProvider.pause()` — 停 just_audio + 同步通知栏
-  /// 2) `NodeJsServer.stop()` — 释放 127.0.0.1:8080 端口 + 关 libuv
-  /// 3) `SystemNavigator.pop()` — 通知系统 finish 当前 Activity，
-  ///    系统会随之销毁进程（等同 kill app）
-  void _showExitConfirmDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('退出 App'),
-        content: const Text('确定要退出 md3Music 吗？\n将停止播放并释放本地 Node.js 服务器。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              // 关闭对话框（避免 SystemNavigator.pop 后 context 失效）
-              Navigator.of(ctx).pop();
-              // 1) 暂停播放（just_audio 内部会停音频 + 通知栏可同步清空）
-              // ignore: discarded_futures
-              context.read<PlayerProvider>().pause();
-              // 2) 关停 Node.js（释放 8080 端口 + libuv 事件循环退出）
-              // ignore: discarded_futures
-              NodeJsServer.stop();
-              // 3) 杀进程（SystemNavigator.pop 等价于 Activity.finish，
-              //    紧接着系统会 destroy 进程，所有 md3music 进程随之结束）
-              SystemNavigator.pop();
-            },
-            child: const Text('退出'),
-          ),
+      compactBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
+      ),
+      mediumBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
+      ),
+      expandedBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
         ],
       ),
     );

@@ -24,89 +24,54 @@ class MiniPlayer extends StatelessWidget {
         ? position.inMilliseconds / duration.inMilliseconds
         : 0.0;
 
-    return ValueListenableBuilder<bool>(
-      valueListenable: isFullPlayerOnTop,
-      builder: (context, hidden, child) {
-        // 当 FullPlayer 路由在栈顶时，mini bar 同步淡出：
-        // - 避免 FullPlayer 滑入时底部 mini bar 与 FullPlayer 内容视觉打架
-        // - 避免 FullPlayer pop 时 mini bar 瞬间"跳回"造成割裂
-        // - 用 AnimatedOpacity 平滑过渡（250ms，easeOutCubic），
-        //   比 FullPlayer 路由过渡 420ms 短，让 mini bar 先消失再让 FullPlayer
-        //   上来，节奏感更顺
-        return IgnorePointer(
-          ignoring: hidden,
-          child: AnimatedOpacity(
-            opacity: hidden ? 0.0 : 1.0,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            child: child,
-          ),
-        );
+    return GestureDetector(
+      onTap: () {
+        // 使用 BottomSlideMaterialPageRoute（MaterialPageRoute 子类）：
+        // - 继承 MaterialPageRoute 保留与系统预测返回手势的对接
+        // - 重写 buildTransitions 用 animation 驱动 SlideTransition
+        //   push 时从底部滑入，预测返回时系统驱动 animation 反向播放，
+        //   页面自然跟随手势向下平移（而非默认的整页缩小）
+        // fullPlayerRoute 根据 ThemeProvider.useAmStylePlayer 开关
+        // 选择 AM 风格或原版 MD3 风格 FullPlayer widget
+        Navigator.of(context).push(fullPlayerRoute(context));
       },
-      child: GestureDetector(
-        onTap: () {
-          // 使用 BottomSlideMaterialPageRoute（MaterialPageRoute 子类）：
-          // - 自定义 buildTransitions：420ms 短距离 slide (8%) + fade，
-          //   比标准 MaterialPageRoute 更精致，避免浅色主题下黑块
-          // - 保留 MaterialPageRoute 的系统预测返回手势对接
-          // fullPlayerRoute 根据 ThemeProvider.useAmStylePlayer 开关
-          // 选择 AM 风格或原版 MD3 风格 FullPlayer widget
-          Navigator.of(context).push(fullPlayerRoute(context));
-        },
-        child: Container(
-          // Container 在外提供整体背景色与顶部 border：
-          // 颜色会自然填充 SafeArea 在底部留出的系统手势条区域，
-          // 避免手势条区域露出 Scaffold 背景色与主体形成颜色断层
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
-            border: Border(
-              top: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
-            ),
+      child: Container(
+        // Container 在外提供整体背景色与顶部 border：
+        // 颜色会自然填充 SafeArea 在底部留出的系统手势条区域，
+        // 避免手势条区域露出 Scaffold 背景色与主体形成颜色断层
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
+          border: Border(
+            top: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
           ),
-          child: SafeArea(
-            // 仅吸收底部系统手势条/Home Indicator 高度
-            top: false,
-            bottom: true,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
-                  minHeight: 2,
-                  backgroundColor: colorScheme.surfaceContainerHighest,
-                  color: colorScheme.primary,
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: currentSong.artworkUri != null
-                              ? CachedNetworkImage(
-                                  imageUrl: currentSong.artworkUri!,
-                                  fit: BoxFit.cover,
-                                  placeholder: (_, _) => Container(
-                                    color: colorScheme.surfaceContainerHighest,
-                                    child: Icon(
-                                      Icons.music_note,
-                                      size: 20,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  errorWidget: (_, _, _) => Container(
-                                    color: colorScheme.surfaceContainerHighest,
-                                    child: Icon(
-                                      Icons.music_note,
-                                      size: 20,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                )
-                              : Container(
+        ),
+        child: SafeArea(
+          // 仅吸收底部系统手势条/Home Indicator 高度
+          top: false,
+          bottom: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LinearProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                minHeight: 2,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                color: colorScheme.primary,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: currentSong.artworkUri != null
+                            ? CachedNetworkImage(
+                                imageUrl: currentSong.artworkUri!,
+                                fit: BoxFit.cover,
+                                placeholder: (_, _) => Container(
                                   color: colorScheme.surfaceContainerHighest,
                                   child: Icon(
                                     Icons.music_note,
@@ -114,90 +79,106 @@ class MiniPlayer extends StatelessWidget {
                                     color: colorScheme.onSurfaceVariant,
                                   ),
                                 ),
-                        ),
+                                errorWidget: (_, _, _) => Container(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  child: Icon(
+                                    Icons.music_note,
+                                    size: 20,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                color: colorScheme.surfaceContainerHighest,
+                                child: Icon(
+                                  Icons.music_note,
+                                  size: 20,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              currentSong.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                            Text(
-                              currentSong.artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: colorScheme.onSurfaceVariant),
-                            ),
-                          ],
-                        ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            currentSong.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          Text(
+                            currentSong.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: Icon(
-                          playerProvider.isPlaying
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                        ),
-                        onPressed: () {
-                          if (playerProvider.isPlaying) {
-                            playerProvider.pause();
-                          } else {
-                            playerProvider.resume();
-                          }
-                        },
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        playerProvider.isPlaying
+                            ? Icons.pause
+                            : Icons.play_arrow,
                       ),
-                      IconButton(
-                        tooltip: DesktopLyricService.instance.enabled
-                            ? '关闭桌面歌词'
-                            : '开启桌面歌词',
-                        icon: Icon(
-                          DesktopLyricService.instance.enabled
-                              ? Icons.lyrics
-                              : Icons.lyrics_outlined,
-                          color: DesktopLyricService.instance.enabled
-                              ? colorScheme.primary
-                              : null,
-                        ),
-                        onPressed: () async {
-                          await DesktopLyricService.instance.toggle();
-                          if (context.mounted) {
-                            (context as Element).markNeedsBuild();
-                            // 同步通知栏"桌面歌词"按钮状态
-                            final player = context.read<PlayerProvider>();
-                            final song = player.currentSong;
-                            await MediaNotificationService.updateNotification(
-                              title: song?.title ?? '',
-                              artist: song?.artist ?? '',
-                              artUrl: song?.artworkUri,
-                              isPlaying: player.isPlaying,
-                              position: player.position,
-                              duration: player.duration ?? Duration.zero,
-                              desktopLyricEnabled:
-                                  DesktopLyricService.instance.enabled,
-                            );
-                          }
-                        },
+                      onPressed: () {
+                        if (playerProvider.isPlaying) {
+                          playerProvider.pause();
+                        } else {
+                          playerProvider.resume();
+                        }
+                      },
+                    ),
+                    IconButton(
+                      tooltip: DesktopLyricService.instance.enabled
+                          ? '关闭桌面歌词'
+                          : '开启桌面歌词',
+                      icon: Icon(
+                        DesktopLyricService.instance.enabled
+                            ? Icons.lyrics
+                            : Icons.lyrics_outlined,
+                        color: DesktopLyricService.instance.enabled
+                            ? colorScheme.primary
+                            : null,
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.skip_next),
-                        onPressed: () {
-                          playerProvider.next();
-                        },
-                      ),
-                    ],
-                  ),
+                      onPressed: () async {
+                        await DesktopLyricService.instance.toggle();
+                        if (context.mounted) {
+                          (context as Element).markNeedsBuild();
+                          // 同步通知栏"桌面歌词"按钮状态
+                          final player = context.read<PlayerProvider>();
+                          final song = player.currentSong;
+                          await MediaNotificationService.updateNotification(
+                            title: song?.title ?? '',
+                            artist: song?.artist ?? '',
+                            artUrl: song?.artworkUri,
+                            isPlaying: player.isPlaying,
+                            position: player.position,
+                            duration: player.duration ?? Duration.zero,
+                            desktopLyricEnabled:
+                                DesktopLyricService.instance.enabled,
+                          );
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.skip_next),
+                      onPressed: () {
+                        playerProvider.next();
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ), // SafeArea
-        ), // Container
-      ), // GestureDetector
+              ),
+            ],
+          ),
+        ), // SafeArea
+      ), // Container
     );
   }
 }
