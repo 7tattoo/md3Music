@@ -8,10 +8,20 @@ import '../../main.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../widgets/apple_lyrics/models/lyric_line.dart';
+import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
 import 'media_notification_service.dart';
 
-/// 桌面歌词服务：管理开关、解析 LRC、按播放位置同步到原生悬浮窗。
-/// 设置面板已内嵌到原生悬浮窗，Dart 端不再弹 dialog。
+/// 桌面歌词服务：管理开关、解析歌词（KRC/LRC/纯文本）、按播放位置同步到原生悬浮窗。
+///
+/// **关键修复**：之前用 `displayLyric`（KRC 优先）+ LRC 正则解析，导致 KRC 文本
+/// 解析全部失败、悬浮窗永远显示「暂无歌词」。现改用 [LyricParserChain.parse]
+/// 自动识别 KRC/LRC/纯文本，输出统一 [LyricLine] 列表。
+///
+/// **逐字支持**：KRC 解析后每行携带 [LyricWord] 字级时间戳，本服务按当前播放
+/// 位置计算已唱字数 `sungCharCount`，通过 `updateLyric` 通道传给原生悬浮窗，
+/// 原生侧用 clipRect 实现已唱/未唱二分色。LRC/纯文本无字时间戳时传 -1，
+/// 原生侧走整行渐变色（保持原行为）。
 class DesktopLyricService {
   static final DesktopLyricService instance = DesktopLyricService._();
   DesktopLyricService._();
@@ -25,7 +35,8 @@ class DesktopLyricService {
 
   String? _currentSongId;
   String? _currentLrcText;
-  List<_LyricLine> _lines = const [];
+  // 解析后的歌词行列表（统一模型，KRC 含 words，LRC/纯文本 words 为空）
+  List<LyricLine> _lines = const [];
   int _currentLineIndex = -1;
   Timer? _ticker;
   bool _awaitingLyric = false;
@@ -48,8 +59,6 @@ class DesktopLyricService {
       cb();
     }
   }
-
-  static final RegExp _lrcLine = RegExp(r'\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)');
 
   /// 在 app 启动时（main 中）调用：注册原生回调
   void registerNativeCallbacks() {
@@ -195,6 +204,8 @@ class DesktopLyricService {
     await _pushConfig();
     _syncCurrentFromPlayer();
     _ticker?.cancel();
+    // 250ms tick：逐行歌词不需要高频刷新，250ms 足够检测切行
+    // （曾用 100ms 支持逐字二分色但卡顿严重，已恢复逐行）
     _ticker = Timer.periodic(
       const Duration(milliseconds: 250),
       (_) => _onTick(),
@@ -293,21 +304,25 @@ class DesktopLyricService {
       _awaitingLyric = false;
       _lastPushedPosMs = null;
       _pushPlaying(_player!.isPlaying);
-      _pushLyric('歌词加载中...', '');
+      _pushLyric('歌词加载中...', '', -1);
       _fetchLyricFor(song);
       return;
     }
 
-    // 拉取/解析歌词
+    // 拉取/解析歌词（修复：用 LyricParserChain 自动识别 KRC/LRC/纯文本）
     if (!_awaitingLyric && _lines.isEmpty) {
       final lyric = _kugou!.lyric;
       if (lyric != null && lyric.displayLyric.isNotEmpty) {
         final lrc = lyric.displayLyric;
         if (lrc != _currentLrcText) {
           _currentLrcText = lrc;
-          _lines = _parseLrc(lrc);
+          // LyricParserChain.parse 自动检测格式：
+          // - KRC：返回 LyricLine 列表，每行含 LyricWord 字级时间戳
+          // - LRC：返回 LyricLine 列表，words 为空
+          // - 纯文本：返回 LyricLine 列表，words 为空，startTime 全部为 0
+          _lines = LyricParserChain.parse(lrc);
           if (_lines.isEmpty) {
-            _pushLyric('暂无歌词', '');
+            _pushLyric('暂无歌词', '', -1);
           }
         }
       } else if (song.id.isNotEmpty) {
@@ -327,14 +342,17 @@ class DesktopLyricService {
 
     // Find current line
     if (_lines.isEmpty) return;
-    final newIndex = _findLineIndex(pos);
+    final newIndex = _findLineIndex(posMs);
+
+    // 行变化时推送（逐行模式：每行只在进入时推一次，不高频刷字色）
     if (newIndex != _currentLineIndex) {
       _currentLineIndex = newIndex;
       final current = newIndex >= 0 ? _lines[newIndex].text : '';
       final next = (_doubleLine && newIndex + 1 < _lines.length)
           ? _lines[newIndex + 1].text
           : '';
-      _pushLyric(current, next);
+      // sungCharCount 固定 -1：不启用逐字二分色，原生侧走整行渐变色（避免 100ms invalidate 卡顿）
+      _pushLyric(current, next, -1);
     }
   }
 
@@ -344,7 +362,7 @@ class DesktopLyricService {
     try {
       await _kugou!.getLyric(song.id, songName: song.title, fmt: 'lrc');
     } catch (_) {
-      _pushLyric('歌词加载失败', '');
+      _pushLyric('歌词加载失败', '', -1);
     } finally {
       _awaitingLyric = false;
     }
@@ -352,39 +370,29 @@ class DesktopLyricService {
 
   int? _lastPushedPosMs;
 
-  Future<void> _pushLyric(String current, String next) async {
+  /// 推送当前行文本到原生悬浮窗。
+  ///
+  /// - [sungCharCount] 始终传 -1（逐行模式，不启用逐字二分色）
+  ///   原生侧 GradientTextView.onDraw 走 LRC/纯文本分支，整行渐变色
+  ///   历史参数保留是为了不破坏 MethodChannel 协议，原生侧会忽略 -1
+  Future<void> _pushLyric(String current, String next, int sungCharCount) async {
     try {
       await _channel.invokeMethod('updateLyric', {
         'lyric': current,
         'nextLyric': next,
+        'sungCharCount': sungCharCount,
       });
     } catch (_) {}
   }
 
-  List<_LyricLine> _parseLrc(String lrc) {
-    final result = <_LyricLine>[];
-    for (final raw in lrc.split('\n')) {
-      final line = raw.trim();
-      if (line.isEmpty) continue;
-      final m = _lrcLine.firstMatch(line);
-      if (m == null) continue;
-      final mm = int.parse(m.group(1)!);
-      final ss = int.parse(m.group(2)!);
-      final ff = int.parse(m.group(3)!);
-      final ms = m.group(3)!.length == 2 ? ff * 10 : ff;
-      final text = m.group(4)!.trim();
-      if (text.isEmpty) continue;
-      final ts = Duration(minutes: mm, seconds: ss, milliseconds: ms);
-      result.add(_LyricLine(ts, text));
-    }
-    result.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    return result;
-  }
-
-  int _findLineIndex(Duration position) {
+  /// 二分查找当前播放位置对应的歌词行 index。
+  ///
+  /// _lines 已按 startTime 升序排列（LyricParserChain 保证），
+  /// 找到最后一个 startTime <= posMs 的行。
+  int _findLineIndex(int posMs) {
     int idx = -1;
     for (int i = 0; i < _lines.length; i++) {
-      if (position >= _lines[i].timestamp) {
+      if (posMs >= _lines[i].startTime) {
         idx = i;
       } else {
         break;
@@ -392,10 +400,4 @@ class DesktopLyricService {
     }
     return idx;
   }
-}
-
-class _LyricLine {
-  final Duration timestamp;
-  final String text;
-  _LyricLine(this.timestamp, this.text);
 }
