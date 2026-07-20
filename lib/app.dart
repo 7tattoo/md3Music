@@ -1,3 +1,6 @@
+import 'dart:io' show exit;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:provider/provider.dart';
@@ -392,11 +395,19 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
               // ignore: discarded_futures
               context.read<PlayerProvider>().pause();
               // 2) 关停 Node.js（释放 8080 端口 + libuv 事件循环退出）
-              // ignore: discarded_futures
-              NodeJsServer.stop();
-              // 3) 杀进程（SystemNavigator.pop 等价于 Activity.finish，
-              //    紧接着系统会 destroy 进程，所有 md3music 进程随之结束）
-              SystemNavigator.pop();
+              // 必须等待完成，否则端口未释放，下次冷启动会冲突导致闪退
+              try {
+                await NodeJsServer.stop();
+                // nativeStopNode() 在独立线程执行，MethodChannel 返回只代表调用已发出，
+                // 需要给 native 线程一点时间完成 libuv 事件循环退出
+                await Future.delayed(const Duration(milliseconds: 300));
+              } catch (_) {}
+              // 3) 杀进程：exit(0) 立即终止整个进程（含 Node.js 线程），
+              //    确保 8080 端口一定被释放。SystemNavigator.pop() 只 finish Activity，
+              //    进程可能残留，导致下次启动时端口冲突/服务器未启动。
+              // ignore: avoid_print
+              print('Exiting app...');
+              exit(0);
             },
             child: const Text('退出'),
           ),
