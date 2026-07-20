@@ -7,7 +7,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.12+-02569B?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android-green)]()
-[![Version](https://img.shields.io/badge/Version-3.2.0-blue)]()
+[![Version](https://img.shields.io/badge/Version-2.5.0-blue)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 </div>
@@ -119,9 +119,6 @@ rm native-libs.zip
 - `android/app/src/main/jniLibs/` — 3个架构的 `libnode.so`
 - `android/app/src/main/cpp/include/` — Node.js v18 头文件
 
-> **CI 用户**：项目已配置 [GitHub Actions 自动构建](#-github-actions-自动构建)。
-> 首次启用前需要手动上传一次 `native-libs.zip` 到 `native-libs` release，详见下方 CI 文档。
-
 ### 3. 安装 Flutter 依赖
 
 ```bash
@@ -172,71 +169,6 @@ flutter build apk --release --split-per-abi
 - **arm64-v8a**：大多数现代 Android 设备（推荐）
 - **armeabi-v7a**：较旧的 32 位设备
 - **x86_64**：Android 模拟器
-
----
-
-## 🤖 GitHub Actions 自动构建
-
-项目已配置 GitHub Actions，推送 `v*` 标签即可自动编译并发布 Android APK。
-
-### 工作流
-
-[`.github/workflows/main.yml`](.github/workflows/main.yml) 定义了一个 Ubuntu 任务，主要步骤：
-
-1. 解析 tag → 提取版本号
-2. 安装 Java 17、Android SDK（含 NDK 28.2.13676358）、Flutter stable、Node 18
-3. 下载 `native-libs.zip`（`libnode.so` + Node headers）
-4. 重新构建 `kugou_api_server/server_bundle.js` 并拷贝到 `assets/`
-5. `flutter build apk --release --split-per-abi` → 产出 3 个 APK
-6. 自动从 `git log` 生成 changelog
-7. 把 3 个 APK 上传到 GitHub Release（追加模式，不覆盖历史版本）
-
-### 首次启用（一次性）
-
-CI 运行环境无法编译 `nodejs-mobile` 的 native libs，所以需要你**先手动准备一次** `native-libs.zip`：
-
-```bash
-# 1. 在 Windows 本地已成功构建的环境下打包
-cd android/app/src/main
-powershell -Command "Compress-Archive -Path 'jniLibs','cpp' -DestinationPath 'native-libs.zip' -Force"
-
-# 2. 创建一个名为 'native-libs' 的 release
-#    https://github.com/zzyoxml/md3Music/releases/new?tag=native-libs
-#    把 native-libs.zip 拖进去上传
-
-# 3. 后续 workflow 会自动从这里下载
-```
-
-> 也可以直接复用你已有的 [setup_native.bat](setup_native.bat) 下载好的文件来打包。
-
-### 触发构建
-
-**方式一：推送 tag（推荐）**
-
-```bash
-git tag v3.3.0
-git push origin v3.3.0
-# → Actions 自动开始构建，约 3-5 分钟后 APK 出现在 release 页
-```
-
-**方式二：手动触发**
-
-1. 进入仓库 → Actions → "Build & Release Android APK" → Run workflow
-2. 填入要构建的 tag（如 `v3.3.0`）
-3. 点击运行
-
-### Release 产物
-
-每次发布都会自动生成 3 个 APK：
-- `app-arm64-v8a-release.apk` — 推荐：大多数现代 Android 设备
-- `app-armeabi-v7a-release.apk` — 较旧的 32 位设备
-- `app-x86_64-release.apk` — Android 模拟器
-
-历史版本**不会**被删除，新 APK 是**追加**到对应 release 的。
-
-### 签名
-
-当前 `android/app/build.gradle.kts` 使用 debug keys 签名（见 [build.gradle.kts:43](android/app/build.gradle.kts#L43)），所以 CI 也不需要额外配置签名密钥。**生产环境请改为正式签名。**
 
 ---
 
