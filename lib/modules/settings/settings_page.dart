@@ -14,6 +14,13 @@ import '../../data/repositories/settings_repository.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/theme_provider.dart';
 
+/// 编译时通过 `--dart-define=APP_VERSION=3.3.0` 注入的版本号。
+/// 优先级低于 PackageInfo（运行时实际读取），仅作回退显示用。
+const String kBuildAppVersion = String.fromEnvironment(
+  'APP_VERSION',
+  defaultValue: '0.0.0',
+);
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -71,7 +78,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '3.2.0';
+          _appVersion = kBuildAppVersion;
         });
       }
     }
@@ -390,7 +397,7 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         ListTile(
           title: const Text('应用版本'),
-          subtitle: Text(_appVersion.isEmpty ? '3.2.0' : _appVersion),
+          subtitle: Text(_appVersion.isEmpty ? kBuildAppVersion : _appVersion),
           leading: const Icon(Icons.info_outline),
         ),
         ListTile(
@@ -407,7 +414,7 @@ class _SettingsPageState extends State<SettingsPage> {
             showLicensePage(
               context: context,
               applicationName: 'MD3Music',
-              applicationVersion: _appVersion.isEmpty ? '3.2.0' : _appVersion,
+              applicationVersion: _appVersion.isEmpty ? kBuildAppVersion : _appVersion,
             );
           },
         ),

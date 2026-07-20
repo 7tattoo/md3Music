@@ -1,1 +1,305 @@
+name: Build & Release Android APK
 
+# 触发条件：
+#   1. 推送 v* 标签（如 v3.2.0）→ 自动构建并发布 Release
+#   2. 手动触发（workflow_dispatch）→ 选择标签重新构建
+#   3. 不要删除/覆盖历史版本，每次发布都是追加 APK
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要构建的 tag（例如 v3.2.0）'
+        required: true
+        default: ''
+
+permissions:
+  contents: write
+
+# 取消相同 workflow 正在运行中、针对相同 ref 的旧执行
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      # ============================================================
+      # 1. 准备代码
+      # ============================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 需要完整 git 历史来生成 changelog
+
+      # ============================================================
+      # 2. 解析版本号（从 git tag 派生，自动递增 versionCode）
+      # ============================================================
+      - name: Resolve version from tag
+        id: version
+        run: |
+          set -e
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG=${GITHUB_REF#refs/tags/}
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION=${TAG#v}   # e.g. 3.3.0
+
+          # 自动递增 versionCode：取所有历史 tag 中最大的 versionCode +1
+          # pubspec.yaml 格式："version: 3.2.0+9"
+          PREV_MAX_CODE=$(git tag --list 'v*' \
+            | while read t; do
+                pub=$(git show "$t:pubspec.yaml" 2>/dev/null | grep -E '^version:' | head -1)
+                if [ -n "$pub" ]; then
+                  code=$(echo "$pub" | sed -E 's/.*\+([0-9]+).*/\1/')
+                  [ -n "$code" ] && echo "$code"
+                fi
+              done \
+            | sort -n \
+            | tail -1)
+
+          if [ -n "$PREV_MAX_CODE" ]; then
+            VERSION_CODE=$((PREV_MAX_CODE + 1))
+          else
+            VERSION_CODE=1
+          fi
+
+          FULL_VERSION="${VERSION}+${VERSION_CODE}"
+          echo "tag=$TAG"             >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
+          echo "versionCode=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "full_version=$FULL_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building tag=$TAG version=$VERSION versionCode=$VERSION_CODE (full=$FULL_VERSION)"
+
+      # ============================================================
+      # 2.5 自动更新 pubspec.yaml 的 version 字段
+      # ============================================================
+      - name: Update pubspec.yaml version
+        run: |
+          set -e
+          FULL_VERSION="${{ steps.version.outputs.full_version }}"
+          # pubspec.yaml 总是有 version 行，直接 sed 替换
+          sed -i.bak -E "s/^version:.*/version: ${FULL_VERSION}/" pubspec.yaml
+          rm -f pubspec.yaml.bak
+          echo "Updated pubspec.yaml:"
+          grep -E '^(name|version):' pubspec.yaml
+
+      # ============================================================
+      # 3. 基础工具链
+      # ============================================================
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # 与 android/app/build.gradle.kts 中的 compileSdk / ndkVersion 保持一致
+          android-version: '36'
+          ndk-version: '28.2.13676358'
+          build-tools-version: '36.0.0'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Node.js 18 (for server bundle)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # ============================================================
+      # 4. 缓存 Gradle（加速依赖下载）
+      # ============================================================
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # ============================================================
+      # 5. 下载 native-libs（libnode.so + Node headers）
+      #    优先从专用的 native-libs release 下载；
+      #    若不存在则报错，提示用户先创建该 release。
+      # ============================================================
+      - name: Download native-libs.zip
+        run: |
+          set -e
+          echo "Downloading native-libs.zip from 'native-libs' release..."
+          if ! curl -fL --retry 3 -o native-libs.zip \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/native-libs/native-libs.zip"; then
+            echo ""
+            echo "============================================================"
+            echo "ERROR: native-libs.zip 下载失败"
+            echo ""
+            echo "首次启用 CI 时需要手动上传一次 native-libs.zip："
+            echo "  1. 在本地把 android/app/src/main/jniLibs/ 和"
+            echo "     android/app/src/main/cpp/include/ 打包成 native-libs.zip"
+            echo "  2. 创建一个名为 'native-libs' 的 release："
+            echo "     https://github.com/${GITHUB_REPOSITORY}/releases/new?tag=native-libs"
+            echo "  3. 把 native-libs.zip 作为资产上传"
+            echo "  4. 重新触发本 workflow"
+            echo "============================================================"
+            exit 1
+          fi
+          ls -lh native-libs.zip
+
+      - name: Extract native libs
+        run: |
+          set -e
+          unzip -q -o native-libs.zip -d .
+          rm native-libs.zip
+          echo "jniLibs/:"
+          ls -la android/app/src/main/jniLibs/ 2>/dev/null || echo "  (missing)"
+          echo ""
+          echo "cpp/include/node/:"
+          ls android/app/src/main/cpp/include/node/ 2>/dev/null | head -5 || echo "  (missing)"
+
+      # ============================================================
+      # 6. 构建嵌入式 Node.js 服务器 bundle
+      # ============================================================
+      - name: Install server dependencies
+        working-directory: kugou_api_server
+        run: npm install --omit=dev
+
+      - name: Generate bundled entry
+        run: node scripts/gen_node_bundle_entry.js
+
+      - name: Build server bundle with esbuild
+        working-directory: kugou_api_server
+        run: |
+          npx --yes esbuild bundled_entry.js \
+            --bundle --minify \
+            --outfile=server_bundle.js \
+            --platform=node \
+            --target=node18
+
+      - name: Copy server bundle to Flutter assets
+        run: |
+          mkdir -p assets/nodejs-project
+          cp kugou_api_server/server_bundle.js assets/nodejs-project/server_bundle.js
+          ls -lh assets/nodejs-project/server_bundle.js
+
+      # ============================================================
+      # 7. 构建 Android APK
+      # ============================================================
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Flutter build APK (split per ABI)
+        run: |
+          flutter build apk --release --split-per-abi \
+            --dart-define=APP_VERSION=${{ steps.version.outputs.version }} \
+            --build-name=${{ steps.version.outputs.version }} \
+            --build-number=${{ steps.version.outputs.versionCode }}
+
+      - name: Verify APKs
+        run: |
+          ls -lh build/app/outputs/flutter-apk/
+          for f in build/app/outputs/flutter-apk/*.apk; do
+            echo ""
+            echo "=== $f ==="
+            # 简单验证 apk 完整性
+            if unzip -l "$f" > /dev/null; then
+              echo "  OK ($(du -h "$f" | cut -f1))"
+            else
+              echo "  CORRUPTED"
+              exit 1
+            fi
+          done
+
+      # ============================================================
+      # 8. 生成更新日志
+      # ============================================================
+      - name: Generate changelog
+        id: changelog
+        run: |
+          set -e
+          CURRENT_TAG="${{ steps.version.outputs.tag }}"
+          # 找前一个 release tag
+          PREV_TAG=$(git tag --sort=-version:refname \
+            | grep -v "^${CURRENT_TAG}$" \
+            | grep -v "^native-libs$" \
+            | head -1 || true)
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "Previous tag: $PREV_TAG"
+            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+          else
+            echo "No previous tag, using last 20 commits"
+            RANGE=""
+          fi
+
+          {
+            echo "## MD3Music v${{ steps.version.outputs.version }}"
+            echo ""
+            echo "_Built: $(date -u '+%Y-%m-%d %H:%M UTC')_"
+            echo ""
+            echo "### Downloads"
+            echo "- **app-arm64-v8a-release.apk** — 推荐：大多数现代 Android 设备"
+            echo "- **app-armeabi-v7a-release.apk** — 较旧的 32 位设备"
+            echo "- **app-x86_64-release.apk** — Android 模拟器"
+            echo ""
+            echo "### Commits (${RANGE:-最近 20 条})"
+            echo ""
+            if [ -n "$RANGE" ]; then
+              git log "$RANGE" --pretty=format:"- \`%h\` %s" --no-merges
+            else
+              git log --pretty=format:"- \`%h\` %s" -20 --no-merges
+            fi
+            echo ""
+            echo ""
+            echo "---"
+            echo "🤖 本版本由 GitHub Actions 自动构建。"
+          } > changelog.md
+
+          cat changelog.md
+          {
+            echo "body<<EOF"
+            cat changelog.md
+            echo ""
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # ============================================================
+      # 9. 创建/更新 GitHub Release
+      #    append=true 保留历史资产，不会删除旧版本
+      # ============================================================
+      - name: Upload APKs to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: MD3Music v${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.body }}
+          draft: false
+          prerelease: false
+          append_body: false  # 默认行为：用自动生成的 changelog 替换 release 描述
+          files: |
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: md3music-apk-${{ steps.version.outputs.version }}
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
+          retention-days: 30
