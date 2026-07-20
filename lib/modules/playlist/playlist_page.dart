@@ -35,9 +35,21 @@ class _PlaylistPageState extends State<PlaylistPage> {
   bool _isCollected = false;
   String? _collectedListId;
 
+  /// 顶栏渐变 ScrollController：监听 CustomScrollView 滚动 offset，
+  /// 用于 SliverAppBar pinned 后 fade-in 显示歌单名称
+  final ScrollController _scrollController = ScrollController();
+  double _scrollOffset = 0;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // 只有普通歌单才需要查收藏状态。「我收藏」里进来的歌单跳过。
       if (!widget.isInMyFavorites) {
@@ -45,6 +57,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
       }
       _fetchSongs();
     });
+  }
+
+  /// 滚动监听：更新 _scrollOffset 触发重绘，驱动顶栏 fade-in 歌单名称
+  void _onScroll() {
+    if (!mounted) return;
+    final offset = _scrollController.offset;
+    if ((offset - _scrollOffset).abs() > 0.5) {
+      setState(() => _scrollOffset = offset);
+    }
   }
 
   // ==================== 收藏本地缓存（解决后端 user/playlist 列表 ~1-2 分钟缓存才同步的问题）====================
@@ -366,10 +387,34 @@ class _PlaylistPageState extends State<PlaylistPage> {
               children: [
                 Expanded(
                   child: CustomScrollView(
+                    controller: _scrollController,
                     slivers: [
                       SliverAppBar(
                         expandedHeight: 280,
                         pinned: true,
+                        // pinned 后顶栏背景色：滚动到 expandedHeight - kToolbarHeight
+                        // 之后从透明渐变到 surface
+                        backgroundColor: Color.lerp(
+                          Colors.transparent,
+                          colorScheme.surface,
+                          (_scrollOffset - (280 - kToolbarHeight))
+                              .clamp(0.0, 60.0) / 60,
+                        )!,
+                        surfaceTintColor: Colors.transparent,
+                        scrolledUnderElevation: 0,
+                        // pinned 后顶栏标题：滚动超过阈值后 fade-in 显示歌单名称
+                        title: Opacity(
+                          opacity: ((_scrollOffset - (280 - kToolbarHeight)) /
+                                  60.0)
+                              .clamp(0.0, 1.0),
+                          child: Text(
+                            displayPlaylist.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
                         flexibleSpace: FlexibleSpaceBar(
                           background: Container(
                             decoration: BoxDecoration(
@@ -448,7 +493,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                                         children: [
                                           Text(
                                             displayPlaylist.name,
-                                            maxLines: 2,
+                                            maxLines: 4,
                                             overflow: TextOverflow.ellipsis,
                                             style: textTheme.headlineSmall
                                                 ?.copyWith(
