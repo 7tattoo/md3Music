@@ -13,10 +13,13 @@ on:
       tag:
         description: '要构建的 tag（例如 v3.2.0）'
         required: true
+        type: string
         default: ''
 
+# 默认 GITHUB_TOKEN 权限
 permissions:
-  contents: write
+  contents: write   # 创建/更新 release、上传 APK 需要
+  actions: read
 
 # 取消相同 workflow 正在运行中、针对相同 ref 的旧执行
 concurrency:
@@ -100,13 +103,20 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK & NDK
         uses: android-actions/setup-android@v3
         with:
-          # 与 android/app/build.gradle.kts 中的 compileSdk / ndkVersion 保持一致
-          android-version: '36'
-          ndk-version: '28.2.13676358'
-          build-tools-version: '36.0.0'
+          # android-actions/setup-android@v3 已废弃 android-version/ndk-version/build-tools-version
+          # 必须用 packages 参数显式指定所有组件
+          packages: |
+            cmdline-tools;latest
+            platforms;android-36
+            build-tools;36.0.0
+            ndk;28.2.13676358
+            cmake;3.22.1
+        env:
+          # 自动接受 Android SDK 许可
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -229,19 +239,40 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          set -e
+          set -eo pipefail
           CURRENT_TAG="${{ steps.version.outputs.tag }}"
-          # 找前一个 release tag
-          PREV_TAG=$(git tag --sort=-version:refname \
-            | grep -v "^${CURRENT_TAG}$" \
-            | grep -v "^native-libs$" \
-            | head -1 || true)
 
-          if [ -n "$PREV_TAG" ]; then
-            echo "Previous tag: $PREV_TAG"
-            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+          echo "=== Generate changelog ==="
+          echo "Current tag: ${CURRENT_TAG}"
+          echo "Local tags:"
+          git tag --list 2>&1 | head -20 || echo "  (git tag failed)"
+
+          # 拉取远端 tags（不限制 depth，避免与 full clone 冲突）
+          echo "Fetching remote tags..."
+          if git fetch --tags --force origin 2>&1; then
+            echo "  fetch OK"
           else
-            echo "No previous tag, using last 20 commits"
+            echo "  WARN: git fetch failed, will use local tags only"
+          fi
+
+          # 验证 CURRENT_TAG 是否存在
+          if git rev-parse --verify "refs/tags/${CURRENT_TAG}" >/dev/null 2>&1; then
+            echo "Current tag ${CURRENT_TAG} exists in repo"
+            # 找前一个 release tag（排除 native-libs 这种内部 tag 和当前 tag）
+            PREV_TAG=$(git tag --sort=-version:refname \
+              | grep -v "^${CURRENT_TAG}$" \
+              | grep -v "^native-libs$" \
+              | head -1 || true)
+
+            if [ -n "$PREV_TAG" ] && git rev-parse --verify "refs/tags/${PREV_TAG}" >/dev/null 2>&1; then
+              echo "Previous tag: $PREV_TAG"
+              RANGE="${PREV_TAG}..${CURRENT_TAG}"
+            else
+              echo "No previous tag, using last 20 commits"
+              RANGE=""
+            fi
+          else
+            echo "WARN: tag '${CURRENT_TAG}' not found in repo. Falling back to last 20 commits."
             RANGE=""
           fi
 

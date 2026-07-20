@@ -197,8 +197,22 @@ CI 运行环境无法编译 `nodejs-mobile` 的 native libs，所以需要你**�
 
 ```bash
 # 1. 在 Windows 本地已成功构建的环境下打包
-cd android/app/src/main
-powershell -Command "Compress-Archive -Path 'jniLibs','cpp' -DestinationPath 'native-libs.zip' -Force"
+#    ⚠️ 不要用 PowerShell 的 Compress-Archive，它会写 Windows 反斜杠路径，
+#       Linux 的 unzip 会拒绝解压。用 Python 打包（路径一定是正斜杠）。
+#    ⚠️ 必须在仓库根目录（md3Music/）运行，zip 内部路径必须带 android/app/src/main/ 前缀。
+cd E:\md3Music\md3Music
+python -c "
+import zipfile, os
+zf = zipfile.ZipFile('android/app/src/main/native-libs.zip', 'w', zipfile.ZIP_DEFLATED)
+SRC_PREFIX = 'android/app/src/main'
+for rel in ['jniLibs', 'cpp']:
+    src = os.path.join(SRC_PREFIX, rel)
+    for dp, _, fns in os.walk(src):
+        for fn in fns:
+            full = os.path.join(dp, fn)
+            zf.write(full, full.replace(os.sep, '/'))
+zf.close()
+"
 
 # 2. 创建一个名为 'native-libs' 的 release
 #    https://github.com/zzyoxml/md3Music/releases/new?tag=native-libs
