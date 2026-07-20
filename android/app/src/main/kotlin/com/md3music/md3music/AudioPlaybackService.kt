@@ -23,6 +23,12 @@ import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.github.proify.lyricon.provider.ConnectionListener
+import io.github.proify.lyricon.provider.LyriconFactory
+import io.github.proify.lyricon.provider.LyriconProvider
+import io.github.proify.lyricon.lyric.model.LyricWord
+import io.github.proify.lyricon.lyric.model.RichLyricLine
+import io.github.proify.lyricon.lyric.model.Song
 
 class AudioPlaybackService : Service() {
     companion object {
@@ -43,7 +49,6 @@ class AudioPlaybackService : Service() {
         const val EXTRA_DESKTOP_LYRIC_ENABLED = "desktopLyricEnabled"
         const val EXTRA_IS_FAVORITED = "isFavorited"
 
-        // 静态变量用于跨组件传递 FlutterEngine
         private var staticFlutterEngine: FlutterEngine? = null
         private var wakeLock: PowerManager.WakeLock? = null
 
@@ -68,6 +73,52 @@ class AudioPlaybackService : Service() {
             }
             wakeLock = null
         }
+
+        @Volatile
+        private var lyriconProvider: LyriconProvider? = null
+        private var lyriconChannel: MethodChannel? = null
+
+        fun setLyriconChannel(channel: MethodChannel?) {
+            lyriconChannel = channel
+        }
+
+        fun getLyriconProvider(): LyriconProvider? = lyriconProvider
+
+        fun buildLyriconSong(arg: Map<String, Any?>): Song {
+            @Suppress("UNCHECKED_CAST")
+            val lyricsRaw = arg["lyrics"] as? List<Map<String, Any?>> ?: emptyList()
+            val lyrics = lyricsRaw.map { line ->
+                @Suppress("UNCHECKED_CAST")
+                val wordsRaw = line["words"] as? List<Map<String, Any?>> ?: emptyList()
+                RichLyricLine(
+                    begin = (line["begin"] as? Number)?.toLong() ?: 0L,
+                    end = (line["end"] as? Number)?.toLong() ?: 0L,
+                    text = line["text"] as? String ?: "",
+                    translation = line["translation"] as? String,
+                    words = wordsRaw.map { w ->
+                        LyricWord(
+                            text = w["text"] as? String ?: "",
+                            begin = (w["begin"] as? Number)?.toLong() ?: 0L,
+                            end = (w["end"] as? Number)?.toLong() ?: 0L
+                        )
+                    }
+                )
+            }
+            val song = Song(
+                id = arg["id"] as? String ?: "",
+                name = arg["name"] as? String ?: "",
+                artist = arg["artist"] as? String ?: "",
+                duration = (arg["duration"] as? Number)?.toLong() ?: 0L,
+                lyrics = lyrics
+            )
+            val first = lyrics.firstOrNull()
+            android.util.Log.d("LyriconDebug",
+                "buildLyriconSong: name='${song.name}', artist='${song.artist}', " +
+                "duration=${song.duration}, lyrics.size=${lyrics.size}, " +
+                "first=${first?.let { "begin=${it.begin}, end=${it.end}, text='${it.text}', words=${it.words?.size ?: 0}" }}"
+            )
+            return song
+        }
     }
 
     private var mediaSession: MediaSessionCompat? = null
@@ -84,6 +135,30 @@ class AudioPlaybackService : Service() {
         initMediaSession()
         registerReceiver()
         acquireWakeLock(this)
+
+        lyriconProvider = try {
+            LyriconFactory.createProvider(this).apply {
+                autoSync = true
+                try {
+                    service.addConnectionListener(object : ConnectionListener {
+                        override fun onConnected(provider: LyriconProvider) {
+                            lyriconChannel?.invokeMethod("onConnectionStateChanged", "connected")
+                        }
+                        override fun onReconnected(provider: LyriconProvider) {
+                            lyriconChannel?.invokeMethod("onConnectionStateChanged", "reconnected")
+                        }
+                        override fun onDisconnected(provider: LyriconProvider) {
+                            lyriconChannel?.invokeMethod("onConnectionStateChanged", "disconnected")
+                        }
+                        override fun onConnectTimeout(provider: LyriconProvider) {
+                            lyriconChannel?.invokeMethod("onConnectionStateChanged", "timeout")
+                        }
+                    })
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -215,33 +290,25 @@ class AudioPlaybackService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            
-            // 删除旧渠道（如果存在且配置不正确）- Android 8+ 渠道一旦创建无法修改，必须删除重建
             try {
                 val existingChannel = manager.getNotificationChannel(CHANNEL_ID)
                 if (existingChannel != null) {
-                    // 检查是否需要重建（重要度不是 LOW，或者声音未禁用）
                     if (existingChannel.importance != NotificationManager.IMPORTANCE_LOW ||
                         existingChannel.sound != null) {
                         manager.deleteNotificationChannel(CHANNEL_ID)
                     }
                 }
             } catch (_: Exception) {}
-            
-            // 创建静音通知渠道 - 修复荣耀/vivo 手机通知提示音问题
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "音乐播放",
-                NotificationManager.IMPORTANCE_LOW  // 使用 LOW 而不是 DEFAULT，减少通知干扰
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "音乐播放控制"
                 setShowBadge(false)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                // 关键修复：禁用声音和震动
                 setSound(null, null)
                 enableVibration(false)
-                // 不在锁屏上显示（可选，根据需求调整）
-                // setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
             }
             manager.createNotificationChannel(channel)
         }
@@ -262,7 +329,6 @@ class AudioPlaybackService : Service() {
             this, 0, launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         val prevIntent = PendingIntent.getService(
             this, 1, Intent(this, AudioPlaybackService::class.java).apply { action = ACTION_PREV },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -275,7 +341,6 @@ class AudioPlaybackService : Service() {
             this, 3, Intent(this, AudioPlaybackService::class.java).apply { action = ACTION_NEXT },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        // 桌面歌词开关：通知栏按钮 → 调 dart 端 toggleDesktopLyric
         val toggleLyricIntent = PendingIntent.getService(
             this, 4, Intent(this, AudioPlaybackService::class.java).apply { action = ACTION_TOGGLE_DESKTOP_LYRIC },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -284,11 +349,9 @@ class AudioPlaybackService : Service() {
             this, 5, Intent(this, AudioPlaybackService::class.java).apply { action = ACTION_TOGGLE_FAVORITE },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         val lyricIconRes = if (desktopLyricEnabled) R.drawable.ic_lyric_on else R.drawable.ic_lyric_off
         val favoriteIconRes = if (isFavorited) R.drawable.ic_favorite_on else R.drawable.ic_favorite_off
-
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(title)
@@ -296,8 +359,8 @@ class AudioPlaybackService : Service() {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW)  // 降低优先级，配合渠道的 LOW 设置
-            .setOnlyAlertOnce(true)  // 关键：确保通知更新时不会触发声音/震动
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .addAction(android.R.drawable.ic_media_previous, "上一首", prevIntent)
             .addAction(playPauseIcon, if (isPlaying) "暂停" else "播放", playPauseIntent)
@@ -310,7 +373,6 @@ class AudioPlaybackService : Service() {
                     .setMediaSession(mediaSession?.sessionToken)
                     .setShowActionsInCompactView(0, 1, 3)
             )
-
         if (!artUrl.isNullOrEmpty()) {
             Thread {
                 try {
@@ -322,7 +384,6 @@ class AudioPlaybackService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, builder.build())
         }
-
         mediaSession?.setPlaybackState(
             PlaybackStateCompat.Builder()
                 .setState(
@@ -354,7 +415,9 @@ class AudioPlaybackService : Service() {
                 )
                 .build()
         )
-
+        try {
+            lyriconProvider?.player?.setPlaybackState(isPlaying)
+        } catch (_: Exception) {}
         mediaSession?.setMetadata(
             MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
@@ -382,6 +445,13 @@ class AudioPlaybackService : Service() {
             } catch (_: Exception) {}
         }
         mediaSession?.release()
+        try {
+            lyriconProvider?.unregister()
+        } catch (_: Exception) {}
+        try {
+            lyriconProvider?.destroy()
+        } catch (_: Exception) {}
+        lyriconProvider = null
         releaseWakeLock()
         super.onDestroy()
     }

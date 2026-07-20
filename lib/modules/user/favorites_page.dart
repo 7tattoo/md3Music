@@ -6,6 +6,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/playlist_collection_notifier.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
+import '../../widgets/scroll_aware_app_bar.dart';
 import '../playlist/playlist_page.dart';
 
 class FavoritesPage extends StatefulWidget {
@@ -27,6 +28,9 @@ class _FavoritesPageState extends State<FavoritesPage> {
   bool _isManaging = false;
   final Set<int> _selectedIndices = {};
 
+  /// 顶栏渐变 ScrollController：与 ScrollAwareAppBar 共享
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +44,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
   @override
   void dispose() {
     context.read<PlaylistCollectionNotifier>().removeListener(_onCollectionChanged);
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -103,7 +108,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
         if (list != null && list.isNotEmpty) {
           // 调试：打印每个歌单的原始字段，帮助确认过滤条件
-          for (final item in list!) {
+          for (final item in list) {
             final j = item as Map<String, dynamic>;
             debugPrint(
               '[Playlist] name=${j['specialname'] ?? j['name']} | '
@@ -238,13 +243,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '我的收藏',
-          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-        ),
+      appBar: ScrollAwareAppBar(
+        title: '我的收藏',
+        scrollController: _scrollController,
         actions: [
           if (!_isManaging)
             IconButton(
@@ -272,6 +274,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     return RefreshIndicator(
       onRefresh: () => _loadPlaylists(forceNoCache: true),
       child: ListView(
+        controller: _scrollController,
         children: [
           // 我创建的歌单
           if (created.isNotEmpty)
@@ -282,7 +285,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
               onToggle: (v) => setState(() => _createdExpanded = v),
               playlists: created,
               baseIndex: 0,
-              showAdd: true,
             ),
 
           // 我收藏的歌单
@@ -294,7 +296,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
               onToggle: (v) => setState(() => _collectedExpanded = v),
               playlists: collected,
               baseIndex: created.length,
-              showAdd: false,
             ),
         ],
       ),
@@ -308,10 +309,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     required ValueChanged<bool> onToggle,
     required List<KugouPlaylistBrief> playlists,
     required int baseIndex,
-    required bool showAdd,
   }) {
-    final displayCount = isExpanded ? playlists.length : (count > 5 ? 5 : count);
-
     return Column(
       children: [
         // 分组头部
@@ -321,7 +319,13 @@ class _FavoritesPageState extends State<FavoritesPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                Icon(isExpanded ? Icons.expand_less : Icons.expand_more, size: 20),
+                // 箭头图标加旋转动画
+                AnimatedRotation(
+                  turns: isExpanded ? 0.25 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOutCubic,
+                  child: const Icon(Icons.chevron_right, size: 22),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(title, style: Theme.of(context).textTheme.titleMedium),
@@ -331,7 +335,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 )),
                 const SizedBox(width: 8),
-                // 我创建的歌单：显示"+"和"管理"；收藏的歌单：只显示"管理"
+                // 管理模式下显示「删除 + 取消」，否则只显示「sort」管理按钮
                 if (_isManaging) ...[
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 20),
@@ -345,12 +349,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
                     child: const Text('取消'),
                   ),
                 ] else ...[
-                  if (showAdd)
-                    IconButton(
-                      icon: const Icon(Icons.add, size: 20),
-                      tooltip: '新建歌单',
-                      onPressed: _showCreatePlaylistDialog,
-                    ),
                   IconButton(
                     icon: const Icon(Icons.sort, size: 20),
                     tooltip: '管理歌单',
@@ -363,24 +361,33 @@ class _FavoritesPageState extends State<FavoritesPage> {
         ),
         Divider(height: 1, indent: 44, color: Theme.of(context).colorScheme.outlineVariant),
 
-        // 展开时显示列表
-        if (isExpanded)
-          ...List.generate(displayCount, (i) {
-            final playlist = playlists[i];
-            final idx = baseIndex + i;
-            final isSelected = _selectedIndices.contains(idx);
-            return _buildPlaylistTile(playlist, isSelected, idx, baseIndex);
-          }),
-
-        // 折叠且超过显示数量时，底部展开按钮
-        if (!isExpanded && count > 5)
-          Center(
-            child: TextButton.icon(
-              onPressed: () => onToggle(true),
-              icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-              label: const Text('展开', style: TextStyle(fontSize: 13)),
-            ),
+        // 用 AnimatedSwitcher + SizeTransition 实现展开/收纳动画：
+        // AnimatedSize 在折叠时 child 立即变空 Column，动画过程无可视内容；
+        // SizeTransition 的 child 始终完整渲染所有 tiles，通过 sizeFactor
+        // 控制可见比例，折叠时 tiles 从顶部向下被裁切消失，展开时反向显现。
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeInOutCubic,
+          switchOutCurve: Curves.easeInOutCubic,
+          transitionBuilder: (child, animation) => SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: 1.0, // 顶部对齐，向下展开/向上收起
+            child: child,
           ),
+          child: isExpanded
+              ? Column(
+                  key: const ValueKey('expanded'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(playlists.length, (i) {
+                    final playlist = playlists[i];
+                    final idx = baseIndex + i;
+                    final isSelected = _selectedIndices.contains(idx);
+                    return _buildPlaylistTile(
+                        playlist, isSelected, idx, baseIndex);
+                  }),
+                )
+              : const SizedBox.shrink(key: ValueKey('collapsed')),
+        ),
       ],
     );
   }

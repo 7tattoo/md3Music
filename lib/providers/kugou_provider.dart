@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
@@ -210,7 +209,24 @@ class KugouProvider extends ChangeNotifier {
   KugouAlbumDetail? get albumDetail => _albumDetail;
   List<String> get searchSuggest => _searchSuggest;
   KugouPlayUrl? get songUrl => _songUrl;
-  KugouLyric? get lyric => _lyric;
+
+  /// 当前歌词（Task 15 双请求合并后的对象，同时携带 KRC 与 LRC 明文）。
+  /// 旧调用方继续使用此 getter，通过 [KugouLyric.displayLyric] 自动取
+  /// KRC 优先、降级 LRC 的文本——等价于 `krcLyric ?? lrcLyric`，
+  /// 因为 Task 15 返回的是同一个 `KugouLyric` 对象。
+  KugouLyric? get lyric => krcLyric ?? lrcLyric;
+
+  /// 携带 KRC 明文（逐字）的 `KugouLyric`（如有）。
+  /// 调用方应使用 `krcLyric?.displayKrcLyric` 取 KRC 明文文本。
+  /// Task 15 双请求返回的同一对象，KRC 部分可能为 null（仅 LRC 可用）。
+  KugouLyric? get krcLyric => _lyric;
+
+  /// 携带 LRC 明文（行级）的 `KugouLyric`（如有）。
+  /// 调用方应使用 `lrcLyric?.displayLrcLyric` 取 LRC 明文文本。
+  /// 与 [krcLyric] 引用同一对象，Task 15 合并后两者共享存储，
+  /// 由模型层 `displayKrcLyric` / `displayLrcLyric` 区分。
+  KugouLyric? get lrcLyric => _lyric;
+
   KugouCommentList? get comments => _comments;
   KugouPlaylistSongs? get playlistSongs => _playlistSongs;
   List<KugouSongDetail> get personalFmSongs => _personalFmSongs;
@@ -422,6 +438,12 @@ class KugouProvider extends ChangeNotifier {
     _lyricSongId = hash;
     notifyListeners();
     try {
+      // Task 15：默认 fmt='lrc' 时，API 客户端会并发发起 LRC + KRC 两个请求，
+      // 返回的 KugouLyric 同时携带 decodedContent（LRC 明文）与
+      // decodedKrcContent（KRC 明文）。任一请求失败不影响另一个。
+      // 这里只调用一次，结果统一存入 _lyric，由 [krcLyric] / [lrcLyric]
+      // getter 暴露，调用方通过 KugouLyric.displayKrcLyric / displayLrcLyric
+      // 显式分别取两种文本。
       final result = await _apiClient.getLyric(
         hash,
         songName: songName,

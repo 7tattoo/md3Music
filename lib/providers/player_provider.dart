@@ -6,12 +6,16 @@ import 'package:provider/provider.dart';
 
 import '../core/services/audio_service.dart';
 import '../core/services/desktop_lyric_service.dart';
+import '../core/services/lyricon_provider_service.dart';
 import '../core/services/media_notification_service.dart';
 import '../data/models/song.dart';
 import '../data/repositories/history_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import '../main.dart';
+import '../widgets/apple_lyrics/models/lyric_line.dart';
+import '../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
 import 'favorites_provider.dart';
+import 'kugou_provider.dart';
 import '../services/kugou_api/kugou_api_client.dart';
 
 enum AppLoopMode { off, one, all }
@@ -70,8 +74,17 @@ class PlayerProvider extends ChangeNotifier {
   // 未登录时尝试播放需联网歌曲,通知 UI 弹窗
   void Function()? onLoginRequired;
 
+  // —— Lyricon 钩子字段 ——
+  // 记录上次推送给 Lyricon 的歌曲，用于在 notifyListeners 回调中检测切歌
+  // （PlayerProvider 没有专门的切歌回调，用 addListener 监听自身是最小侵入方式）
+  Song? _lastLyriconSong;
+  // 歌词异步拉取的竞态 token：每次切歌自增，过期结果被丢弃
+  int _lyriconFetchToken = 0;
+
   PlayerProvider() {
     _initAudioService();
+    // 监听自身变化检测切歌 → 推送 Lyricon（仅 enabled 时实际推送）
+    addListener(_handleLyriconSongChange);
   }
 
   Future<void> _initAudioService() async {
@@ -127,6 +140,16 @@ class PlayerProvider extends ChangeNotifier {
           _position = position;
           _updateNotificationPosition();
           notifyListeners();
+          // 直接转发给 Lyricon，无节流。
+          // positionStream 本身就是 ~200ms 周期（just_audio 默认），是天然节流。
+          // MethodChannel 是异步的，不阻塞 Dart UI；setPosition 是 fire-and-forget。
+          // 仅在播放中推送，暂停时跳过避免无意义 IPC。
+          if (LyriconProviderService.instance.enabled && _isPlaying) {
+            try {
+              LyriconProviderService.instance
+                  .setPosition(position.inMilliseconds);
+            } catch (_) {}
+          }
         },
         onError: (e) {
                   },
@@ -146,6 +169,17 @@ class PlayerProvider extends ChangeNotifier {
           _isPlaying = isPlaying;
           _updateNotification();
           notifyListeners();
+          // 播放/暂停切换时立即推 Lyricon，避免等下一个 positionStream tick
+          // state 必须用 PlaybackStateCompat.STATE_PLAYING=3 / STATE_PAUSED=2
+          if (LyriconProviderService.instance.enabled) {
+            try {
+              LyriconProviderService.instance.setPlaybackState(
+                state: isPlaying ? 3 : 2,
+                position: _position.inMilliseconds,
+                speed: 1.0,
+              );
+            } catch (_) {}
+          }
         },
         onError: (e) {
                   },
@@ -216,7 +250,11 @@ class PlayerProvider extends ChangeNotifier {
                 .where((s) => s.id != currentSong?.id)
                 .toList();
             remaining.shuffle();
-            _playlist = [?currentSong, ...remaining];
+            // currentSong 可能为 null，使用 collection-if 条件添加
+            _playlist = [
+              if (currentSong != null) currentSong,
+              ...remaining,
+            ];
             _currentIndex = 0;
           } else {
             _currentIndex = 0;
@@ -497,6 +535,13 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     }
     await _audioService?.seek(position);
+    // 同步进度到 Lyricon（仅 enabled 时推送，避免无意义 IPC；
+    // seek 由用户拖动进度条或切歌/上一首/下一首触发，频率自然不高，无需额外节流）
+    if (LyriconProviderService.instance.enabled) {
+      try {
+        LyriconProviderService.instance.seekTo(position.inMilliseconds);
+      } catch (_) {}
+    }
   }
 
   Future<bool> _resolveAndPlayCurrentSong() async {
@@ -671,7 +716,11 @@ class PlayerProvider extends ChangeNotifier {
           .where((s) => s.id != currentSong?.id)
           .toList();
       remaining.shuffle();
-      _playlist = [?currentSong, ...remaining];
+      // currentSong 可能为 null，使用 collection-if 条件添加
+      _playlist = [
+        if (currentSong != null) currentSong,
+        ...remaining,
+      ];
       _currentIndex = 0;
     } else {
       final currentSong = _currentSong;
@@ -778,13 +827,14 @@ class PlayerProvider extends ChangeNotifier {
     // Check favorite status from FavoritesProvider via global context
     bool isFavorited = false;
     try {
-      final ctx = appNavigatorKey?.currentContext;
+      final ctx = appNavigatorKey.currentContext;
       if (ctx != null) {
         isFavorited = ctx.read<FavoritesProvider>().isFavorite(song.id);
       }
     } catch (_) {}
     MediaNotificationService.updateNotification(
-      title: song.title,
+      // 使用 displayName 剥离 .mp3 等扩展名，与 _createAudioSource 行为保持一致
+      title: song.displayName,
       artist: song.artist,
       artUrl: song.artworkUri,
       isPlaying: _isPlaying,
@@ -810,7 +860,8 @@ class PlayerProvider extends ChangeNotifier {
       return createAudioSourceWeb(
         id: song.id,
         url: playbackUrl ?? '',
-        title: song.title,
+        // 使用 displayName 剥离 .mp3 等扩展名，避免系统通知栏/锁屏显示后缀
+        title: song.displayName,
         artist: song.artist,
         album: song.album,
         artUri: song.artworkUri != null ? Uri.parse(song.artworkUri!) : null,
@@ -819,15 +870,86 @@ class PlayerProvider extends ChangeNotifier {
     return createAudioSource(
       id: song.id,
       url: playbackUrl ?? '',
-      title: song.title,
+      // 使用 displayName 剥离 .mp3 等扩展名，避免系统通知栏/锁屏显示后缀
+      title: song.displayName,
       artist: song.artist,
       album: song.album,
       artUri: song.artworkUri != null ? Uri.parse(song.artworkUri!) : null,
     );
   }
 
+  /// 监听自身 notifyListeners：检测 currentSong 变化时推送 Lyricon。
+  ///
+  /// PlayerProvider 没有专门的切歌回调（playSong / next / previous / playSongAt
+  /// 等多处都会切歌），用 addListener 监听自身是最小侵入方式。
+  /// 每次 notifyListeners（含 position tick）都会触发本方法，但首行 short-circuit
+  /// 仅做一次字符串比较，开销可忽略。
+  void _handleLyriconSongChange() {
+    if (!LyriconProviderService.instance.enabled) return;
+    final song = _currentSong;
+    // id 相同（含都为 null）则不处理，避免高频 tick 触发重复推送
+    if (song?.id == _lastLyriconSong?.id) return;
+    _lastLyriconSong = song;
+    _pushLyriconSongChange(song);
+  }
+
+  /// 拉取歌词 → 解析 → 推送 Lyricon onSongChanged。
+  ///
+  /// 参考 [DesktopLyricService._onTick] / [_fetchLyricFor] 的模式：
+  /// - 通过 appNavigatorKey.currentContext 拿 KugouProvider
+  /// - 调 kugou.getLyric 拉 LRC（Task 15 双请求会同时拉 KRC）
+  /// - 用 LyricParserChain.parse 自动识别 KRC/LRC/纯文本
+  /// - 推送 LyriconProviderService.instance.onSongChanged
+  ///
+  /// 竞态处理：每次切歌自增 _lyriconFetchToken，异步结果过期则丢弃，
+  /// 避免快速切歌时旧歌词覆盖新歌词。
+  Future<void> _pushLyriconSongChange(Song? song) async {
+    if (!LyriconProviderService.instance.enabled) return;
+    final token = ++_lyriconFetchToken;
+    try {
+      List<LyricLine> lines = const [];
+      if (song != null) {
+        final ctx = appNavigatorKey.currentContext;
+        if (ctx != null) {
+          try {
+            final kugou = ctx.read<KugouProvider>();
+            // fmt='lrc' 触发 KugouApiClient 内部并发双请求（LRC + KRC），
+            // 返回的 KugouLyric 同时携带 decodedContent（LRC）与
+            // decodedKrcContent（KRC），由 displayLyric 优先返回 KRC 明文。
+            // 不复用 kugou.lyric 缓存：KugouProvider 未暴露 lyricSongId getter，
+            // 无法判断缓存是否属于当前歌曲（切歌瞬间缓存可能仍是上一首）。
+            // getLyric 内部有 _lyricSongId 竞态保护，与 apple_lyrics_view
+            // 的并发请求互不干扰（后调覆盖前调，结果一致）。
+            await kugou.getLyric(
+              song.id,
+              songName: song.title,
+              fmt: 'lrc',
+            );
+            if (token != _lyriconFetchToken) return; // 切歌已变化，丢弃旧结果
+            // 复用 LyricParserChain 自动识别 KRC/LRC/纯文本（与
+            // DesktopLyricService 同一解析入口，不重复实现解析逻辑）
+            final text = kugou.lyric?.displayLyric;
+            if (text != null && text.isNotEmpty) {
+              lines = LyricParserChain.parse(text);
+            }
+          } catch (_) {}
+        }
+      }
+      if (token != _lyriconFetchToken) return;
+      // 传入当前播放进度和状态，让 Lyricon 能立即触发歌词渲染
+      // （Lyricon 推荐调用顺序：setSong → setPosition → setPlaybackState）
+      await LyriconProviderService.instance.onSongChanged(
+        song,
+        lines,
+        positionMs: _position.inMilliseconds,
+        isPlaying: _isPlaying,
+      );
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
+    removeListener(_handleLyriconSongChange);
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
     _playingSubscription?.cancel();

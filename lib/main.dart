@@ -7,8 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/services/desktop_lyric_service.dart';
+import 'core/services/lyricon_provider_service.dart';
 import 'core/services/media_notification_service.dart';
 import 'services/nodejs_server.dart';
+import 'widgets/apple_lyrics/layout/lyric_preferences.dart';
 
 const String _kBatteryPromptShownKey = 'battery_prompt_shown';
 
@@ -18,9 +20,14 @@ final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('zh_CN');
+  // 加载歌词字号/行间距偏好（从 SharedPreferences）
+  await LyricPreferences.instance.load();
   // 注册通知栏/悬浮窗回调（悬浮窗内按钮 → DesktopLyricService；通知栏桌面歌词按钮 → toggle）
   MediaNotificationService.initCallbacks();
   DesktopLyricService.instance.registerNativeCallbacks();
+  // 注册 Lyricon 反向回调（连接状态变更 → UI 刷新）
+  // initialize 内部仅 setMethodCallHandler，同步完成，无需 await
+  LyriconProviderService.instance.initialize();
   // 权限请求包裹 try/catch：在部分设备/早期阶段 permission_handler 可能抛
   // "Unable to detect current Android Activity"，不能让它中断启动流程。
   try {

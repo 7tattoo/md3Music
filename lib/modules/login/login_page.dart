@@ -396,6 +396,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildWxTab(ColorScheme colorScheme, TextTheme textTheme) {
     final base64 = _wxQrData?['qrcode']?['qrcodebase64']?.toString();
     final bytes = _decodeBase64Image(base64);

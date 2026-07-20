@@ -81,6 +81,15 @@ jobs:
           echo "full_version=$FULL_VERSION" >> "$GITHUB_OUTPUT"
           echo "Building tag=$TAG version=$VERSION versionCode=$VERSION_CODE (full=$FULL_VERSION)"
 
+          # 检查 tag 是否真实存在（用于决定是否创建 release）
+          if git rev-parse --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${TAG} exists in repo (will create release)"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            echo "WARN: Tag ${TAG} does NOT exist in repo (will skip release creation)"
+          fi
+
       # ============================================================
       # 2.5 自动更新 pubspec.yaml 的 version 字段
       # ============================================================
@@ -179,6 +188,55 @@ jobs:
           echo ""
           echo "cpp/include/node/:"
           ls android/app/src/main/cpp/include/node/ 2>/dev/null | head -5 || echo "  (missing)"
+
+      # ============================================================
+      # 5.5 下载持久化 release keystore
+      #     从 'keystore' release 下载 release.keystore，
+      #     并生成 keystore.properties（密码用 GitHub Secrets）
+      # ============================================================
+      - name: Download release keystore
+        id: keystore
+        continue-on-error: true
+        run: |
+          set -e
+          echo "Downloading release.keystore from 'keystore' release..."
+          if ! curl -fL --retry 3 -o /tmp/release.keystore \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/keystore/release.keystore"; then
+            echo ""
+            echo "============================================================"
+            echo "WARN: keystore release 不存在，使用 debug keystore 兜底"
+            echo ""
+            echo "首次启用持久签名需要："
+            echo "  1. 在本地生成 release.keystore"
+            echo "  2. 创建一个名为 'keystore' 的 release："
+            echo "     https://github.com/${GITHUB_REPOSITORY}/releases/new?tag=keystore"
+            echo "  3. 把 release.keystore 作为资产上传"
+            echo "  4. 重新触发本 workflow"
+            echo "============================================================"
+            echo "keystore_available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cp /tmp/release.keystore android/app/release.keystore
+          rm /tmp/release.keystore
+          ls -lh android/app/release.keystore
+          echo "keystore_available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Generate keystore.properties (for CI)
+        if: steps.keystore.outputs.keystore_available == 'true'
+        run: |
+          set -e
+          cat > android/keystore.properties <<EOF
+          storePassword=${KEYSTORE_PASSWORD:-android}
+          keyPassword=${KEY_PASSWORD:-android}
+          keyAlias=${KEY_ALIAS:-androiddebugkey}
+          storeFile=release.keystore
+          EOF
+          echo "keystore.properties:"
+          cat android/keystore.properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
 
       # ============================================================
       # 6. 构建嵌入式 Node.js 服务器 bundle
@@ -308,10 +366,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # ============================================================
-      # 9. 创建/更新 GitHub Release
+      # 9. 创建/更新 GitHub Release（仅在 tag 真实存在时执行）
       #    append=true 保留历史资产，不会删除旧版本
       # ============================================================
       - name: Upload APKs to Release
+        if: steps.version.outputs.tag_exists == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}

@@ -169,4 +169,36 @@ class SettingsRepository {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('settings_dl_locked', v);
   }
+
+  // ===== Lyricon 配置 =====
+
+  Future<bool> getLyriconEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('lyricon_enabled') ?? false;
+  }
+
+  Future<void> setLyriconEnabled(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('lyricon_enabled', v);
+  }
+
+  Future<bool> getLyriconDisplayTranslation() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('lyricon_display_translation') ?? true;
+  }
+
+  Future<void> setLyriconDisplayTranslation(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('lyricon_display_translation', v);
+  }
+
+  Future<bool> getLyriconDisplayRoma() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('lyricon_display_roma') ?? false;
+  }
+
+  Future<void> setLyriconDisplayRoma(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('lyricon_display_roma', v);
+  }
 }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../widgets/app_animation.dart';
+import '../../widgets/scroll_aware_app_bar.dart';
 import '../../widgets/song_list_item.dart';
 
 class ChartsPage extends StatefulWidget {
@@ -15,6 +16,15 @@ class ChartsPage extends StatefulWidget {
 }
 
 class _ChartsPageState extends State<ChartsPage> {
+  /// 顶栏渐变 ScrollController：与 ScrollAwareAppBar 共享
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -26,13 +36,10 @@ class _ChartsPageState extends State<ChartsPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '排行榜',
-          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-        ),
+      appBar: ScrollAwareAppBar(
+        title: '排行榜',
+        scrollController: _scrollController,
       ),
       body: _buildRankList(context, cs),
     );
@@ -69,6 +76,7 @@ class _ChartsPageState extends State<ChartsPage> {
         return RefreshIndicator(
           onRefresh: () => kugou.getRankList(forceRefresh: true),
           child: ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.all(16),
             itemCount: ranks.ranks.length,
             itemBuilder: (context, i) {

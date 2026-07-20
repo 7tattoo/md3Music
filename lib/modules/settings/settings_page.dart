@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:http/http.dart' as http;
@@ -10,16 +9,22 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/services/lyricon_provider_service.dart';
+import '../../core/theme/app_theme.dart';
 import '../../data/repositories/settings_repository.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
+import '../../widgets/apple_lyrics/preview/lyrics_preview_page.dart';
+import '../../widgets/seed_color_picker.dart';
 
-/// 编译时通过 `--dart-define=APP_VERSION=3.3.0` 注入的版本号。
-/// 优先级低于 PackageInfo（运行时实际读取），仅作回退显示用。
+/// CI compile-time version injection via --dart-define=APP_VERSION=X
+/// Fallback display when runtime PackageInfo read fails.
 const String kBuildAppVersion = String.fromEnvironment(
   'APP_VERSION',
-  defaultValue: '0.0.0',
+  defaultValue: '3.3.0',
 );
+
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -38,19 +43,67 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isTestingConnection = false;
   String? _connectionResult;
   bool _autoReceiveVip = true;
+  bool _useDynamicColor = false;
+  // Apple Music 风格播放页开关（默认关闭，开启后用 AM 风格 FullPlayer）
+  bool _useAmStylePlayer = false;
   String _appVersion = '';
+  // Lyricon 词幕推送相关状态
+  bool _lyriconEnabled = false;
+  bool _lyriconDisplayTranslation = true;
+  bool _lyriconDisplayRoma = false;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _loadVersion();
+    _loadLyriconSettings();
+    LyriconProviderService.instance.addListener(_onLyriconStateChanged);
   }
 
   @override
   void dispose() {
+    LyriconProviderService.instance.removeListener(_onLyriconStateChanged);
     _apiServerController.dispose();
     super.dispose();
+  }
+
+  /// Lyricon 服务状态变化回调：触发 UI 刷新
+  void _onLyriconStateChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// 从 SettingsRepository 加载 Lyricon 三个偏好
+  Future<void> _loadLyriconSettings() async {
+    final enabled = await _settingsRepository.getLyriconEnabled();
+    final displayTranslation =
+        await _settingsRepository.getLyriconDisplayTranslation();
+    final displayRoma = await _settingsRepository.getLyriconDisplayRoma();
+    if (mounted) {
+      setState(() {
+        _lyriconEnabled = enabled;
+        _lyriconDisplayTranslation = displayTranslation;
+        _lyriconDisplayRoma = displayRoma;
+      });
+    }
+  }
+
+  /// Lyricon 连接状态 → 中文文案
+  String _getLyriconStateText() {
+    switch (LyriconProviderService.instance.state) {
+      case LyriconConnectionState.disabled:
+        return '未启用';
+      case LyriconConnectionState.connecting:
+        return '连接中...';
+      case LyriconConnectionState.connected:
+        return '已连接';
+      case LyriconConnectionState.disconnected:
+        return '已断开';
+      case LyriconConnectionState.timeout:
+        return '连接超时，请检查 Lyricon / LSPosed 配置';
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -58,12 +111,18 @@ class _SettingsPageState extends State<SettingsPage> {
     final quality = await _settingsRepository.getDefaultQuality();
     final autoReceiveVip = await _settingsRepository.getAutoReceiveVip();
     final apiServerUrl = await _settingsRepository.getApiServerUrl();
+    // 从 ThemeProvider 同步「使用系统主题色」开关状态
+    final useDynamicColor = context.read<ThemeProvider>().useDynamicColor;
+    // 从 ThemeProvider 同步「Apple Music 风格播放页」开关状态
+    final useAmStylePlayer = context.read<ThemeProvider>().useAmStylePlayer;
 
     setState(() {
       _themeMode = themeMode;
       _defaultQuality = quality;
       _autoReceiveVip = autoReceiveVip;
       _apiServerController.text = apiServerUrl;
+      _useDynamicColor = useDynamicColor;
+      _useAmStylePlayer = useAmStylePlayer;
     });
   }
 
@@ -127,6 +186,9 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSectionHeader('外观'),
           _buildAppearanceSection(colorScheme),
           const Divider(),
+          _buildSectionHeader('歌词'),
+          _buildLyricSection(colorScheme),
+          const Divider(),
           _buildSectionHeader('播放'),
           _buildPlaybackSection(colorScheme),
           const Divider(),
@@ -156,7 +218,88 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// 歌词设置 section：点击进入字号/行间距调节面板。
+  Widget _buildLyricSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.lyrics),
+          title: const Text('歌词显示'),
+          subtitle: const Text('字号、行间距'),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              builder: (context) => SafeArea(
+                child: const LyricPreferencesPanel(),
+              ),
+            );
+          },
+        ),
+        // Lyricon 词幕推送主开关
+        SwitchListTile(
+          title: const Text('Lyricon 词幕推送'),
+          subtitle: const Text('向 Lyricon 提供方实时推送歌词'),
+          value: _lyriconEnabled,
+          onChanged: (value) {
+            setState(() {
+              _lyriconEnabled = value;
+            });
+            LyriconProviderService.instance.setEnabled(value);
+            _settingsRepository.setLyriconEnabled(value);
+          },
+        ),
+        // 主开关下方显示当前连接状态
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _getLyriconStateText(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+        // 次级开关：翻译歌词（主开关关闭时禁用）
+        SwitchListTile(
+          title: const Text('翻译歌词'),
+          value: _lyriconDisplayTranslation,
+          onChanged: _lyriconEnabled
+              ? (value) {
+                  setState(() {
+                    _lyriconDisplayTranslation = value;
+                  });
+                  LyriconProviderService.instance.setDisplayTranslation(value);
+                  _settingsRepository.setLyriconDisplayTranslation(value);
+                }
+              : null,
+        ),
+        // 次级开关：罗马音（主开关关闭时禁用）
+        SwitchListTile(
+          title: const Text('罗马音'),
+          value: _lyriconDisplayRoma,
+          onChanged: _lyriconEnabled
+              ? (value) {
+                  setState(() {
+                    _lyriconDisplayRoma = value;
+                  });
+                  LyriconProviderService.instance.setDisplayRoma(value);
+                  _settingsRepository.setLyriconDisplayRoma(value);
+                }
+              : null,
+        ),
+      ],
+    );
+  }
+
   Widget _buildAppearanceSection(ColorScheme colorScheme) {
+    final themeProvider = context.read<ThemeProvider>();
+    // 仅 ThemeMode.light 时禁用 OLED 开关；dark 与 system 均可勾选。
+    // system 模式下勾选后，等系统切到深色时 darkTheme 自动应用纯黑（MaterialApp 机制）。
+    final canToggleOled = _themeMode != ThemeMode.light;
     return Column(
       children: [
         Padding(
@@ -203,8 +346,77 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
         ),
+        // 主题色入口：点击弹出 8 色预设面板。
+        // 系统色开启时用 IgnorePointer 禁用点击（不灰显，色块仍显示当前 effectiveSeedColor）。
+        IgnorePointer(
+          ignoring: themeProvider.useDynamicColor,
+          child: ListTile(
+            leading: const Icon(Icons.palette),
+            title: const Text('主题色'),
+            subtitle: Text(
+              themeProvider.useDynamicColor
+                  ? '跟随系统壁纸取色'
+                  : '手动选择种子色',
+            ),
+            trailing: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: themeProvider.effectiveSeedColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: colorScheme.outline, width: 1.5),
+              ),
+            ),
+            onTap: () => _showSeedColorPicker(themeProvider),
+          ),
+        ),
+        SwitchListTile(
+          title: const Text('使用系统主题色'),
+          subtitle: const Text('跟随系统壁纸取色（Android 12+ 莫奈色，HCT 多点量化）'),
+          value: _useDynamicColor,
+          onChanged: (v) {
+            setState(() => _useDynamicColor = v);
+            context.read<ThemeProvider>().setUseDynamicColor(v);
+          },
+        ),
+        // OLED 纯黑开关：light 模式禁用；dark 与 system 可勾选。
+        // system 模式下勾选后，系统切深色时自动生效，切浅色时不影响 lightTheme。
+        SwitchListTile(
+          title: const Text('OLED 纯黑深色'),
+          subtitle: const Text('将深色背景改为纯黑（仅深色模式生效，节省 OLED 电量）'),
+          value: themeProvider.useOledBlack,
+          onChanged: canToggleOled
+              ? (v) => themeProvider.setUseOledBlack(v)
+              : null,
+        ),
+        SwitchListTile(
+          title: const Text('Apple Music 风格播放页'),
+          subtitle: const Text('使用模糊封面背景 + 弹簧动画 + 逐字歌词（关闭则用原版 MD3 风格）'),
+          value: _useAmStylePlayer,
+          onChanged: (v) {
+            setState(() => _useAmStylePlayer = v);
+            context.read<ThemeProvider>().setUseAmStylePlayer(v);
+          },
+        ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+
+  /// 弹出 8 色预设种子色选择面板。
+  /// 选择后调用 ThemeProvider.setManualSeedColor 持久化并立即生效。
+  void _showSeedColorPicker(ThemeProvider themeProvider) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SeedColorPicker(
+        currentColor:
+            themeProvider.manualSeedColor ?? AppTheme.defaultSeedColor,
+        onSelected: (color) {
+          themeProvider.setManualSeedColor(color);
+          Navigator.pop(ctx);
+        },
+      ),
     );
   }
 
@@ -415,6 +627,19 @@ class _SettingsPageState extends State<SettingsPage> {
               context: context,
               applicationName: 'MD3Music',
               applicationVersion: _appVersion.isEmpty ? kBuildAppVersion : _appVersion,
+            );
+          },
+        ),
+        // 开发者入口：跳转 Apple Music 风格歌词渲染预览页（Task 22.5）
+        ListTile(
+          title: const Text('歌词预览（开发）'),
+          subtitle: const Text('Apple Music 风格歌词渲染调试'),
+          leading: const Icon(Icons.lyrics_outlined),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const LyricsPreviewPage(),
+              ),
             );
           },
         ),

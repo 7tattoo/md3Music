@@ -1,7 +1,17 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystoreProperties = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) {
+        load(FileInputStream(f))
+    }
 }
 
 android {
@@ -36,11 +46,26 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystoreProperties.isNotEmpty()) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the persistent release signing config (if keystore.properties exists)
+            // Falls back to debug signing when keystore.properties is missing (CI / first build)
+            signingConfig = if (keystoreProperties.isNotEmpty()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
         debug {
             // Disable symbol stripping for Gradle 9.x compatibility
@@ -60,6 +85,8 @@ kotlin {
 dependencies {
     implementation("androidx.media:media:1.6.0")
     implementation("androidx.core:core-ktx:1.12.0")
+    implementation("io.github.proify.lyricon:provider:0.1.70")
+    implementation("io.github.proify.lyricon.lyric:model:0.1.70")
 }
 
 flutter {
