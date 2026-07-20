@@ -2,7 +2,6 @@ import 'dart:io' show exit;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:provider/provider.dart';
 
 import 'core/layout/responsive_layout.dart';
@@ -64,17 +63,19 @@ class _UpFadeMainRoute<T> extends MaterialPageRoute<T> {
           );
         }
         // FullPlayer 在栈顶：_MainLayout 向上偏移 15% + 淡出
-        final offset =
-            Tween<Offset>(
-              begin: Offset.zero,
-              end: const Offset(0, -0.15),
-            ).animate(
-              CurvedAnimation(
-                parent: secondaryAnimation,
-                curve: Curves.easeOutCubic,
-              ),
-            );
-        final fade = Tween<double>(begin: 1.0, end: 0.0).animate(
+        final offset = Tween<Offset>(
+          begin: Offset.zero,
+          end: const Offset(0, -0.15),
+        ).animate(
+          CurvedAnimation(
+            parent: secondaryAnimation,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+        final fade = Tween<double>(
+          begin: 1.0,
+          end: 0.0,
+        ).animate(
           CurvedAnimation(
             parent: secondaryAnimation,
             curve: Curves.easeOutCubic,
@@ -144,7 +145,9 @@ class _AppView extends StatelessWidget {
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/') {
-          return _UpFadeMainRoute<void>(builder: (_) => const _MainLayout());
+          return _UpFadeMainRoute<void>(
+            builder: (_) => const _MainLayout(),
+          );
         }
         if (settings.name == '/playlist') {
           final playlist = settings.arguments as Playlist;
@@ -318,54 +321,40 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // 一级页面返回拦截：
-    // 1) PopScope 拦截系统返回手势 / 物理返回键，canPop=false → 触发 onPopInvoked
-    // 2) 弹"退出 App"确认对话框
-    // 3) 确认后顺序关停：暂停播放 → 关停本地 Node.js → SystemNavigator.pop 杀进程
-    //    任务栈为空时系统默认行为是退出 App，但不会主动关停 Node.js server 和
-    //    audio service，端口会被占用（下一次冷启动会冲突），通知栏会残留。
-    //    因此需要这个拦截 + 手动 cleanup。
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        _showExitConfirmDialog();
+    // 预测返回手势由 AndroidManifest 的 enableOnBackInvokedCallback 控制（编译时静态），
+    // 应用无法运行时关闭系统预测动画。栈空时直接退出 App（系统默认行为）。
+    return ResponsiveScaffold(
+      destinations: _destinations,
+      railDestinations: _railDestinations,
+      drawerDestinations: _drawerDestinations,
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (index) {
+        setState(() {
+          _selectedIndex = index;
+        });
       },
-      child: ResponsiveScaffold(
-        destinations: _destinations,
-        railDestinations: _railDestinations,
-        drawerDestinations: _drawerDestinations,
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        body: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        compactBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        mediumBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
-        expandedBody: Column(
-          children: [
-            Expanded(child: _pages[_selectedIndex]),
-            const MiniPlayer(),
-          ],
-        ),
+      body: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
       ),
+      compactBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
+      ),
+      mediumBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
+        ],
+      ),
+      expandedBody: Column(
+        children: [
+          Expanded(child: _pages[_selectedIndex]),
+          const MiniPlayer(),
     );
   }
 
