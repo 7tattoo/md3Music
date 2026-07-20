@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/kugou_provider.dart';
 import '../../widgets/app_animation.dart';
+import '../../widgets/scroll_aware_app_bar.dart';
 import '../login/login_page.dart';
 import '../settings/settings_page.dart';
 import 'downloads_page.dart';
@@ -18,6 +19,9 @@ class UserCenterPage extends StatefulWidget {
 }
 
 class _UserCenterPageState extends State<UserCenterPage> {
+  /// 顶栏渐变 ScrollController：与 ScrollAwareAppBar 共享
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -31,16 +35,20 @@ class _UserCenterPageState extends State<UserCenterPage> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '我的',
-          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-        ),
+      appBar: ScrollAwareAppBar(
+        title: '我的',
+        scrollController: _scrollController,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -88,6 +96,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
               await kugou.getVipMonthRecord();
             },
             child: CustomScrollView(
+              controller: _scrollController,
               slivers: [
                 _buildUserHeader(cs, tt, kugou),
                 _buildVipCard(cs, tt, kugou),
