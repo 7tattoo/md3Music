@@ -81,6 +81,15 @@ jobs:
           echo "full_version=$FULL_VERSION" >> "$GITHUB_OUTPUT"
           echo "Building tag=$TAG version=$VERSION versionCode=$VERSION_CODE (full=$FULL_VERSION)"
 
+          # 检查 tag 是否真实存在（用于决定是否创建 release）
+          if git rev-parse --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${TAG} exists in repo (will create release)"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            echo "WARN: Tag ${TAG} does NOT exist in repo (will skip release creation)"
+          fi
+
       # ============================================================
       # 2.5 自动更新 pubspec.yaml 的 version 字段
       # ============================================================
@@ -308,10 +317,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # ============================================================
-      # 9. 创建/更新 GitHub Release
+      # 9. 创建/更新 GitHub Release（仅在 tag 真实存在时执行）
       #    append=true 保留历史资产，不会删除旧版本
       # ============================================================
       - name: Upload APKs to Release
+        if: steps.version.outputs.tag_exists == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
