@@ -169,7 +169,7 @@ class DownloadsProvider extends ChangeNotifier {
 
     await _repository.saveTask(task);
     final dir = await _resolveDownloadDir();
-    _manager.download(task, dir);
+    _manager.download(task, dir, quality: quality);
   }
 
   void cancelDownload(String songId) {
