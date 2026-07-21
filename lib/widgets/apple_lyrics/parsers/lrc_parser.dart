@@ -40,6 +40,16 @@ class LrcParser {
       // 按行拆分，兼容 \n 与 \r\n
       final lines = lrcText.split(RegExp(r'\r?\n'));
 
+      // 先提取 [offset:±xxx] 全局时间偏移（毫秒）
+      int offsetMs = 0;
+      for (final rawLine in lines) {
+        final offsetMatch = RegExp(r'^\[offset:([+-]?\d+)\]').firstMatch(rawLine.trim());
+        if (offsetMatch != null) {
+          offsetMs = int.tryParse(offsetMatch.group(1)!) ?? 0;
+          break;
+        }
+      }
+
       for (final rawLine in lines) {
         final line = rawLine.trim();
 
@@ -67,7 +77,7 @@ class LrcParser {
           final milliseconds =
               int.parse(msStr) * (msStr.length == 2 ? 10 : 1);
 
-          final startTime = (minutes * 60 + seconds) * 1000 + milliseconds;
+          final startTime = (minutes * 60 + seconds) * 1000 + milliseconds - offsetMs;
 
           result.add(LyricLine(
             startTime: startTime,
