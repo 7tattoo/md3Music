@@ -188,10 +188,6 @@ class LyricsViewState extends State<LyricsView> {
     if (_parsedLyrics.isEmpty) return;
 
     final newIndex = _findLineIndex(widget.position);
-    // Debug: print current position and line index
-    if (newIndex >= 0 && newIndex < _parsedLyrics.length) {
-      print('[LyricsView] position=${widget.position.inMilliseconds}ms, line=$newIndex/${_parsedLyrics.length}, text="${_parsedLyrics[newIndex].text}", timestamp=${_parsedLyrics[newIndex].timestamp.inMilliseconds}ms');
-    }
     final shouldScroll = _forceScroll || (newIndex != _currentLineIndex);
     _currentLineIndex = newIndex;
 

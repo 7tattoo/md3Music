@@ -94,6 +94,9 @@ class KrcParser {
         // 整行文本由所有字文本拼接
         final text = words.map((w) => w.text).join();
 
+        // 跳过非歌词内容（词/曲/编曲等元数据）
+        if (_isMetadataText(text)) continue;
+
         lines.add(LyricLine(
           startTime: lineStart,
           duration: lineDuration,
@@ -116,6 +119,20 @@ class KrcParser {
   static bool _isMetadata(String line) {
     for (final prefix in _metadataPrefixes) {
       if (line.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+
+  /// 判断是否为非歌词内容（词/曲/编曲等元数据文本）
+  static bool _isMetadataText(String text) {
+    if (text.isEmpty) return false;
+    // 歌曲标题行：含 " - " 或 "—" 或 "（" 格式
+    if (text.length > 5 && (text.contains(' - ') || text.contains(' — ') || text.contains('（') || text.contains('('))) {
+      // 检查是否包含常见元数据关键词
+      final metadataKeywords = ['词：', '词:', '曲：', '曲:', '编曲', '制作人', '混音', '录音', '母带', '出品', '监制', '和声', '演唱', '演奏', '乐团', '乐队', '原唱', '翻唱', '作词', '作曲'];
+      for (final keyword in metadataKeywords) {
+        if (text.contains(keyword)) return true;
+      }
     }
     return false;
   }

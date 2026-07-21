@@ -27,7 +27,17 @@ class LrcParser {
 
   /// 元数据前缀正则：匹配 LRC 元数据标签前缀，这些行不属于歌词内容。
   static final RegExp _metadataPrefixRegex = RegExp(
-    r'^\[(ar|ti|al|by|offset|id|hash|total|language|sign|qq):',
+    r'^\[(ar|ti|al|by|offset|id|hash|total|language|sign|qq|reverb|ve):',
+  );
+
+  /// 非歌词内容检测：匹配常见的歌词元数据文本（词/曲/编曲/制作等）
+  static final RegExp _lyricsMetadataRegex = RegExp(
+    r'^(词[：:]|曲[：:]|编曲[：:]|制作人[：:]|混音[：:]|录音[：:]|母带[：:]|出品[：:]|监制[：:]|和声[：:]|吉他[：:]|钢琴[：:]|贝斯[：:]|鼓[：:]|弦乐[：:]|管乐[：:]|合声[：:]|伴奏[：:]|演奏[：:]|演唱[：:]|独唱[：:]|合唱[：:]|乐团[：:]|乐队[：:])',
+  );
+
+  /// 歌曲标题行检测：匹配 "歌名 - 歌手" 或 "歌名（专辑）" 格式
+  static final RegExp _songTitleRegex = RegExp(
+    r'^.+\s*[-—–]\s*.+$|^.+[（(].+[）)]$',
   );
 
   /// 解析 LRC 明文为 [LyricLine] 列表。
@@ -67,6 +77,12 @@ class LrcParser {
         // 剩余部分作为歌词文本（最后一个时间戳之后的内容）
         final lastMatch = matches.last;
         final text = line.substring(lastMatch.end).trim();
+
+        // 跳过非歌词内容（词/曲/编曲等元数据）
+        if (_lyricsMetadataRegex.hasMatch(text)) continue;
+
+        // 跳过歌曲标题行（如 "阴天快乐 - 陈奕迅 (Eason Chan)"）
+        if (text.length > 5 && _songTitleRegex.hasMatch(text)) continue;
 
         // 为每个时间戳生成一条 LyricLine（一行多时间戳展开）
         for (final match in matches) {
