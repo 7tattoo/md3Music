@@ -357,6 +357,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
           const MiniPlayer(),
         ],
       ),
+    );
   }
   /// 显示"退出 App"确认对话框。
   ///
