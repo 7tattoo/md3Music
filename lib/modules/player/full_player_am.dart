@@ -17,6 +17,7 @@ import '../../widgets/apple_lyrics/apple_lyrics_view.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
 import '../../widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
+import '../../utils/landscape_immersive.dart';
 import '../../widgets/player_playlist_dialog.dart';
 import 'comments_view.dart';
 
@@ -66,6 +67,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
+    // 进入播放器时根据当前方向应用沉浸模式
+    applyImmersiveForOrientation();
     // 创建弹簧驱动 ticker（muted 机制自动处理路由不可见时暂停）
     _springTicker = createTicker(_onSpringTick);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -83,6 +86,12 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     if (song != null && song.id != _lastSongId) {
       _fetchLyrics(song);
     }
+  }
+
+  @override
+  void didChangeMetrics() {
+    // 用户旋转设备时重新应用沉浸模式
+    applyImmersiveForOrientation();
   }
 
   @override
@@ -104,6 +113,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     WidgetsBinding.instance.removeObserver(this);
     _springTicker.dispose();
     _tabController.dispose();
+    // 退出播放器时恢复系统栏显示
+    restoreSystemUi();
     super.dispose();
   }
 
