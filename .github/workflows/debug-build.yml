@@ -5,6 +5,14 @@ name: Debug Build & Test
 on:
   workflow_dispatch:
     inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        type: choice
+        options:
+          - debug
+          - release
+        default: 'debug'
       notes:
         description: '构建说明（可选）'
         required: false
@@ -21,7 +29,7 @@ concurrency:
 
 jobs:
   build-debug:
-    name: Build Android Debug APK
+    name: Build Android ${{ inputs.build_type == 'release' && 'Release' || 'Debug' }} APK
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -105,15 +113,15 @@ jobs:
           mkdir -p assets/nodejs-project
           cp kugou_api_server/server_bundle.js assets/nodejs-project/server_bundle.js
 
-      # Flutter 构建 debug APK（不分 ABI，单文件方便安装）
+      # Flutter 构建 APK
       - name: Flutter pub get
         run: flutter pub get
 
       - name: Flutter analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Flutter build debug APK
-        run: flutter build apk --debug
+      - name: Flutter build APK
+        run: flutter build apk --${{ inputs.build_type }}
 
       - name: Verify APK
         run: |
@@ -128,10 +136,10 @@ jobs:
             fi
           done
 
-      - name: Upload debug APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: app-${{ inputs.build_type }}
+          path: build/app/outputs/flutter-apk/app-${{ inputs.build_type }}.apk
           if-no-files-found: error
           retention-days: 7
