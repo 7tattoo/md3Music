@@ -11,6 +11,8 @@ import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import 'comments_view.dart';
 import 'lyrics_view.dart';
+import '../../utils/landscape_immersive.dart';
+import '../../widgets/player_playlist_dialog.dart';
 
 const List<AudioQuality> _audioQualities = [
   AudioQuality.standard,
@@ -38,6 +40,8 @@ class _FullPlayerState extends State<FullPlayer>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
+    // 进入播放器时根据当前方向应用沉浸模式
+    applyImmersiveForOrientation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final song = context.read<PlayerProvider>().currentSong;
       if (song != null) {
@@ -45,6 +49,12 @@ class _FullPlayerState extends State<FullPlayer>
       }
       context.read<PlayerProvider>().addListener(_onPlayerSongChanged);
     });
+  }
+
+  @override
+  void didChangeMetrics() {
+    // 用户旋转设备时重新应用沉浸模式
+    applyImmersiveForOrientation();
   }
 
   void _onPlayerSongChanged() {
@@ -73,6 +83,8 @@ class _FullPlayerState extends State<FullPlayer>
     } catch (_) {}
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
+    // 退出播放器时恢复系统栏显示
+    restoreSystemUi();
     super.dispose();
   }
 
@@ -193,7 +205,10 @@ class _FullPlayerState extends State<FullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
+    // 横屏启用沉浸模式后系统栏隐藏，SafeArea 仅处理顶部安全区即可，
+    // bottom: false 让 Scaffold 背景色延伸到屏幕底部，避免出现黑色底框
     return SafeArea(
+      bottom: false,
       child: Row(
         children: [
           // ── 左侧：封面 ──
@@ -1187,81 +1202,11 @@ class _FullPlayerState extends State<FullPlayer>
   void _showPlaylist(PlayerProvider playerProvider) {
     showDialog(
       context: context,
-      builder: (dialogContext) {
-        final playlist = playerProvider.playlist;
-        return AlertDialog(
-          title: const Center(child: Text('播放列表')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              playlist.isEmpty
-                  ? const Text('播放列表为空')
-                  : SizedBox(
-                      width: 300,
-                      height: 400,
-                      child: ListView.builder(
-                        itemCount: playlist.length,
-                        itemBuilder: (context, index) {
-                          final song = playlist[index];
-                          final isCurrent =
-                              index == playerProvider.currentIndex;
-                          return ListTile(
-                            leading: isCurrent
-                                ? const Icon(
-                                    Icons.play_arrow,
-                                    color: Colors.blue,
-                                  )
-                                : Text('${index + 1}'),
-                            title: Text(
-                              song.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: isCurrent ? FontWeight.bold : null,
-                                color: isCurrent ? Colors.blue : null,
-                              ),
-                            ),
-                            subtitle: Text(
-                              song.artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () {
-                              playerProvider.playSongAt(index);
-                              Navigator.pop(dialogContext);
-                            },
-                          );
-                        },
-                      ),
-                    ),
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: SizedBox(
-                  width: 300,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: playlist.isEmpty
-                            ? null
-                            : () {
-                                playerProvider.clearPlaylist();
-                                Navigator.pop(dialogContext);
-                              },
-                        child: const Text('清空'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        child: const Text('关闭'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      // 透明 barrier：横屏时点击左半边不关闭对话框（仍可操作播放器）
+      barrierColor: Colors.transparent,
+      builder: (dialogContext) => const PlayerPlaylistDialog(
+        useDisplayName: false, // MD3 风格用 title
+      ),
     );
   }
 }

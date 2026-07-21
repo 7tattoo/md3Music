@@ -18,6 +18,8 @@ import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
 import '../../widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
 import 'comments_view.dart';
+import '../../utils/landscape_immersive.dart';
+import '../../widgets/player_playlist_dialog.dart';
 
 const List<AudioQuality> _audioQualities = [
   AudioQuality.standard,
@@ -67,6 +69,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     _tabController = TabController(length: 3, vsync: this);
     // 创建弹簧驱动 ticker（muted 机制自动处理路由不可见时暂停）
     _springTicker = createTicker(_onSpringTick);
+    // 进入播放器时根据当前方向应用沉浸模式
+    applyImmersiveForOrientation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final song = context.read<PlayerProvider>().currentSong;
       if (song != null) {
@@ -74,6 +78,12 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       }
       context.read<PlayerProvider>().addListener(_onPlayerSongChanged);
     });
+  }
+
+  @override
+  void didChangeMetrics() {
+    // 用户旋转设备时重新应用沉浸模式
+    applyImmersiveForOrientation();
   }
 
   void _onPlayerSongChanged() {
@@ -103,6 +113,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     WidgetsBinding.instance.removeObserver(this);
     _springTicker.dispose();
     _tabController.dispose();
+    // 退出播放器时恢复系统栏显示
+    restoreSystemUi();
     super.dispose();
   }
 
@@ -507,7 +519,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
+    // 横屏启用沉浸模式后系统栏隐藏，SafeArea 仅处理顶部安全区即可，
+    // bottom: false 让 Scaffold 背景色（Colors.black）延伸到屏幕底部，
+    // 避免出现 AM 风格特有的黑色底框断层
     return SafeArea(
+      bottom: false,
       child: Row(
         children: [
           // ── 左侧：封面 ──
@@ -1599,81 +1615,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   void _showPlaylist(PlayerProvider playerProvider) {
     showDialog(
       context: context,
-      builder: (dialogContext) {
-        final playlist = playerProvider.playlist;
-        return AlertDialog(
-          title: const Center(child: Text('播放列表')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              playlist.isEmpty
-                  ? const Text('播放列表为空')
-                  : SizedBox(
-                      width: 300,
-                      height: 400,
-                      child: ListView.builder(
-                        itemCount: playlist.length,
-                        itemBuilder: (context, index) {
-                          final song = playlist[index];
-                          final isCurrent =
-                              index == playerProvider.currentIndex;
-                          return ListTile(
-                            leading: isCurrent
-                                ? const Icon(
-                                    Icons.play_arrow,
-                                    color: Colors.blue,
-                                  )
-                                : Text('${index + 1}'),
-                            title: Text(
-                              song.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: isCurrent ? FontWeight.bold : null,
-                                color: isCurrent ? Colors.blue : null,
-                              ),
-                            ),
-                            subtitle: Text(
-                              song.artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () {
-                              playerProvider.playSongAt(index);
-                              Navigator.pop(dialogContext);
-                            },
-                          );
-                        },
-                      ),
-                    ),
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: SizedBox(
-                  width: 300,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: playlist.isEmpty
-                            ? null
-                            : () {
-                                playerProvider.clearPlaylist();
-                                Navigator.pop(dialogContext);
-                              },
-                        child: const Text('清空'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        child: const Text('关闭'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      // 透明 barrier：横屏时点击左半边不关闭对话框（仍可操作播放器）
+      barrierColor: Colors.transparent,
+      builder: (dialogContext) => const PlayerPlaylistDialog(
+        useDisplayName: true, // AM 风格用 displayName
+      ),
     );
   }
 }
