@@ -535,12 +535,55 @@ class KugouApiClient {
       if (lyricAccesskey != null) params['accesskey'] = lyricAccesskey;
       final json = await _get(KugouEndpoints.lyric, queryParameters: params);
       if (json == null) return null;
-      return json['data'] as Map<String, dynamic>? ?? json;
-    } catch (e) { return null; }
+      final data = json['data'] as Map<String, dynamic>? ?? json;
+      if (kDebugMode) {
+        debugPrint('[LyriconDebug._fetchLyricContent] fmt=$fmt, lyricId=$lyricId, '
+            'response top-level keys=${json.keys.toList()..sort()}, '
+            'data keys=${data.keys.toList()..sort()}');
+      }
+      return data;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[LyriconDebug._fetchLyricContent] error fmt=$fmt: $e');
+      }
+      return null;
+    }
   }
 
   static KugouLyric? mergeLyricResponses(Map<String, dynamic>? lrcJson, Map<String, dynamic>? krcJson) {
     if (lrcJson == null && krcJson == null) return null;
+    // 诊断日志：打印 API 返回的所有顶层字段，确认翻译字段名
+    if (kDebugMode) {
+      if (lrcJson != null) {
+        final keys = lrcJson.keys.toList()..sort();
+        debugPrint('[LyriconDebug.mergeLyric] lrcJson keys: $keys');
+        // 找出可能是翻译的字段
+        for (final k in keys) {
+          if (k.toLowerCase().contains('trans') ||
+              k.toLowerCase().contains('chi') ||
+              k.toLowerCase().contains('translate') ||
+              k.toLowerCase().contains('bilingual')) {
+            final v = lrcJson[k];
+            final preview = v == null ? 'null' : (v.toString().length > 100 ? '${v.toString().substring(0, 100)}...' : v.toString());
+            debugPrint('[LyriconDebug.mergeLyric] lrcJson[$k] = $preview');
+          }
+        }
+      }
+      if (krcJson != null) {
+        final keys = krcJson.keys.toList()..sort();
+        debugPrint('[LyriconDebug.mergeLyric] krcJson keys: $keys');
+        for (final k in keys) {
+          if (k.toLowerCase().contains('trans') ||
+              k.toLowerCase().contains('chi') ||
+              k.toLowerCase().contains('translate') ||
+              k.toLowerCase().contains('bilingual')) {
+            final v = krcJson[k];
+            final preview = v == null ? 'null' : (v.toString().length > 100 ? '${v.toString().substring(0, 100)}...' : v.toString());
+            debugPrint('[LyriconDebug.mergeLyric] krcJson[$k] = $preview');
+          }
+        }
+      }
+    }
     final lrcLyric = lrcJson != null ? KugouLyric.fromJson(lrcJson) : null;
     final krcLyric = krcJson != null ? KugouLyric.fromJson(krcJson) : null;
     String? krcContent;
@@ -549,12 +592,19 @@ class KugouApiClient {
       if (explicitKrc != null) { krcContent = explicitKrc.toString(); }
       else if (krcJson['decodeContent'] != null) { krcContent = krcJson['decodeContent'].toString(); }
     }
-    return KugouLyric(
+    final merged = KugouLyric(
       content: lrcLyric?.content ?? krcLyric?.content ?? '',
       decodedContent: lrcLyric?.decodedContent,
       decodedKrcContent: krcContent,
       translatedContent: lrcLyric?.translatedContent ?? krcLyric?.translatedContent,
     );
+    if (kDebugMode) {
+      debugPrint('[LyriconDebug.mergeLyric] merged: content.len=${merged.content.length}, '
+          'decodedContent=${merged.decodedContent == null ? "null" : "len=${merged.decodedContent!.length}"}, '
+          'decodedKrcContent=${merged.decodedKrcContent == null ? "null" : "len=${merged.decodedKrcContent!.length}"}, '
+          'translatedContent=${merged.translatedContent == null ? "null" : "len=${merged.translatedContent!.length}"}');
+    }
+    return merged;
   }
 
   Future<KugouCommentList?> getComments(String hash, {String? albumAudioId, int page = 1, int pagesize = 20}) async {
