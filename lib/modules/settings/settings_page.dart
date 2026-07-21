@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/services/folder_picker_service.dart';
 import '../../core/services/lyricon_provider_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/settings_repository.dart';
@@ -433,9 +434,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// 下载 section：自定义下载目录
   ///
-  /// 用户可输入一个绝对路径作为下载根目录；空字符串表示恢复使用默认目录
-  /// （Android 应用专属外部目录 /storage/emulated/0/Android/data/<package>/files/downloads）。
-  /// 输入后立即写入 SharedPreferences。
+  /// 使用 Android 原生 SAF 文件夹选择器。
   Widget _buildDownloadSection(ColorScheme colorScheme) {
     return Column(
       children: [
@@ -456,60 +455,22 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  /// 弹出"自定义下载目录"输入对话框。
-  /// 输入框预填当前值；空字符串/纯空白 = 恢复默认目录。
+  /// 打开 Android 原生文件夹选择器。
+  ///
+  /// 使用 SAF (Storage Access Framework) 打开系统目录选择界面，
+  /// 用户选择的目录路径会直接保存用于下载。
   Future<void> _showDownloadDirDialog() async {
-    final controller = TextEditingController(text: _downloadDir ?? '');
-    final result = await showDialog<String?>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('下载目录'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '输入一个绝对路径作为下载根目录。\n'
-              'Android 推荐：/storage/emulated/0/Music/md3Music\n'
-              '留空则使用默认目录（Android/data/包名）。',
-              style: TextStyle(fontSize: 12),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: '下载目录路径',
-                hintText: '留空 = 默认目录',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              maxLines: 2,
-              minLines: 1,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    if (result == null) return;
-    final trimmed = result.trim();
+    final path = await FolderPickerService.pickFolder();
+    if (path == null) return; // 用户取消
+
     setState(() {
-      _downloadDir = trimmed.isEmpty ? null : trimmed;
+      _downloadDir = path;
     });
     await _settingsRepository.setDownloadDir(_downloadDir);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(trimmed.isEmpty ? '已恢复使用默认下载目录' : '下载目录已设置为：$trimmed'),
+        content: Text('下载目录已设置为：$path'),
         behavior: SnackBarBehavior.floating,
       ),
     );
