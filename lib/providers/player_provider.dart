@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart' as just_audio;
 import 'package:provider/provider.dart';
 
@@ -31,7 +32,7 @@ enum AudioQuality {
   final String label;
 }
 
-class PlayerProvider extends ChangeNotifier {
+class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Song? _currentSong;
   bool _isPlaying = false;
   Duration _position = Duration.zero;
@@ -89,6 +90,7 @@ class PlayerProvider extends ChangeNotifier {
   Timer? _saveDebounce;
 
   PlayerProvider() {
+    WidgetsBinding.instance.addObserver(this);
     _initAudioService();
     // 监听自身变化检测切歌 → 推送 Lyricon（仅 enabled 时实际推送）
     addListener(_handleLyriconSongChange);
@@ -1129,9 +1131,21 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      // App 进入后台或即将被杀死，立即保存播放状态
+      _saveState();
+      _saveDebounce?.cancel();
+    }
+  }
+
+  @override
   void dispose() {
     _saveState(); // 退出时立即保存
     _saveDebounce?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     removeListener(_handleLyriconSongChange);
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
