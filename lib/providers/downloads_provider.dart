@@ -132,23 +132,22 @@ class DownloadsProvider extends ChangeNotifier {
   Future<void> downloadSong(Song song, {String quality = '128'}) async {
     if (isDownloading(song.id)) return;
 
-    String? downloadUrl = song.url;
-
-    if (downloadUrl == null || downloadUrl.isEmpty) {
-      try {
-        final result = await _api.getSongUrl(
-          song.id,
-          quality: quality,
-          albumId: song.albumId,
-          albumAudioId: song.albumAudioId,
-        );
-        if (result != null && result.url.isNotEmpty) {
-          downloadUrl = result.url;
-        }
-      } catch (e) {
-        debugPrint('[DownloadsProvider] getSongUrl failed: $e');
-        return;
+    // 始终调用 API 获取指定音质的下载链接，不使用 song.url 缓存
+    // 因为播放时获取的 URL 可能是最高音质（VIP 用户），与用户选择的音质不一致
+    String? downloadUrl;
+    try {
+      final result = await _api.getSongUrl(
+        song.id,
+        quality: quality,
+        albumId: song.albumId,
+        albumAudioId: song.albumAudioId,
+      );
+      if (result != null && result.url.isNotEmpty) {
+        downloadUrl = result.url;
       }
+    } catch (e) {
+      debugPrint('[DownloadsProvider] getSongUrl failed: $e');
+      return;
     }
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
