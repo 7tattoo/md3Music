@@ -11,6 +11,7 @@ import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/song_list_item.dart';
 import '../album/album_detail_page.dart';
 import '../playlist/playlist_page.dart';
+import '../player/mini_player.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -78,9 +79,10 @@ class _SearchPageState extends State<SearchPage>
 
   Future<void> _saveSearchHistory(String query) async {
     final prefs = await SharedPreferences.getInstance();
-    _searchHistory = [query, ..._searchHistory.where((h) => h != query)]
-        .take(10)
-        .toList();
+    _searchHistory = [
+      query,
+      ..._searchHistory.where((h) => h != query),
+    ].take(10).toList();
     await prefs.setStringList(_historyKey, _searchHistory);
     setState(() {});
   }
@@ -117,83 +119,93 @@ class _SearchPageState extends State<SearchPage>
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverAppBar(
-              floating: true,
-              pinned: true,
-              title: SizedBox(
-                height: 40,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: '搜索歌曲、歌手、专辑',
-                    hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+      body: Column(
+        children: [
+          Expanded(
+            child: NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  SliverAppBar(
+                    floating: true,
+                    pinned: true,
+                    title: SizedBox(
+                      height: 40,
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: '搜索歌曲、歌手、专辑',
+                          hintStyle: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            size: 20,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(
+                                    Icons.clear,
+                                    size: 18,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _query = '';
+                                      _hasSearched = false;
+                                    });
+                                  },
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: colorScheme.surfaceContainerHighest,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 0,
+                          ),
+                          isDense: true,
                         ),
-                    prefixIcon: Icon(
-                      Icons.search,
-                      size: 20,
-                      color: colorScheme.onSurfaceVariant,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: _performSearch,
+                        onChanged: (value) {
+                          setState(() {});
+                          if (value.trim().isNotEmpty) {
+                            context.read<KugouProvider>().getSearchSuggest(
+                              value.trim(),
+                            );
+                          }
+                        },
+                      ),
                     ),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear,
-                              size: 18,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _query = '';
-                                _hasSearched = false;
-                              });
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    isDense: true,
                   ),
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: _performSearch,
-                  onChanged: (value) {
-                    setState(() {});
-                    if (value.trim().isNotEmpty) {
-                      context.read<KugouProvider>().getSearchSuggest(value.trim());
-                    }
-                  },
-                ),
-              ),
+                  if (_hasSearched)
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _TabBarDelegate(
+                        TabBar(
+                          controller: _tabController,
+                          tabs: const [
+                            Tab(text: '歌曲'),
+                            Tab(text: '专辑'),
+                            Tab(text: '歌单'),
+                          ],
+                        ),
+                      ),
+                    ),
+                ];
+              },
+              body: _hasSearched
+                  ? _buildSearchResults()
+                  : _searchController.text.trim().isNotEmpty
+                  ? _buildSuggestions()
+                  : _buildEmptyState(),
             ),
-            if (_hasSearched)
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _TabBarDelegate(
-                  TabBar(
-                    controller: _tabController,
-                    tabs: const [
-                      Tab(text: '歌曲'),
-                      Tab(text: '专辑'),
-                      Tab(text: '歌单'),
-                    ],
-                  ),
-                ),
-              ),
-          ];
-        },
-        body: _hasSearched
-            ? _buildSearchResults()
-            : _searchController.text.trim().isNotEmpty
-                ? _buildSuggestions()
-                : _buildEmptyState(),
+          ),
+          const MiniPlayer(),
+        ],
       ),
     );
   }
@@ -217,8 +229,8 @@ class _SearchPageState extends State<SearchPage>
             Text(
               '搜索你喜欢的音乐',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -232,10 +244,7 @@ class _SearchPageState extends State<SearchPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '搜索历史',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('搜索历史', style: Theme.of(context).textTheme.titleMedium),
               TextButton(
                 onPressed: _clearSearchHistory,
                 child: const Text('清空'),
@@ -262,10 +271,7 @@ class _SearchPageState extends State<SearchPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '热门搜索',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('热门搜索', style: Theme.of(context).textTheme.titleMedium),
             ],
           ),
           const SizedBox(height: 8),
@@ -318,11 +324,7 @@ class _SearchPageState extends State<SearchPage>
             size: 20,
             color: colorScheme.onSurfaceVariant,
           ),
-          title: Text(
-            suggestion,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          title: Text(suggestion, maxLines: 1, overflow: TextOverflow.ellipsis),
           dense: true,
           onTap: () {
             _searchController.text = suggestion;
@@ -363,9 +365,7 @@ class _SearchPageState extends State<SearchPage>
         return SongListItem(
           song: results[index],
           onTap: () {
-            context
-                .read<PlayerProvider>()
-                .playOnlinePlaylist(results, index);
+            context.read<PlayerProvider>().playOnlinePlaylist(results, index);
           },
           onMoreTap: () {},
         );
@@ -374,11 +374,9 @@ class _SearchPageState extends State<SearchPage>
   }
 
   void _showAlbumDetail(Album album) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AlbumDetailPage(album: album),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)));
   }
 
   Widget _buildAlbumResults() {
@@ -499,22 +497,19 @@ class _SearchPageState extends State<SearchPage>
             Text(
               '搜索失败',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               error,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            FilledButton.tonal(
-              onPressed: onRetry,
-              child: const Text('重试'),
-            ),
+            FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
           ],
         ),
       ),
@@ -536,8 +531,8 @@ class _SearchPageState extends State<SearchPage>
           Text(
             '未找到相关结果',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -581,7 +576,8 @@ class _SearchAlbumCard extends StatelessWidget {
                         fit: BoxFit.cover,
                         width: double.infinity,
                         placeholder: (_, _) => _buildPlaceholder(colorScheme),
-                        errorWidget: (_, _, _) => _buildPlaceholder(colorScheme),
+                        errorWidget: (_, _, _) =>
+                            _buildPlaceholder(colorScheme),
                       )
                     : _buildPlaceholder(colorScheme),
               ),
@@ -649,7 +645,10 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Container(
       color: Theme.of(context).colorScheme.surface,
       child: tabBar,
