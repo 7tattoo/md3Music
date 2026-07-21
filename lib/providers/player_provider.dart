@@ -1024,8 +1024,9 @@ class PlayerProvider extends ChangeNotifier {
             // 复用 LyricParserChain 自动识别 KRC/LRC/纯文本（与
             // DesktopLyricService 同一解析入口，不重复实现解析逻辑）
             final text = kugou.lyric?.displayLyric;
+            final translationText = kugou.lyric?.translatedContent;
             if (text != null && text.isNotEmpty) {
-              lines = LyricParserChain.parse(text);
+              lines = LyricParserChain.parse(text, translationText: translationText);
             }
           } catch (_) {}
         }

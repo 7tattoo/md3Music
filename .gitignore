@@ -61,3 +61,7 @@ native-libs.zip
 .mimocode/plans/1783171865901-quick-cactus.md
 .mimocode/.cron-lock
 debug-apk/
+
+# Documentation files to exclude from sync
+agent.md
+BUGS.md
