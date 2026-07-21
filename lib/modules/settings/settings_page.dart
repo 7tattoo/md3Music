@@ -49,7 +49,6 @@ class _SettingsPageState extends State<SettingsPage> {
   // Lyricon 词幕推送相关状态
   bool _lyriconEnabled = false;
   bool _lyriconDisplayTranslation = true;
-  bool _lyriconDisplayRoma = false;
   // 自定义下载目录：null/空表示使用默认目录
   String? _downloadDir;
 
@@ -81,12 +80,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final enabled = await _settingsRepository.getLyriconEnabled();
     final displayTranslation = await _settingsRepository
         .getLyriconDisplayTranslation();
-    final displayRoma = await _settingsRepository.getLyriconDisplayRoma();
     if (mounted) {
       setState(() {
         _lyriconEnabled = enabled;
         _lyriconDisplayTranslation = displayTranslation;
-        _lyriconDisplayRoma = displayRoma;
       });
     }
   }
@@ -280,20 +277,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   });
                   LyriconProviderService.instance.setDisplayTranslation(value);
                   _settingsRepository.setLyriconDisplayTranslation(value);
-                }
-              : null,
-        ),
-        // 次级开关：罗马音（主开关关闭时禁用）
-        SwitchListTile(
-          title: const Text('罗马音'),
-          value: _lyriconDisplayRoma,
-          onChanged: _lyriconEnabled
-              ? (value) {
-                  setState(() {
-                    _lyriconDisplayRoma = value;
-                  });
-                  LyriconProviderService.instance.setDisplayRoma(value);
-                  _settingsRepository.setLyriconDisplayRoma(value);
                 }
               : null,
         ),

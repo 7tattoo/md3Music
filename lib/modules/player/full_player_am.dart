@@ -19,8 +19,6 @@ import '../../widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
 import '../../widgets/player_playlist_dialog.dart';
 import 'comments_view.dart';
-import '../../utils/landscape_immersive.dart';
-import '../../widgets/player_playlist_dialog.dart';
 
 const List<AudioQuality> _audioQualities = [
   AudioQuality.standard,
@@ -70,8 +68,6 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     _tabController = TabController(length: 3, vsync: this);
     // 创建弹簧驱动 ticker（muted 机制自动处理路由不可见时暂停）
     _springTicker = createTicker(_onSpringTick);
-    // 进入播放器时根据当前方向应用沉浸模式
-    applyImmersiveForOrientation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final song = context.read<PlayerProvider>().currentSong;
       if (song != null) {
@@ -79,12 +75,6 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       }
       context.read<PlayerProvider>().addListener(_onPlayerSongChanged);
     });
-  }
-
-  @override
-  void didChangeMetrics() {
-    // 用户旋转设备时重新应用沉浸模式
-    applyImmersiveForOrientation();
   }
 
   void _onPlayerSongChanged() {
@@ -114,8 +104,6 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     WidgetsBinding.instance.removeObserver(this);
     _springTicker.dispose();
     _tabController.dispose();
-    // 退出播放器时恢复系统栏显示
-    restoreSystemUi();
     super.dispose();
   }
 
@@ -142,16 +130,10 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             lyric?.displayLrcLyric ??
             lyric?.displayLyric ??
             '';
-        // 翻译 LRC：传给解析器链按时间戳合并到各行
-        final translationText = lyric?.translatedContent;
         setState(() {
           _isLoadingLyrics = false;
           // 解析器链自动检测格式（KRC/LRC/纯文本）并输出统一 List<LyricLine>
-          // 同时合并翻译（若有）到各行 translation 字段
-          _parsedLyrics = LyricParserChain.parse(
-            lyricText,
-            translationText: translationText,
-          );
+          _parsedLyrics = LyricParserChain.parse(lyricText);
           // 同步记录格式，用于底部标注
           _lyricFormat = LyricParserChain.detectFormat(lyricText);
         });
@@ -233,11 +215,12 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
 
     // 用 Stack 叠加全屏布局与迷你条布局，由弹簧进度驱动透明度交叉淡入淡出。
     // IgnorePointer 防止隐藏层拦截手势。
-    // 外层用 Scaffold(backgroundColor: Colors.black) 包裹：
-    // 1. 提供稳定不透明背景，避免预测返回手势时透出底层路由
-    // 2. 与 _buildFullLayout 内部的 Scaffold(backgroundColor: Colors.black) 一致
+    // 外层用 Scaffold(backgroundColor: Colors.transparent) 包裹：
+    // 1. 避免在浅色主题下 mini bar 模式时显示硬编码的黑色块
+    // 2. 透出底层路由（home page）背景，与主题一致
+    // 3. _buildFullLayout 内部仍用 Scaffold(backgroundColor: Colors.black) 提供 AM 风格的稳定深色背景
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           // 1. 全屏 Apple Music 风格布局
@@ -527,11 +510,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
-    // 横屏启用沉浸模式后系统栏隐藏，SafeArea 仅处理顶部安全区即可，
-    // bottom: false 让 Scaffold 背景色（Colors.black）延伸到屏幕底部，
-    // 避免出现 AM 风格特有的黑色底框断层
     return SafeArea(
-      bottom: false,
       child: Row(
         children: [
           // ── 左侧：封面 ──
@@ -1653,11 +1632,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     // - playerProvider 参数保留以匹配调用点签名，内部由 Provider.of 获取
     showDialog(
       context: context,
-      // 透明 barrier：横屏时点击左半边不关闭对话框（仍可操作播放器）
-      barrierColor: Colors.transparent,
-      builder: (dialogContext) => const PlayerPlaylistDialog(
-        useDisplayName: true, // AM 风格用 displayName
-      ),
+      builder: (dialogContext) =>
+          const PlayerPlaylistDialog(useDisplayName: true),
     );
   }
 }

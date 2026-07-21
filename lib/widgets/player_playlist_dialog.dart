@@ -257,19 +257,23 @@ class _PlayerPlaylistDialogState extends State<PlayerPlaylistDialog> {
             leading: isCurrent
                 ? Icon(Icons.play_arrow, color: theme.colorScheme.primary)
                 : Text('${index + 1}'),
-            title: Text(
-              widget.useDisplayName ? song.displayName : song.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: isCurrent ? FontWeight.bold : null,
-                color: isCurrent ? theme.colorScheme.primary : null,
+            title: Center(
+              child: Text(
+                widget.useDisplayName ? song.displayName : song.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: isCurrent ? FontWeight.bold : null,
+                  color: isCurrent ? theme.colorScheme.primary : null,
+                ),
               ),
             ),
-            subtitle: Text(
-              song.artist,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            subtitle: Center(
+              child: Text(
+                song.artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             onTap: () {
               playerProvider.playSongAt(index);

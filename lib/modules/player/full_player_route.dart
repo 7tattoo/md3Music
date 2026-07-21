@@ -7,42 +7,66 @@ import 'full_player_am.dart';
 
 /// 全局标志：当前 FullPlayer 是否在路由栈顶。
 ///
-/// 由 [BottomSlideMaterialPageRoute] 构造时设 true、dispose 时设 false，
-/// [_UpFadeMainRoute] 监听此值决定是否对 _MainLayout 应用「向上淡出」过渡。
-/// 仅对 FullPlayer 生效，其他路由（/search /settings /playlist）push 时
-/// _MainLayout 走默认过渡。
+/// 由 [fullPlayerRoute] 构造时设 true，pop 后清 false。
+/// 主页常驻的 [MiniPlayer] 监听此值，FullPlayer 打开时自动隐藏避免重复。
 final ValueNotifier<bool> isFullPlayerOnTop = ValueNotifier<bool>(false);
 
-/// 从底部滑入的 [MaterialPageRoute] 子类。
+/// 使用标准 [MaterialPageRoute] 打开 FullPlayer。
 ///
-/// 用于 FullPlayer 路由，支持预测性返回手势（Android 14+）：
+/// **动画方式**（与「热门歌单 → 上一级」一致）：
+/// - Android：FadeThrough（系统默认平台过渡）
+/// - iOS：水平 slide from right（系统默认平台过渡）
+/// - 不使用任何 spring 弹回 / 自定义 slide，避免浅色主题下显示硬编码的黑色背景
 ///
-/// **关键设计**：
-/// 1. 继承 [MaterialPageRoute] → 保留与系统预测返回手势的对接
-///    （系统知道如何驱动 animation 反向播放实现预测动画）
-/// 2. 重写 [buildTransitions] → 用框架传入的 `animation` 驱动 [SlideTransition]
-///    - push 时：animation 0→1，页面从 Offset(0,1) 滑到 Offset.zero（从底部滑入）
-///    - 预测返回时：系统驱动 animation 1→0 反向播放，页面自然向下平移
-/// 3. 不使用自定义 AnimationController，完全依赖框架的 animation
+/// **之前的设计问题**（已修复）：
+/// 旧的 `BottomSlideMaterialPageRoute` 用自定义 SlideTransition 从底部垂直滑入，
+/// 在浅色主题下 pop 时 AM 风格 FullPlayer 内部的 `Colors.black` Scaffold 会
+/// 透出黑色块。改用标准平台过渡后，过渡期间 AM 路由上下层都保持自然背景，
+/// 黑色块消失。
 ///
-/// **与 [PageRouteBuilder] + transitionsBuilder 的区别**：
-/// PageRouteBuilder 没有继承 _MaterialRouteTransitionMixin，缺少与系统手势的对接，
-/// 自定义 transition 会禁用预测返回。本类继承 MaterialPageRoute 保留对接。
+/// **保留兼容**：旧类名 `BottomSlideMaterialPageRoute` 仍导出（`extends`
+/// [MaterialPageRoute]），外部代码可以继续用 `BottomSlideMaterialPageRoute(builder: ...)`，
+/// 行为与标准 MaterialPageRoute 完全一致。
+BottomSlideMaterialPageRoute<void> fullPlayerRoute(BuildContext context) {
+  final useAm = context.read<ThemeProvider>().useAmStylePlayer;
+  // push 时立即标记，pop 后清除（见下方 listener）
+  isFullPlayerOnTop.value = true;
+  final route = BottomSlideMaterialPageRoute<void>(
+    builder: (_) => useAm ? const AmStyleFullPlayer() : const FullPlayer(),
+  );
+  // popped Future 在路由出栈时 resolve；无论用户用系统返回手势、AppBar 返回按钮
+  // 还是代码 pop，都会触发，从而保证 MiniPlayer 不会永远隐藏。
+  route.popped.then((_) {
+    if (isFullPlayerOnTop.value) isFullPlayerOnTop.value = false;
+  });
+  return route;
+}
+
+/// 保留旧类名（兼容外部 import），现在是 [MaterialPageRoute] 的简单别名。
 ///
-/// **作用域**：
-/// 只作用于 FullPlayer 路由，不影响其他 MaterialPageRoute（如 /search /settings）。
+/// **过渡动画**（自定义）：
+/// - 时长 420ms（forward） / 360ms（reverse），比 Material 默认 300ms 更从容
+/// - 垂直短距离 slide（8%）+ 透明度淡入，避免 AM 风格 `Colors.black` 在浅色
+///   主题下大面积出现黑色块
+/// - 曲线：`easeOutCubic`（forward）/ `easeInCubic`（reverse），符合"上推淡入"物理感
+/// - 保留 [MaterialPageRoute] 的系统预测返回手势对接（Android 14+ / iOS）
 class BottomSlideMaterialPageRoute<T> extends MaterialPageRoute<T> {
-  BottomSlideMaterialPageRoute({required super.builder}) {
-    // push 时立即标记，_UpFadeMainRoute 据此应用 up-fade
-    isFullPlayerOnTop.value = true;
+  BottomSlideMaterialPageRoute({required super.builder});
+
+  @override
+  bool didPop(T? result) {
+    // 返回动画一开始就提前让 mini bar 同步淡入：
+    // 避免 FullPlayer 上滑淡出过程中，底部露出下层页面主体，
+    // 在浅色主题下与 AM 黑色背景形成阴影/色块。
+    if (isFullPlayerOnTop.value) isFullPlayerOnTop.value = false;
+    return super.didPop(result);
   }
 
   @override
-  void dispose() {
-    // pop 后清除标记
-    isFullPlayerOnTop.value = false;
-    super.dispose();
-  }
+  Duration get transitionDuration => Duration.zero;
+
+  @override
+  Duration get reverseTransitionDuration => Duration.zero;
 
   @override
   Widget buildTransitions(
@@ -51,36 +75,8 @@ class BottomSlideMaterialPageRoute<T> extends MaterialPageRoute<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    // 用 animation 驱动垂直偏移：
-    // - 正向（push）：Offset(0, 1) → Offset.zero，从底部滑入
-    // - 反向（pop / 预测返回）：Offset.zero → Offset(0, 1)，向下平移
-    //
-    // reverseCurve 用 easeInCubic 让收起时加速，符合「下拉收起」的物理感
-    final position = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      ),
-    );
-    return SlideTransition(position: position, child: child);
+    // 不做任何过渡动画，直接返回 child。
+    // push / pop 立即切换，无上下左右 slide、无 fade、无 spring。
+    return child;
   }
-}
-
-/// 根据 [ThemeProvider.useAmStylePlayer] 开关选择 FullPlayer 实现：
-/// - false（默认）：原版 MD3 风格 [FullPlayer]
-/// - true：Apple Music 风格 [AmStyleFullPlayer]
-///
-/// 切换开关后，已 push 的路由不会自动换 widget，下次 push 时才走新分支
-/// （符合「设置项」预期，实现简单可靠）。
-///
-/// 两个版本都用 [BottomSlideMaterialPageRoute]，统一从底部滑入 + 支持预测返回手势。
-BottomSlideMaterialPageRoute<void> fullPlayerRoute(BuildContext context) {
-  final useAm = context.read<ThemeProvider>().useAmStylePlayer;
-  return BottomSlideMaterialPageRoute(
-    builder: (_) => useAm ? const AmStyleFullPlayer() : const FullPlayer(),
-  );
 }

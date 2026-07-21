@@ -242,4 +242,11 @@ class LyriconProviderService {
       await _channel.invokeMethod('setDisplayTranslation', {'enabled': enabled});
     } catch (_) {}
   }
+
+  /// 切换罗马音显示。
+  Future<void> setDisplayRoma(bool enabled) async {
+    try {
+      await _channel.invokeMethod('setDisplayRoma', {'enabled': enabled});
+    } catch (_) {}
+  }
 }
