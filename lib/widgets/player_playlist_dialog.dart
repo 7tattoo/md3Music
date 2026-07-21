@@ -61,6 +61,43 @@ class _PlayerPlaylistDialogState extends State<PlayerPlaylistDialog> {
   static const double _swipeThreshold = 0.4;
   static const Duration _fadeDuration = Duration(milliseconds: 100);
 
+  /// 播放列表滚动控制器
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // 打开对话框后自动滚动到当前播放歌曲
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrentSong();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 滚动到当前播放的歌曲并居中显示
+  void _scrollToCurrentSong() {
+    final playerProvider = context.read<PlayerProvider>();
+    final currentIndex = playerProvider.currentIndex;
+    if (currentIndex < 0 || !_scrollController.hasClients) return;
+
+    // 每个列表项高度约 72px（ListTile 默认高度）
+    const itemHeight = 72.0;
+    final targetOffset = (currentIndex * itemHeight) - 200.0; // 200px 大约是列表高度的一半
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final offset = targetOffset.clamp(0.0, maxScroll);
+
+    _scrollController.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -127,6 +164,7 @@ class _PlayerPlaylistDialogState extends State<PlayerPlaylistDialog> {
                   ),
                 )
               : ReorderableListView(
+                  scrollController: _scrollController,
                   buildDefaultDragHandles: false,
                   onReorder: (oldIndex, newIndex) {
                     playerProvider.reorderPlaylist(oldIndex, newIndex);

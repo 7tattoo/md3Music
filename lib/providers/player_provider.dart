@@ -759,6 +759,46 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// 在当前播放歌曲之后插入歌曲（"下一首播放"功能）。
+  Future<void> insertAfterCurrent(List<Song> songs) async {
+    if (_playlist.isEmpty || _currentIndex < 0) {
+      // 播放列表为空，直接追加
+      await appendPlaylist(songs);
+      return;
+    }
+
+    final newSongs = <Song>[];
+    final insertIndex = _currentIndex + 1;
+    for (final song in songs) {
+      if (!_playlist.any((s) => s.id == song.id)) {
+        newSongs.add(song);
+      }
+    }
+
+    if (newSongs.isEmpty) return;
+
+    // 在当前歌曲之后插入
+    _playlist.insertAll(insertIndex, newSongs);
+    // 同步 originalPlaylist
+    _originalPlaylist.insertAll(
+      (_originalPlaylist.indexWhere((s) => s.id == _playlist[_currentIndex].id) + 1).clamp(0, _originalPlaylist.length),
+      newSongs,
+    );
+    notifyListeners();
+
+    // 重建 audio_service 队列以反映新顺序
+    if (_audioService != null && _currentSong != null) {
+      final sources = _playlist
+          .map((song) => _createAudioSource(song))
+          .toList();
+      await _audioService.setPlaylist(sources, startIndex: _currentIndex);
+      // seek 到当前位置，保持播放连续性
+      await _audioService.seek(_position);
+      if (_isPlaying) await _audioService.play();
+    }
+    _prefetchNextSongs(_currentIndex);
+  }
+
   /// 从播放列表中删除指定索引的歌曲。
   ///
   /// 同步更新 _playlist / _originalPlaylist / _currentIndex。

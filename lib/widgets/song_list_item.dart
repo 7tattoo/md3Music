@@ -53,7 +53,7 @@ class SongListItem extends StatelessWidget {
               onTap: () {
                 Navigator.pop(ctx);
                 final player = context.read<PlayerProvider>();
-                player.appendPlaylist([song]);
+                player.insertAfterCurrent([song]);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('已加入下一首'),
