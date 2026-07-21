@@ -55,10 +55,17 @@ class LyricParserChain {
   ///
   /// 检测逻辑：找到首个非空非元数据行，用正则匹配其前缀决定走哪个解析器；
   /// 若所有行均为空或元数据，降级为纯文本解析。
-  static List<LyricLine> parse(String text) {
+  ///
+  /// 若传入 [translationText]，解析完成后会按时间戳最近邻匹配将翻译合并到
+  /// 各行。容差 500ms；翻译文本无时间戳时降级为按行序号顺序匹配。
+  static List<LyricLine> parse(String text, {String? translationText}) {
     try {
       final format = detectFormat(text);
-      return _delegate(text, format);
+      final lines = _delegate(text, format);
+      if (translationText != null && translationText.isNotEmpty) {
+        return _mergeTranslation(lines, translationText);
+      }
+      return lines;
     } catch (_) {
       // 任何意外都降级纯文本，保证不抛异常
       return PlainTextParser.parse(text);
@@ -69,12 +76,74 @@ class LyricParserChain {
   ///
   /// 调用方已知格式时可直接指定，跳过自动检测。例如外部已通过文件扩展名
   /// 或服务端字段确认是 KRC，可直接 `parseAs(text, LyricFormat.krc)`。
-  static List<LyricLine> parseAs(String text, LyricFormat format) {
+  ///
+  /// 若传入 [translationText]，解析完成后会按时间戳最近邻匹配将翻译合并到
+  /// 各行。容差 500ms；翻译文本无时间戳时降级为按行序号顺序匹配。
+  static List<LyricLine> parseAs(String text, LyricFormat format,
+      {String? translationText}) {
     try {
-      return _delegate(text, format);
+      final lines = _delegate(text, format);
+      if (translationText != null && translationText.isNotEmpty) {
+        return _mergeTranslation(lines, translationText);
+      }
+      return lines;
     } catch (_) {
       return PlainTextParser.parse(text);
     }
+  }
+
+  /// 将翻译 LRC 文本按时间戳对齐到原文行。
+  ///
+  /// 算法：
+  /// 1. 用 [LrcParser] 解析 translationText 得到 [List<LyricLine>]（仅取
+  ///    startTime + text）
+  /// 2. 对每个原文行，查找时间戳差值最小且 <= 500ms 的翻译行
+  /// 3. 命中则用 [LyricLine.copyWith] 替换原文行的 translation 字段
+  ///
+  /// 容差 500ms 用于吸收 KRC（毫秒）vs LRC 翻译（百分秒）轻微错位。
+  /// 若翻译文本无法解析为 LRC（无时间戳行），降级按行序号顺序匹配。
+  static List<LyricLine> _mergeTranslation(
+      List<LyricLine> lines, String translationText) {
+    final translationLines = LrcParser.parse(translationText);
+    // 诊断日志：确认翻译 LRC 解析结果
+    print('[LyriconDebug._mergeTranslation] '
+        'lines.len=${lines.length}, translationText.len=${translationText.length}, '
+        'translationLines.len=${translationLines.length}, '
+        'hasTimestamps=${translationLines.any((l) => l.startTime > 0)}');
+    if (translationLines.isEmpty) return lines;
+
+    // 降级判断：若翻译解析后所有行 startTime 都是 0，说明是纯文本（无时间戳），
+    // 按行序号顺序匹配；否则用最近邻时间戳匹配
+    final hasTimestamps = translationLines.any((l) => l.startTime > 0);
+
+    final List<LyricLine> result = [];
+    int matchedCount = 0;
+    for (int i = 0; i < lines.length; i++) {
+      String? matched;
+      if (hasTimestamps) {
+        // 最近邻：找时间戳差值最小且 <= 500ms 的翻译行
+        int bestDelta = 501; // 容差 +1 作为哨兵
+        for (final tl in translationLines) {
+          final delta = (tl.startTime - lines[i].startTime).abs();
+          if (delta <= 500 && delta < bestDelta) {
+            bestDelta = delta;
+            matched = tl.text;
+          }
+        }
+      } else {
+        // 降级：按行序号匹配
+        if (i < translationLines.length) {
+          matched = translationLines[i].text;
+        }
+      }
+      if (matched != null) matchedCount++;
+      result.add(matched == null
+          ? lines[i]
+          : lines[i].copyWith(translation: matched));
+    }
+    // 诊断日志：合并命中率
+    print('[LyriconDebug._mergeTranslation] matched=$matchedCount/${lines.length}');
+    return result;
   }
 
   /// 检测输入文本的歌词格式。

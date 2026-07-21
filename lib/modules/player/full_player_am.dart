@@ -128,10 +128,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             lyric?.displayLrcLyric ??
             lyric?.displayLyric ??
             '';
+        // 翻译 LRC：传给解析器链按时间戳合并到各行
+        final translationText = lyric?.translatedContent;
         setState(() {
           _isLoadingLyrics = false;
           // 解析器链自动检测格式（KRC/LRC/纯文本）并输出统一 List<LyricLine>
-          _parsedLyrics = LyricParserChain.parse(lyricText);
+          // 同时合并翻译（若有）到各行 translation 字段
+          _parsedLyrics = LyricParserChain.parse(lyricText, translationText: translationText);
           // 同步记录格式，用于底部标注
           _lyricFormat = LyricParserChain.detectFormat(lyricText);
         });

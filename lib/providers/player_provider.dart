@@ -85,6 +85,24 @@ class PlayerProvider extends ChangeNotifier {
     _initAudioService();
     // 监听自身变化检测切歌 → 推送 Lyricon（仅 enabled 时实际推送）
     addListener(_handleLyriconSongChange);
+    // 监听 Lyricon 服务状态变化：冷启动后 Kotlin 自动恢复 enabled 时，
+    // 通过 auto_restored 事件触发重推当前歌曲 + 应用翻译偏好
+    LyriconProviderService.instance.addListener(_onLyriconServiceStateChanged);
+  }
+
+  /// Lyricon 服务状态变化回调。
+  ///
+  /// 当 Kotlin 端在 AudioPlaybackService.onCreate 自动恢复 enabled 后会回调
+  /// `auto_restored` 事件，LyriconProviderService 将 _state 切到 connecting。
+  /// 此时 Provider 已 register，但 PlayerProvider 还没推送过当前歌曲
+  /// （因为冷启动时 _state 是 disabled，_handleLyriconSongChange 直接 short-circuit）。
+  /// 这里检测到 disabled → connecting 的转换后重置 _lastLyriconSong 并强制推送一次。
+  void _onLyriconServiceStateChanged() {
+    if (LyriconProviderService.instance.state == LyriconConnectionState.connecting) {
+      // 重置 _lastLyriconSong 让下次 _handleLyriconSongChange 强制推送
+      _lastLyriconSong = null;
+      _handleLyriconSongChange();
+    }
   }
 
   Future<void> _initAudioService() async {
@@ -928,9 +946,21 @@ class PlayerProvider extends ChangeNotifier {
             if (token != _lyriconFetchToken) return; // 切歌已变化，丢弃旧结果
             // 复用 LyricParserChain 自动识别 KRC/LRC/纯文本（与
             // DesktopLyricService 同一解析入口，不重复实现解析逻辑）
+            // 同时把翻译 LRC 一并传入，由 _mergeTranslation 按时间戳合并到各行
             final text = kugou.lyric?.displayLyric;
+            final translationText = kugou.lyric?.translatedContent;
+            // 诊断日志：确认翻译数据是否到达 PlayerProvider
+            debugPrint('[LyriconDebug] _pushLyriconSongChange: '
+                'song=${song?.title}, text.len=${text?.length}, '
+                'translationText.len=${translationText?.length}, '
+                'translationText.preview=${translationText == null ? "null" : (translationText.length > 80 ? "${translationText.substring(0, 80)}..." : translationText)}');
             if (text != null && text.isNotEmpty) {
-              lines = LyricParserChain.parse(text);
+              lines = LyricParserChain.parse(text, translationText: translationText);
+              // 诊断日志：确认合并后 translation 字段是否填充
+              final withTranslation = lines.where((l) => l.translation != null && l.translation!.isNotEmpty).length;
+              debugPrint('[LyriconDebug] parse result: lines=${lines.length}, '
+                  'withTranslation=$withTranslation, '
+                  'first.translation=${lines.isEmpty ? "N/A" : (lines.first.translation == null ? "null" : "\"${lines.first.translation}\"")}');
             }
           } catch (_) {}
         }
@@ -950,6 +980,7 @@ class PlayerProvider extends ChangeNotifier {
   @override
   void dispose() {
     removeListener(_handleLyriconSongChange);
+    LyriconProviderService.instance.removeListener(_onLyriconServiceStateChanged);
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
     _playingSubscription?.cancel();
