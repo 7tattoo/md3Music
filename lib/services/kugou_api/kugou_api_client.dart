@@ -604,6 +604,17 @@ class KugouApiClient {
           'decodedContent=${merged.decodedContent == null ? "null" : "len=${merged.decodedContent!.length}"}, '
           'decodedKrcContent=${merged.decodedKrcContent == null ? "null" : "len=${merged.decodedKrcContent!.length}"}, '
           'translatedContent=${merged.translatedContent == null ? "null" : "len=${merged.translatedContent!.length}"}');
+      // dump KRC 中的 [language:...] 行，确认翻译格式
+      if (krcContent != null) {
+        final langMatch = RegExp(r'\[language:([^\]]*)\]').firstMatch(krcContent);
+        if (langMatch != null) {
+          final lang = langMatch.group(1)!;
+          final preview = lang.length > 300 ? '${lang.substring(0, 300)}...' : lang;
+          debugPrint('[LyriconDebug.mergeLyric] KRC [language:] field: $preview');
+        } else {
+          debugPrint('[LyriconDebug.mergeLyric] KRC has no [language:] field');
+        }
+      }
     }
     return merged;
   }
