@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
@@ -593,30 +594,109 @@ class KugouApiClient {
       if (explicitKrc != null) { krcContent = explicitKrc.toString(); }
       else if (krcJson['decodeContent'] != null) { krcContent = krcJson['decodeContent'].toString(); }
     }
+    // 从 KRC [language:] 字段提取翻译（酷狗翻译只在 KRC 里，LRC 接口无翻译）
+    // 格式：[language:<base64>] 解码后是 {"content":[{"language":0,"lyricContent":[["行1"],["行2"],...]},{"language":1,...}]}
+    // language=0 是中文翻译，language=1 是音译（罗马音）
+    // lyricContent 按行序对应 KRC 歌词行，无时间戳，需要从 KRC 明文提取每行时间戳合成 LRC
+    String? translationLrc = lrcLyric?.translatedContent ?? krcLyric?.translatedContent;
+    if (translationLrc == null && krcContent != null) {
+      translationLrc = _extractTranslationFromKrc(krcContent);
+    }
+
     final merged = KugouLyric(
       content: lrcLyric?.content ?? krcLyric?.content ?? '',
       decodedContent: lrcLyric?.decodedContent,
       decodedKrcContent: krcContent,
-      translatedContent: lrcLyric?.translatedContent ?? krcLyric?.translatedContent,
+      translatedContent: translationLrc,
     );
     if (kDebugMode) {
       debugPrint('[LyriconDebug.mergeLyric] merged: content.len=${merged.content.length}, '
           'decodedContent=${merged.decodedContent == null ? "null" : "len=${merged.decodedContent!.length}"}, '
           'decodedKrcContent=${merged.decodedKrcContent == null ? "null" : "len=${merged.decodedKrcContent!.length}"}, '
           'translatedContent=${merged.translatedContent == null ? "null" : "len=${merged.translatedContent!.length}"}');
-      // dump KRC 中的 [language:...] 行，确认翻译格式
-      if (krcContent != null) {
-        final langMatch = RegExp(r'\[language:([^\]]*)\]').firstMatch(krcContent);
-        if (langMatch != null) {
-          final lang = langMatch.group(1)!;
-          final preview = lang.length > 300 ? '${lang.substring(0, 300)}...' : lang;
-          debugPrint('[LyriconDebug.mergeLyric] KRC [language:] field: $preview');
-        } else {
-          debugPrint('[LyriconDebug.mergeLyric] KRC has no [language:] field');
-        }
-      }
     }
     return merged;
+  }
+
+  /// 从 KRC 明文中提取翻译，合成 LRC 格式返回。
+  ///
+  /// KRC 明文包含：
+  /// - 歌词行：`[start_ms,duration_ms]<offset,duration,0>字<offset,duration,0>字...`
+  /// - 元数据行：`[language:<base64>]`，解码后为 JSON：
+  ///   `{"content":[{"language":0,"lyricContent":[["行1"],["行2"],...]}, ...]}`
+  ///
+  /// 返回合成的 LRC：
+  /// ```
+  /// [mm:ss.xx]翻译行1
+  /// [mm:ss.xx]翻译行2
+  /// ...
+  /// ```
+  /// 翻译行的 startTime 来自对应 KRC 歌词行。
+  static String? _extractTranslationFromKrc(String krcContent) {
+    try {
+      final langMatch = RegExp(r'\[language:([^\]]*)\]').firstMatch(krcContent);
+      if (langMatch == null) {
+        debugPrint('[LyriconDebug._extractTranslationFromKrc] no [language:] field');
+        return null;
+      }
+      final b64 = langMatch.group(1)!;
+      // Base64 padding 修正
+      final padding = '=' * ((4 - b64.length % 4) % 4);
+      final decoded = utf8.decode(base64.decode(b64 + padding));
+      final json = jsonDecode(decoded) as Map<String, dynamic>;
+      final contentList = json['content'] as List;
+      // 优先 language=0（中文翻译），降级取第一个
+      Map<String, dynamic>? translationEntry;
+      for (final entry in contentList) {
+        final e = entry as Map<String, dynamic>;
+        if (e['language'] == 0) {
+          translationEntry = e;
+          break;
+        }
+      }
+      translationEntry ??= contentList.first as Map<String, dynamic>;
+      final lyricContent = translationEntry['lyricContent'] as List;
+      final translationLines = <String>[];
+      for (final line in lyricContent) {
+        // 每行是单元素数组 ["翻译文本"]
+        if (line is List && line.isNotEmpty) {
+          translationLines.add(line.first.toString());
+        } else {
+          translationLines.add('');
+        }
+      }
+      debugPrint('[LyriconDebug._extractTranslationFromKrc] '
+          'language=${translationEntry['language']}, translationLines=${translationLines.length}');
+
+      // 提取 KRC 歌词行的 startTime
+      final lineTimestampRegex = RegExp(r'^\[(\d+),(\d+)\]', multiLine: true);
+      final lineMatches = lineTimestampRegex.allMatches(krcContent).toList();
+      debugPrint('[LyriconDebug._extractTranslationFromKrc] KRC lines=${lineMatches.length}');
+
+      // 按 startTime 合成 LRC
+      final sb = StringBuffer();
+      final count = lineMatches.length < translationLines.length
+          ? lineMatches.length
+          : translationLines.length;
+      for (int i = 0; i < count; i++) {
+        final startMs = int.parse(lineMatches[i].group(1)!);
+        final translation = translationLines[i].trim();
+        if (translation.isEmpty) continue;
+        // 转成 [mm:ss.xx] 格式
+        final mm = (startMs ~/ 60000).toString().padLeft(2, '0');
+        final ss = ((startMs % 60000) ~/ 1000).toString().padLeft(2, '0');
+        final xx = ((startMs % 1000) ~/ 10).toString().padLeft(2, '0');
+        sb.writeln('[$mm:$ss.$xx]$translation');
+      }
+      final result = sb.toString();
+      debugPrint('[LyriconDebug._extractTranslationFromKrc] '
+          'synthesized LRC len=${result.length}, '
+          'preview=${result.length > 200 ? result.substring(0, 200) : result}');
+      return result.isEmpty ? null : result;
+    } catch (e) {
+      debugPrint('[LyriconDebug._extractTranslationFromKrc] error: $e');
+      return null;
+    }
   }
 
   Future<KugouCommentList?> getComments(String hash, {String? albumAudioId, int page = 1, int pagesize = 20}) async {
