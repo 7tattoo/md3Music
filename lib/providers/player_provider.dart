@@ -856,15 +856,27 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _audioService!.stop();
       _updateNotification();
     } else if (wasCurrent) {
-      // 删除的是当前播放歌曲：重建队列并播放新当前歌曲
+      // 删除的是当前播放歌曲：先解析新当前歌曲的 URL，再重建队列播放
+      if (_currentSong != null && _currentSong!.isOnline && _currentSong!.url == null) {
+        try {
+          final result = await KugouApiClient().getSongUrl(
+            _currentSong!.id,
+            quality: _audioQuality.value,
+            albumId: _currentSong!.albumId,
+            albumAudioId: _currentSong!.albumAudioId,
+          );
+          if (result != null && result.url.isNotEmpty) {
+            final resolvedSong = _currentSong!.copyWith(url: result.url);
+            _currentSong = resolvedSong;
+            _playlist[_currentIndex] = resolvedSong;
+          }
+        } catch (_) {}
+      }
       final sources = _playlist.map(_createAudioSource).toList();
       await _audioService!.setPlaylist(
         sources,
         startIndex: _currentIndex >= 0 ? _currentIndex : 0,
       );
-      // setPlaylist 已经加载了 startIndex 对应的歌曲并设为 ready 状态，
-      // 直接 play 即可。不能调 _resolveAndPlayCurrentSong，因为它会调
-      // setUrl() 覆盖掉刚设好的队列，导致后续 next/prev 无法正常工作。
       await _audioService!.seek(Duration.zero);
       await _audioService!.play();
     }
