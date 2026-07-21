@@ -167,10 +167,9 @@ class PlayerProvider extends ChangeNotifier {
         await _audioService.setShuffleModeEnabled(_shuffleEnabled);
       }
 
-      // 构建播放源并 seek 到保存的位置（仅播放，不自动 resume）
-      final ok = await _resolveAndPlayCurrentSong(seekTo: state.position);
+      // 构建播放源并 seek 到保存的位置（不自动播放，等用户手动触发）
+      final ok = await _resolveAndPlayCurrentSong(seekTo: state.position, play: false);
       if (ok) {
-        // seek 成功后暂停，等用户手动播放
         _position = state.position;
       }
       notifyListeners();
@@ -596,7 +595,7 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> _resolveAndPlayCurrentSong({Duration? seekTo}) async {
+  Future<bool> _resolveAndPlayCurrentSong({Duration? seekTo, bool play = true}) async {
     if (_currentSong == null) return false;
 
     if (_currentSong!.isOnline && _currentSong!.url == null) {
@@ -637,12 +636,7 @@ class PlayerProvider extends ChangeNotifier {
           ? _currentSong!.url
           : _currentSong!.localPath;
       if (playbackUrl != null && playbackUrl.isNotEmpty) {
-        await _setUrlAndPlay(playbackUrl);
-        // 恢复位置：setUrl 后 seek 到目标位置（不自动播放）
-        if (seekTo != null && seekTo > Duration.zero) {
-          await _audioService.seek(seekTo);
-          _position = seekTo;
-        }
+        await _setUrlAndPlay(playbackUrl, seekTo: seekTo, playAfter: play);
       }
     }
     return true;
