@@ -10,6 +10,8 @@ class SettingsRepository {
   static const String _keyAutoReceiveVip = 'settings_auto_receive_vip';
   static const String _keyApiServerUrl = 'settings_api_server_url';
   static const String _keySignedDays = 'settings_signed_days';
+  // 自定义下载目录：空字符串表示使用默认目录（应用私有 documents/downloads）
+  static const String _keyDownloadDir = 'settings_download_dir';
 
   /// 读取本地打卡日期集合（格式 yyyy-MM-dd）
   Future<Set<String>> getSignedDays() async {
@@ -96,6 +98,26 @@ class SettingsRepository {
   Future<void> setAutoReceiveVip(bool autoReceive) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyAutoReceiveVip, autoReceive);
+  }
+
+  /// 读取用户配置的自定义下载目录。
+  /// 返回 null/空字符串 表示使用默认目录（应用私有 documents/downloads）。
+  Future<String?> getDownloadDir() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getString(_keyDownloadDir);
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  /// 持久化用户配置的自定义下载目录。
+  /// 传入 null 或空字符串表示恢复使用默认目录。
+  Future<void> setDownloadDir(String? path) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (path == null || path.isEmpty) {
+      await prefs.remove(_keyDownloadDir);
+    } else {
+      await prefs.setString(_keyDownloadDir, path);
+    }
   }
 
   // ===== 桌面歌词配置 =====

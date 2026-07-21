@@ -108,23 +108,21 @@ class PlayerProvider extends ChangeNotifier {
       await _audioService.init();
       _initStreams();
       await _loadDefaultQuality();
-    } catch (e) {
-          }
+    } catch (e) {}
   }
 
   Future<void> _loadDefaultQuality() async {
     try {
       final settings = SettingsRepository();
       final qualityValue = await settings.getDefaultQuality();
-            _audioQuality = AudioQuality.values.firstWhere(
+      _audioQuality = AudioQuality.values.firstWhere(
         (q) => q.value == qualityValue,
         orElse: () {
-                    return AudioQuality.standard;
+          return AudioQuality.standard;
         },
       );
-            notifyListeners();
-    } catch (e) {
-          }
+      notifyListeners();
+    } catch (e) {}
   }
 
   Future<dynamic> _loadAudioService() async {
@@ -135,99 +133,77 @@ class PlayerProvider extends ChangeNotifier {
     if (_audioService == null || !_audioInitialized) return;
 
     try {
-      _positionSubscription = _audioService.positionStream.listen(
-        (position) {
-          _position = position;
-          _updateNotificationPosition();
-          notifyListeners();
-          // 直接转发给 Lyricon，无节流。
-          // positionStream 本身就是 ~200ms 周期（just_audio 默认），是天然节流。
-          // MethodChannel 是异步的，不阻塞 Dart UI；setPosition 是 fire-and-forget。
-          // 仅在播放中推送，暂停时跳过避免无意义 IPC。
-          if (LyriconProviderService.instance.enabled && _isPlaying) {
-            try {
-              LyriconProviderService.instance
-                  .setPosition(position.inMilliseconds);
-            } catch (_) {}
-          }
-        },
-        onError: (e) {
-                  },
-      );
-
-      _durationSubscription = _audioService.durationStream.listen(
-        (duration) {
-          _duration = duration;
-          notifyListeners();
-        },
-        onError: (e) {
-                  },
-      );
-
-      _playingSubscription = _audioService.playingStream.listen(
-        (isPlaying) {
-          _isPlaying = isPlaying;
-          _updateNotification();
-          notifyListeners();
-          // 播放/暂停切换时立即推 Lyricon，避免等下一个 positionStream tick
-          // state 必须用 PlaybackStateCompat.STATE_PLAYING=3 / STATE_PAUSED=2
-          if (LyriconProviderService.instance.enabled) {
-            try {
-              LyriconProviderService.instance.setPlaybackState(
-                state: isPlaying ? 3 : 2,
-                position: _position.inMilliseconds,
-                speed: 1.0,
-              );
-            } catch (_) {}
-          }
-        },
-        onError: (e) {
-                  },
-      );
-
-      _playerStateSubscription = _audioService.playerStateStream.listen(
-        (playerState) {
+      _positionSubscription = _audioService.positionStream.listen((position) {
+        _position = position;
+        _updateNotificationPosition();
+        notifyListeners();
+        // 直接转发给 Lyricon，无节流。
+        // positionStream 本身就是 ~200ms 周期（just_audio 默认），是天然节流。
+        // MethodChannel 是异步的，不阻塞 Dart UI；setPosition 是 fire-and-forget。
+        // 仅在播放中推送，暂停时跳过避免无意义 IPC。
+        if (LyriconProviderService.instance.enabled && _isPlaying) {
           try {
-            if (playerState.processingState ==
-                just_audio.ProcessingState.completed) {
-              _handlePlaybackCompleted();
-            }
-          } catch (e) {
-                      }
-        },
-        onError: (e) {
-                  },
-      );
+            LyriconProviderService.instance.setPosition(
+              position.inMilliseconds,
+            );
+          } catch (_) {}
+        }
+      }, onError: (e) {});
 
-      _sequenceStateSubscription = _audioService.sequenceStateStream.listen(
-        (sequenceState) {
+      _durationSubscription = _audioService.durationStream.listen((duration) {
+        _duration = duration;
+        notifyListeners();
+      }, onError: (e) {});
+
+      _playingSubscription = _audioService.playingStream.listen((isPlaying) {
+        _isPlaying = isPlaying;
+        _updateNotification();
+        notifyListeners();
+        // 播放/暂停切换时立即推 Lyricon，避免等下一个 positionStream tick
+        // state 必须用 PlaybackStateCompat.STATE_PLAYING=3 / STATE_PAUSED=2
+        if (LyriconProviderService.instance.enabled) {
           try {
-            if (sequenceState != null && sequenceState.currentSource != null) {
-              final effectiveIndex = sequenceState.effectiveSequence.indexOf(
-                sequenceState.currentSource!,
-              );
-              if (effectiveIndex >= _playlist.length - 2 &&
-                  onPlaylistEnd != null) {
-                onPlaylistEnd!();
-              }
-            }
-          } catch (e) {
-                      }
-        },
-        onError: (e) {
-                  },
-      );
+            LyriconProviderService.instance.setPlaybackState(
+              state: isPlaying ? 3 : 2,
+              position: _position.inMilliseconds,
+              speed: 1.0,
+            );
+          } catch (_) {}
+        }
+      }, onError: (e) {});
 
-      _speedSubscription = _audioService.speedStream.listen(
-        (speed) {
-          _speed = speed;
-          notifyListeners();
-        },
-        onError: (e) {
-                  },
-      );
-    } catch (e) {
+      _playerStateSubscription = _audioService.playerStateStream.listen((
+        playerState,
+      ) {
+        try {
+          if (playerState.processingState ==
+              just_audio.ProcessingState.completed) {
+            _handlePlaybackCompleted();
           }
+        } catch (e) {}
+      }, onError: (e) {});
+
+      _sequenceStateSubscription = _audioService.sequenceStateStream.listen((
+        sequenceState,
+      ) {
+        try {
+          if (sequenceState != null && sequenceState.currentSource != null) {
+            final effectiveIndex = sequenceState.effectiveSequence.indexOf(
+              sequenceState.currentSource!,
+            );
+            if (effectiveIndex >= _playlist.length - 2 &&
+                onPlaylistEnd != null) {
+              onPlaylistEnd!();
+            }
+          }
+        } catch (e) {}
+      }, onError: (e) {});
+
+      _speedSubscription = _audioService.speedStream.listen((speed) {
+        _speed = speed;
+        notifyListeners();
+      }, onError: (e) {});
+    } catch (e) {}
   }
 
   bool _handlingCompletion = false;
@@ -251,10 +227,7 @@ class PlayerProvider extends ChangeNotifier {
                 .toList();
             remaining.shuffle();
             // currentSong 可能为 null，使用 collection-if 条件添加
-            _playlist = [
-              if (currentSong != null) currentSong,
-              ...remaining,
-            ];
+            _playlist = [if (currentSong != null) currentSong, ...remaining];
             _currentIndex = 0;
           } else {
             _currentIndex = 0;
@@ -287,6 +260,7 @@ class PlayerProvider extends ChangeNotifier {
     _originalPlaylist = [song];
     _currentIndex = 0;
     _resolveError = null;
+    _position = Duration.zero;
     _recordHistory(song);
     _updateNotification();
     notifyListeners();
@@ -299,7 +273,7 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   Future<void> playOnlineSong(Song song) async {
-        final apiClient = KugouApiClient();
+    final apiClient = KugouApiClient();
     if (!apiClient.isLoggedIn) {
       onLoginRequired?.call();
       return;
@@ -310,13 +284,14 @@ class PlayerProvider extends ChangeNotifier {
     _currentIndex = 0;
     _isResolvingUrl = true;
     _resolveError = null;
+    _position = Duration.zero;
     _recordHistory(song);
     _updateNotification();
-        notifyListeners();
+    notifyListeners();
 
     try {
       final apiClient = KugouApiClient();
-      
+
       final result = await apiClient.getSongUrl(
         song.id,
         quality: _audioQuality.value,
@@ -325,25 +300,24 @@ class PlayerProvider extends ChangeNotifier {
       );
 
       if (result != null && result.url.isNotEmpty) {
-                final resolvedSong = song.copyWith(url: result.url);
+        final resolvedSong = song.copyWith(url: result.url);
         _currentSong = resolvedSong;
         _playlist = [resolvedSong];
         _isResolvingUrl = false;
-                notifyListeners();
+        notifyListeners();
 
         if (_audioService != null) {
-                    final source = _createAudioSource(resolvedSong);
+          final source = _createAudioSource(resolvedSong);
           await _audioService.setPlaylist([source], startIndex: 0);
           await _audioService.play();
-                  } else {
-                  }
+        } else {}
       } else {
-                _isResolvingUrl = false;
+        _isResolvingUrl = false;
         _resolveError = '无法获取播放链接';
         notifyListeners();
       }
     } catch (e) {
-            _isResolvingUrl = false;
+      _isResolvingUrl = false;
       _resolveError = e.toString();
       notifyListeners();
     }
@@ -357,6 +331,7 @@ class PlayerProvider extends ChangeNotifier {
     _currentIndex = startIndex;
     _currentSong = songs[startIndex];
     _resolveError = null;
+    _position = Duration.zero;
     _recordHistory(songs[startIndex]);
     notifyListeners();
 
@@ -419,19 +394,20 @@ class PlayerProvider extends ChangeNotifier {
     _currentSong = songs[startIndex];
     _isResolvingUrl = true;
     _resolveError = null;
+    _position = Duration.zero;
     _recordHistory(songs[startIndex]);
     _updateNotification();
     notifyListeners();
 
     try {
       final apiClient = KugouApiClient();
-            final result = await apiClient.getSongUrl(
+      final result = await apiClient.getSongUrl(
         _currentSong!.id,
         quality: _audioQuality.value,
         albumId: _currentSong!.albumId,
         albumAudioId: _currentSong!.albumAudioId,
       );
-      
+
       if (result != null && result.url.isNotEmpty) {
         final resolvedSong = _currentSong!.copyWith(url: result.url);
         _currentSong = resolvedSong;
@@ -610,6 +586,7 @@ class PlayerProvider extends ChangeNotifier {
     _currentIndex = nextIndex;
     _currentSong = _playlist[nextIndex];
     _resolveError = null;
+    _position = Duration.zero; // 切歌时重置位置，避免恢复时跳到上一首的进度
     _updateNotification();
 
     final ok = await _resolveAndPlayCurrentSong();
@@ -640,8 +617,11 @@ class PlayerProvider extends ChangeNotifier {
       _currentIndex = prevIndex;
       _currentSong = _playlist[prevIndex];
       _resolveError = null;
+      _position = Duration.zero;
 
-      if (await _resolveAndPlayCurrentSong()) return;
+      if (await _resolveAndPlayCurrentSong()) {
+        return;
+      }
       _resolveError = '无法获取播放链接';
     }
     notifyListeners();
@@ -653,6 +633,7 @@ class PlayerProvider extends ChangeNotifier {
     _currentIndex = index;
     _currentSong = _playlist[index];
     _resolveError = null;
+    _position = Duration.zero;
     notifyListeners();
 
     await _resolveAndPlayCurrentSong();
@@ -718,8 +699,9 @@ class PlayerProvider extends ChangeNotifier {
     _playlist.removeAt(index);
 
     // 同步 _originalPlaylist（shuffle 关闭时用于还原原始顺序）
-    final origIndex =
-        _originalPlaylist.indexWhere((s) => s.id == removedSong.id);
+    final origIndex = _originalPlaylist.indexWhere(
+      (s) => s.id == removedSong.id,
+    );
     if (origIndex != -1) _originalPlaylist.removeAt(origIndex);
 
     // 2. 维护当前播放索引
@@ -837,10 +819,7 @@ class PlayerProvider extends ChangeNotifier {
           .toList();
       remaining.shuffle();
       // currentSong 可能为 null，使用 collection-if 条件添加
-      _playlist = [
-        if (currentSong != null) currentSong,
-        ...remaining,
-      ];
+      _playlist = [if (currentSong != null) currentSong, ...remaining];
       _currentIndex = 0;
     } else {
       final currentSong = _currentSong;
@@ -1040,11 +1019,7 @@ class PlayerProvider extends ChangeNotifier {
             // 无法判断缓存是否属于当前歌曲（切歌瞬间缓存可能仍是上一首）。
             // getLyric 内部有 _lyricSongId 竞态保护，与 apple_lyrics_view
             // 的并发请求互不干扰（后调覆盖前调，结果一致）。
-            await kugou.getLyric(
-              song.id,
-              songName: song.title,
-              fmt: 'lrc',
-            );
+            await kugou.getLyric(song.id, songName: song.title, fmt: 'lrc');
             if (token != _lyriconFetchToken) return; // 切歌已变化，丢弃旧结果
             // 复用 LyricParserChain 自动识别 KRC/LRC/纯文本（与
             // DesktopLyricService 同一解析入口，不重复实现解析逻辑）

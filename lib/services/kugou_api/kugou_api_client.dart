@@ -28,6 +28,10 @@ class KugouApiClient {
   }
 
   late final Dio _dio;
+
+  /// 暴露 Dio 实例供外部使用（如 DownloadsProvider 下载封面图）。
+  Dio get dio => _dio;
+
   String? _token;
   String? _userid;
   String? _vipToken;
@@ -36,12 +40,21 @@ class KugouApiClient {
   Completer<void>? _initCompleter;
 
   static const _loginPaths = {
-    '/login/qr/key', '/login/qr/create', '/login/qr/check',
-    '/login/cellphone', '/login/token', '/login',
-    '/login/wx/create', '/login/wx/check',
-    '/login/openplat', '/login/device', '/login/device/kick',
+    '/login/qr/key',
+    '/login/qr/create',
+    '/login/qr/check',
+    '/login/cellphone',
+    '/login/token',
+    '/login',
+    '/login/wx/create',
+    '/login/wx/check',
+    '/login/openplat',
+    '/login/device',
+    '/login/device/kick',
     '/captcha/sent',
-    '/youth/day/vip', '/youth/day/vip/upgrade', '/youth/month/vip/record',
+    '/youth/day/vip',
+    '/youth/day/vip/upgrade',
+    '/youth/month/vip/record',
   };
 
   void _onRequest(
@@ -71,11 +84,11 @@ class KugouApiClient {
 
       // 调试日志：打印请求的用户身份（生产环境可移除）
       print('🌐 [API Request] User: $_userid, URL: ${options.path}');
-          } else {
+    } else {
       // 未登录，清除 Authorization 头
       options.headers.remove('Authorization');
       print('⚠️ [API Request] 未登录状态, URL: ${options.path}');
-          }
+    }
 
     if (_dfid != null) {
       options.queryParameters['dfid'] = _dfid;
@@ -125,10 +138,14 @@ class KugouApiClient {
           return response.data as Map<String, dynamic>;
         }
       }
-      print('[API _get] Non-200 or non-map: status=${response.statusCode} data=${response.data}');
+      print(
+        '[API _get] Non-200 or non-map: status=${response.statusCode} data=${response.data}',
+      );
       return null;
     } on DioException catch (e) {
-      print('[API _get] DioException: ${e.type} ${e.message} response=${e.response?.statusCode} ${e.response?.data}');
+      print(
+        '[API _get] DioException: ${e.type} ${e.message} response=${e.response?.statusCode} ${e.response?.data}',
+      );
       return null;
     } catch (e) {
       print('[API _get] Error: $e');
@@ -154,10 +171,14 @@ class KugouApiClient {
           return response.data as Map<String, dynamic>;
         }
       }
-      print('[API _post] Non-200 or non-map: status=${response.statusCode} data=${response.data}');
+      print(
+        '[API _post] Non-200 or non-map: status=${response.statusCode} data=${response.data}',
+      );
       return null;
     } on DioException catch (e) {
-      print('[API _post] DioException: ${e.type} ${e.message} response=${e.response?.statusCode} ${e.response?.data}');
+      print(
+        '[API _post] DioException: ${e.type} ${e.message} response=${e.response?.statusCode} ${e.response?.data}',
+      );
       return null;
     } catch (e) {
       print('[API _post] Error: $e');
@@ -169,20 +190,20 @@ class KugouApiClient {
     _initCompleter = Completer<void>();
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // 先读取当前登录的用户ID
       final currentUserid = prefs.getString('kugou_current_userid');
-      
+
       if (currentUserid != null && currentUserid.isNotEmpty) {
         // 从用户隔离的键名读取
         final userTokenKey = 'kugou_token_$currentUserid';
         final userIdKey = 'kugou_userid_$currentUserid';
         final userVipKey = 'kugou_vip_token_$currentUserid';
-        
+
         _token = prefs.getString(userTokenKey);
         _userid = prefs.getString(userIdKey);
         _vipToken = prefs.getString(userVipKey);
-        
+
         if (_token != null && _userid != null) {
           print('✅ [Auth] 从存储恢复用户 $currentUserid 的登录状态');
         } else {
@@ -196,16 +217,16 @@ class KugouApiClient {
         _token = prefs.getString('kugou_token');
         _userid = prefs.getString('kugou_userid');
         _vipToken = prefs.getString('kugou_vip_token');
-        
+
         if (_token != null && _userid != null) {
           print('⚠️ [Auth] 检测到旧版本登录状态，建议重新登录');
         }
       }
-      
+
       _dfid = prefs.getString('kugou_dfid');
-          } catch (e) {
+    } catch (e) {
       print('❌ [Auth] 从存储初始化失败: $e');
-          } finally {
+    } finally {
       _isInitialized = true;
       _initCompleter?.complete();
     }
@@ -218,71 +239,71 @@ class KugouApiClient {
   }) async {
     // 关键修复：先清除旧的用户数据，再设置新的
     await clearCookies();
-    
+
     _token = token;
     _userid = userid;
     _vipToken = vipToken;
-    
+
     // 使用用户隔离的键名，避免多用户数据混乱
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // 清除所有可能的旧键（兼容旧版本）
       await prefs.remove('kugou_token');
       await prefs.remove('kugou_userid');
       await prefs.remove('kugou_vip_token');
       await prefs.remove('kugou_dfid');
-      
+
       // 使用带用户ID的键名存储（防止多用户冲突）
       final userTokenKey = 'kugou_token_$userid';
       final userIdKey = 'kugou_userid_$userid';
       final userVipKey = 'kugou_vip_token_$userid';
       final currentUserKey = 'kugou_current_userid';
-      
+
       await prefs.setString(userTokenKey, token);
       await prefs.setString(userIdKey, userid);
       if (vipToken != null && vipToken.isNotEmpty) {
         await prefs.setString(userVipKey, vipToken);
       }
-      
+
       // 记录当前登录的用户ID
       await prefs.setString(currentUserKey, userid);
-      
+
       print('✅ [Auth] 登录成功，用户ID: $userid, Token已存储到: $userTokenKey');
-          } catch (e) {
+    } catch (e) {
       print('❌ [Auth] 保存登录状态失败: $e');
-          }
+    }
   }
 
   Future<void> clearCookies() async {
     final oldUserid = _userid;
-    
+
     _token = null;
     _userid = null;
     _vipToken = null;
     _dfid = null;
-    
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // 清除当前用户的键
       if (oldUserid != null) {
         await prefs.remove('kugou_token_$oldUserid');
         await prefs.remove('kugou_userid_$oldUserid');
         await prefs.remove('kugou_vip_token_$oldUserid');
       }
-      
+
       // 清除全局键（兼容旧版本）
       await prefs.remove('kugou_token');
       await prefs.remove('kugou_userid');
       await prefs.remove('kugou_vip_token');
       await prefs.remove('kugou_dfid');
       await prefs.remove('kugou_current_userid');
-      
+
       print('✅ [Auth] 已清除用户 $oldUserid 的登录状态');
-          } catch (e) {
+    } catch (e) {
       print('❌ [Auth] 清除登录状态失败: $e');
-          }
+    }
   }
 
   String? get token => _token;
@@ -299,10 +320,9 @@ class KugouApiClient {
         final data = json['data'] as Map<String, dynamic>?;
         if (data != null && data['dfid'] != null) {
           _dfid = data['dfid'].toString();
-                  }
+        }
       }
-    } catch (e) {
-          }
+    } catch (e) {}
   }
 
   bool _hasCandidates(Map<String, dynamic> json) {
@@ -331,14 +351,22 @@ class KugouApiClient {
     try {
       return KugouSearchResult.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
-  Future<List<KugouAlbumBrief>?> searchAlbums(String keywords, {int page = 1, int pagesize = 20}) async {
+  Future<List<KugouAlbumBrief>?> searchAlbums(
+    String keywords, {
+    int page = 1,
+    int pagesize = 20,
+  }) async {
     final json = await _get(
       KugouEndpoints.searchAlbum,
-      queryParameters: {'keyword': keywords, 'page': page, 'pagesize': pagesize},
+      queryParameters: {
+        'keyword': keywords,
+        'page': page,
+        'pagesize': pagesize,
+      },
     );
     if (json == null) return null;
     try {
@@ -353,14 +381,22 @@ class KugouApiClient {
           .map((e) => KugouAlbumBrief.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
-  Future<List<KugouPlaylistBrief>?> searchPlaylists(String keywords, {int page = 1, int pagesize = 20}) async {
+  Future<List<KugouPlaylistBrief>?> searchPlaylists(
+    String keywords, {
+    int page = 1,
+    int pagesize = 20,
+  }) async {
     final json = await _get(
       KugouEndpoints.searchSpecial,
-      queryParameters: {'keyword': keywords, 'page': page, 'pagesize': pagesize},
+      queryParameters: {
+        'keyword': keywords,
+        'page': page,
+        'pagesize': pagesize,
+      },
     );
     if (json == null) return null;
     try {
@@ -375,7 +411,7 @@ class KugouApiClient {
           .map((e) => KugouPlaylistBrief.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -421,7 +457,7 @@ class KugouApiClient {
           .cast<String>()
           .toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -471,7 +507,7 @@ class KugouApiClient {
       }
       return items.cast<String>().toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -513,7 +549,7 @@ class KugouApiClient {
         albumAudioId: albumAudioId,
       );
       if (vipUrl != null) return vipUrl;
-            return null;
+      return null;
     }
 
     var json = await _get(KugouEndpoints.songUrl, queryParameters: params);
@@ -523,7 +559,7 @@ class KugouApiClient {
     final errcode = data['errcode'];
 
     if (errcode != null && errcode == 20028) {
-            await registerDevice();
+      await registerDevice();
       if (_dfid == null) return null;
 
       json = await _get(KugouEndpoints.songUrl, queryParameters: params);
@@ -537,7 +573,7 @@ class KugouApiClient {
         errorCode == 20018 &&
         _token != null &&
         _userid != null) {
-            final refreshed = await _tryRefreshToken();
+      final refreshed = await _tryRefreshToken();
       if (refreshed) {
         // refresh 后 vip_token 也会更新，重试 /song/url/new 一次
         if (hasVipToken) {
@@ -567,7 +603,7 @@ class KugouApiClient {
       if (failProcess is List &&
           failProcess.contains('buy') &&
           quality != KugouQuality.standard) {
-                params['quality'] = KugouQuality.standard;
+        params['quality'] = KugouQuality.standard;
         json = await _get(KugouEndpoints.songUrl, queryParameters: params);
         if (json != null) {
           final fallbackData = _extractData(json['data'] ?? json);
@@ -580,10 +616,10 @@ class KugouApiClient {
       // VIP 用户不要再走 free_part=1 主动拉 30 秒试听。
       // 试听只对未登录 / 没有 VIP 凭证的人兜底。
       if (hasVipToken) {
-                return null;
+        return null;
       }
 
-            final freeParams = Map<String, dynamic>.from(params);
+      final freeParams = Map<String, dynamic>.from(params);
       freeParams['free_part'] = 1;
       final freeJson = await _get(
         KugouEndpoints.songUrl,
@@ -595,9 +631,7 @@ class KugouApiClient {
           return KugouPlayUrl.fromJson(freeData);
         }
       }
-
-          } catch (e) {
-          }
+    } catch (e) {}
     return null;
   }
 
@@ -626,7 +660,7 @@ class KugouApiClient {
         queryParameters: query,
       );
       if (json == null) {
-                return null;
+        return null;
       }
       final data = _extractData(json['data'] ?? json);
       final rawUrl = data['url'];
@@ -639,26 +673,25 @@ class KugouApiClient {
         //    酷狗约定：1 = VIP 验证通过给完整音源，0 = 走试听/包月/购买。
         final privStatus = _parseInt(data['priv_status']);
         if (privStatus == 0) {
-                    return null;
+          return null;
         }
 
         // 2) fail_process 含 buy/pkg 时也是试听兜底，丢弃。
         final failProcess = data['fail_process'];
         if (failProcess is List && failProcess.isNotEmpty) {
-                    return null;
+          return null;
         }
 
         // 3) 用 fileSize 兜底识别：3~5 分钟的普通歌曲通常 > 2MB，
         //    如果不到 200KB 几乎一定是 30s 试听片段。
         final fileSize = _parseInt(data['fileSize'] ?? data['file_size']);
         if (fileSize > 0 && fileSize < 200 * 1024) {
-                    return null;
+          return null;
         }
 
-                return KugouPlayUrl.fromJson({...data, 'quality': quality});
+        return KugouPlayUrl.fromJson({...data, 'quality': quality});
       }
-          } catch (e) {
-          }
+    } catch (e) {}
     return null;
   }
 
@@ -706,7 +739,7 @@ class KugouApiClient {
       }
       return KugouSongDetail.fromJson(data);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -776,7 +809,7 @@ class KugouApiClient {
         !_hasCandidates(searchResult) &&
         songName != null &&
         songName.isNotEmpty) {
-            searchResult = await _get(
+      searchResult = await _get(
         KugouEndpoints.searchLyric,
         queryParameters: {'keywords': songName, 'hash': hash.toLowerCase()},
       );
@@ -790,12 +823,11 @@ class KugouApiClient {
           lyricId = first['id']?.toString();
           lyricAccesskey = first['accesskey']?.toString();
         }
-      } catch (e) {
-              }
+      } catch (e) {}
     }
 
     if (lyricId == null) {
-            return null;
+      return null;
     }
 
     // 默认 fmt='lrc' 触发并发双请求（LRC + KRC）；显式传 fmt='krc' 走单请求路径（向后兼容）
@@ -818,7 +850,7 @@ class KugouApiClient {
     try {
       return KugouLyric.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -864,15 +896,14 @@ class KugouApiClient {
   ) {
     if (lrcJson == null && krcJson == null) return null;
 
-    final lrcLyric =
-        lrcJson != null ? KugouLyric.fromJson(lrcJson) : null;
-    final krcLyric =
-        krcJson != null ? KugouLyric.fromJson(krcJson) : null;
+    final lrcLyric = lrcJson != null ? KugouLyric.fromJson(lrcJson) : null;
+    final krcLyric = krcJson != null ? KugouLyric.fromJson(krcJson) : null;
 
     // KRC 明文：优先用专用字段，否则把 KRC 响应的 decodeContent 当作 KRC 明文
     String? krcContent;
     if (krcJson != null) {
-      final explicitKrc = krcJson['decodeKrcContent'] ??
+      final explicitKrc =
+          krcJson['decodeKrcContent'] ??
           krcJson['decoded_krc_content'] ??
           krcJson['krcContent'];
       if (explicitKrc != null) {
@@ -913,7 +944,7 @@ class KugouApiClient {
     try {
       return KugouCommentList.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1025,7 +1056,7 @@ class KugouApiClient {
     try {
       return KugouPlaylistCategory.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1041,7 +1072,7 @@ class KugouApiClient {
       }
       return [];
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1065,7 +1096,7 @@ class KugouApiClient {
     try {
       return KugouPlaylistSongs.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1089,7 +1120,7 @@ class KugouApiClient {
     try {
       return KugouPlaylistSongs.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1164,7 +1195,7 @@ class KugouApiClient {
     try {
       return KugouRankList.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1214,7 +1245,7 @@ class KugouApiClient {
           .map((e) => KugouSongDetail.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1235,7 +1266,7 @@ class KugouApiClient {
           .map((e) => KugouSongDetail.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1344,7 +1375,7 @@ class KugouApiClient {
           .map((e) => KugouSongDetail.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1414,7 +1445,7 @@ class KugouApiClient {
       final data = json['data'] as Map<String, dynamic>? ?? json;
       return KugouArtistDetail.fromJson(data);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1435,7 +1466,7 @@ class KugouApiClient {
     try {
       return KugouArtistAlbums.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1456,7 +1487,7 @@ class KugouApiClient {
     try {
       return KugouArtistAudios.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1519,7 +1550,7 @@ class KugouApiClient {
       final data = json['data'] as Map<String, dynamic>? ?? json;
       return KugouQrKey.fromJson(data);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1537,7 +1568,7 @@ class KugouApiClient {
       final data = json['data'] as Map<String, dynamic>? ?? json;
       return KugouQrCreate.fromJson(data);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1551,9 +1582,9 @@ class KugouApiClient {
     );
     if (json == null) return null;
     try {
-            return KugouQrCheck.fromJson(json);
+      return KugouQrCheck.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1602,9 +1633,9 @@ class KugouApiClient {
   Future<bool> _tryRefreshToken() async {
     if (_token == null || _userid == null) return false;
     try {
-            final result = await refreshLogin(token: _token, userid: _userid);
+      final result = await refreshLogin(token: _token, userid: _userid);
       if (result == null) {
-                return false;
+        return false;
       }
       final status = result['status'];
       final data = result['data'] as Map<String, dynamic>?;
@@ -1614,12 +1645,12 @@ class KugouApiClient {
         final newVipToken = data['vip_token']?.toString();
         if (newToken != null && newUserid != null) {
           await setLoginCookies(newToken, newUserid, vipToken: newVipToken);
-                    return true;
+          return true;
         }
       }
-            return false;
+      return false;
     } catch (e) {
-            return false;
+      return false;
     }
   }
 
@@ -1638,7 +1669,7 @@ class KugouApiClient {
     try {
       return KugouUserDetail.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1731,10 +1762,7 @@ class KugouApiClient {
     String songName, {
     String? albumAudioId,
   }) async {
-    final params = <String, dynamic>{
-      'hash': hash,
-      'songname': songName,
-    };
+    final params = <String, dynamic>{'hash': hash, 'songname': songName};
     if (albumAudioId != null) params['album_audio_id'] = albumAudioId;
     return await _get(
       KugouEndpoints.playhistoryUpload,
@@ -1773,7 +1801,10 @@ class KugouApiClient {
     return await _get(KugouEndpoints.playlistAdd, queryParameters: params);
   }
 
-  Future<Map<String, dynamic>?> deletePlaylist(String listid, {int type = 1}) async {
+  Future<Map<String, dynamic>?> deletePlaylist(
+    String listid, {
+    int type = 1,
+  }) async {
     return await _get(
       KugouEndpoints.playlistDel,
       queryParameters: {'listid': listid, 'type': type},
@@ -1937,7 +1968,7 @@ class KugouApiClient {
       final data = json['data'] as Map<String, dynamic>? ?? json;
       return KugouAlbumDetail.fromJson(data);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1958,7 +1989,7 @@ class KugouApiClient {
     try {
       return KugouAlbumSongs.fromJson(json);
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1984,7 +2015,7 @@ class KugouApiClient {
           .map((e) => KugouSongDetail.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -1995,11 +2026,7 @@ class KugouApiClient {
   }) async {
     final json = await _get(
       KugouEndpoints.playlistTrackAllNew,
-      queryParameters: {
-        'listid': listid,
-        'page': page,
-        'pagesize': pagesize,
-      },
+      queryParameters: {'listid': listid, 'page': page, 'pagesize': pagesize},
     );
     if (json == null) return null;
     try {
@@ -2009,7 +2036,7 @@ class KugouApiClient {
           .map((e) => KugouSongDetail.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-            return null;
+      return null;
     }
   }
 
@@ -2143,7 +2170,7 @@ class KugouApiClient {
   }
 
   Future<Map<String, dynamic>?> upgradeDayVip() async {
-        return await _post(KugouEndpoints.youthDayVipUpgrade);
+    return await _post(KugouEndpoints.youthDayVipUpgrade);
   }
 
   Future<Map<String, dynamic>?> getYouthMonthVipRecord({String? month}) async {

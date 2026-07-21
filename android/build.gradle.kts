@@ -2,6 +2,8 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // JAudioTagger 社区分叉（com.github.AdrienPoupa:jaudiotagger）托管在 JitPack
+        maven { url = uri("https://jitpack.io") }
     }
 }
 

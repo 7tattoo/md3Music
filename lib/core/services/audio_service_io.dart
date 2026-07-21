@@ -1,6 +1,14 @@
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 
+/// 音频焦点 / 音频会话管理。
+///
+/// 关键设计：
+/// - [_pausedByInterruption]：标记"暂停是由音频焦点丢失引起的"。
+///   仅在这种情况下才在重新获得焦点时自动恢复播放，
+///   避免覆盖用户主动的暂停。
+/// - 区分临时中断（pause / unknown → 之后会自动恢复）和永久丢失
+///   （如电话来电、强制中断），后者由 audio_session 标记 `dispose` 状态。
 class AudioService {
   static final AudioService _instance = AudioService._internal();
 
@@ -33,6 +41,12 @@ class AudioService {
 
   double get speed => _player.speed;
 
+  /// 是否因为音频焦点丢失 / 设备中断（拔耳机、来电等）而处于暂停状态。
+  /// 在此状态下若重新获得音频焦点，可自动恢复播放。
+  /// 主动调用 [pause] 不会设置此标志。
+  bool _pausedByInterruption = false;
+  bool get wasPausedByInterruption => _pausedByInterruption;
+
   Future<void> init() async {
     await _player.setLoopMode(LoopMode.off);
     await _configureAudioSession();
@@ -53,6 +67,7 @@ class AudioService {
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
               if (_player.playing) {
+                _pausedByInterruption = true;
                 pause();
               }
               break;
@@ -64,18 +79,19 @@ class AudioService {
               // _player.setVolume(1.0);  // 注释掉：避免音量波动
               break;
             case AudioInterruptionType.pause:
-              // 仅在确实暂停后才恢复播放
-              if (!_player.playing && _player.processingState == ProcessingState.ready) {
-                play();
-              }
+              // 焦点恢复：仅在是被动暂停时尝试恢复（不覆盖用户主动暂停）
+              tryResumeAfterFocusLoss();
               break;
             case AudioInterruptionType.unknown:
               break;
           }
         }
       });
+      // 拔耳机 / 蓝牙断开：通常伴随系统焦点变更，但 just_audio 也会收到
+      // becomingNoisyEvent。统一标记为「中断暂停」以便外层恢复逻辑复用。
       session.becomingNoisyEventStream.listen((_) {
         if (_player.playing) {
+          _pausedByInterruption = true;
           pause();
         }
       });
@@ -83,16 +99,38 @@ class AudioService {
           }
   }
 
+  /// 焦点恢复时尝试自动恢复播放。
+  ///
+  /// 仅当：
+  /// 1) 当前处于「中断暂停」状态（_pausedByInterruption=true）
+  /// 2) 播放器已 ready（processingState == ready）
+  /// 时才会调 play()，避免与用户主动暂停冲突。
+  Future<void> tryResumeAfterFocusLoss() async {
+    if (!_pausedByInterruption) return;
+    if (_player.processingState != ProcessingState.ready) {
+      // 还没 ready，留着标志位等下次 playingStream 变化再试
+      return;
+    }
+    _pausedByInterruption = false;
+    await play();
+  }
+
   Future<void> play() async {
+    // 主动 play 不影响 _pausedByInterruption 标志；
+    // 若是被动恢复（_pausedByInterruption=true），play 后清掉标志。
     await _player.play();
+    _pausedByInterruption = false;
   }
 
   Future<void> pause() async {
+    // pause() 由外部主动调用时不修改 _pausedByInterruption；
+    // 中断引起的 pause 由 _configureAudioSession 内置 listener 设置标志。
     await _player.pause();
   }
 
   Future<void> stop() async {
     await _player.stop();
+    _pausedByInterruption = false;
   }
 
   Future<void> seek(Duration position) async {

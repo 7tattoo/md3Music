@@ -25,7 +25,6 @@ const String kBuildAppVersion = String.fromEnvironment(
   defaultValue: '3.3.0',
 );
 
-
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -51,6 +50,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _lyriconEnabled = false;
   bool _lyriconDisplayTranslation = true;
   bool _lyriconDisplayRoma = false;
+  // 自定义下载目录：null/空表示使用默认目录
+  String? _downloadDir;
 
   @override
   void initState() {
@@ -78,8 +79,8 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 从 SettingsRepository 加载 Lyricon 三个偏好
   Future<void> _loadLyriconSettings() async {
     final enabled = await _settingsRepository.getLyriconEnabled();
-    final displayTranslation =
-        await _settingsRepository.getLyriconDisplayTranslation();
+    final displayTranslation = await _settingsRepository
+        .getLyriconDisplayTranslation();
     final displayRoma = await _settingsRepository.getLyriconDisplayRoma();
     if (mounted) {
       setState(() {
@@ -115,6 +116,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final useDynamicColor = context.read<ThemeProvider>().useDynamicColor;
     // 从 ThemeProvider 同步「Apple Music 风格播放页」开关状态
     final useAmStylePlayer = context.read<ThemeProvider>().useAmStylePlayer;
+    // 读取自定义下载目录
+    final downloadDir = await _settingsRepository.getDownloadDir();
 
     setState(() {
       _themeMode = themeMode;
@@ -123,6 +126,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _apiServerController.text = apiServerUrl;
       _useDynamicColor = useDynamicColor;
       _useAmStylePlayer = useAmStylePlayer;
+      _downloadDir = downloadDir;
     });
   }
 
@@ -192,6 +196,9 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSectionHeader('播放'),
           _buildPlaybackSection(colorScheme),
           const Divider(),
+          _buildSectionHeader('下载'),
+          _buildDownloadSection(colorScheme),
+          const Divider(),
           _buildSectionHeader('在线音乐'),
           _buildOnlineMusicSection(colorScheme),
           const Divider(),
@@ -231,9 +238,8 @@ class _SettingsPageState extends State<SettingsPage> {
             showModalBottomSheet(
               context: context,
               isScrollControlled: true,
-              builder: (context) => SafeArea(
-                child: const LyricPreferencesPanel(),
-              ),
+              builder: (context) =>
+                  SafeArea(child: const LyricPreferencesPanel()),
             );
           },
         ),
@@ -354,9 +360,7 @@ class _SettingsPageState extends State<SettingsPage> {
             leading: const Icon(Icons.palette),
             title: const Text('主题色'),
             subtitle: Text(
-              themeProvider.useDynamicColor
-                  ? '跟随系统壁纸取色'
-                  : '手动选择种子色',
+              themeProvider.useDynamicColor ? '跟随系统壁纸取色' : '手动选择种子色',
             ),
             trailing: Container(
               width: 24,
@@ -441,6 +445,90 @@ class _SettingsPageState extends State<SettingsPage> {
           },
         ),
       ],
+    );
+  }
+
+  /// 下载 section：自定义下载目录
+  ///
+  /// 用户可输入一个绝对路径作为下载根目录；空字符串表示恢复使用默认目录
+  /// （Android 应用专属外部目录 /storage/emulated/0/Android/data/<package>/files/downloads）。
+  /// 输入后立即写入 SharedPreferences。
+  Widget _buildDownloadSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.folder_outlined),
+          title: const Text('下载目录'),
+          subtitle: Text(
+            _downloadDir?.isNotEmpty == true
+                ? _downloadDir!
+                : '默认（Android/data/包名）',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showDownloadDirDialog(),
+        ),
+      ],
+    );
+  }
+
+  /// 弹出"自定义下载目录"输入对话框。
+  /// 输入框预填当前值；空字符串/纯空白 = 恢复默认目录。
+  Future<void> _showDownloadDirDialog() async {
+    final controller = TextEditingController(text: _downloadDir ?? '');
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('下载目录'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '输入一个绝对路径作为下载根目录。\n'
+              'Android 推荐：/storage/emulated/0/Music/md3Music\n'
+              '留空则使用默认目录（Android/data/包名）。',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: '下载目录路径',
+                hintText: '留空 = 默认目录',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              maxLines: 2,
+              minLines: 1,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    final trimmed = result.trim();
+    setState(() {
+      _downloadDir = trimmed.isEmpty ? null : trimmed;
+    });
+    await _settingsRepository.setDownloadDir(_downloadDir);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(trimmed.isEmpty ? '已恢复使用默认下载目录' : '下载目录已设置为：$trimmed'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -626,7 +714,9 @@ class _SettingsPageState extends State<SettingsPage> {
             showLicensePage(
               context: context,
               applicationName: 'MD3Music',
-              applicationVersion: _appVersion.isEmpty ? kBuildAppVersion : _appVersion,
+              applicationVersion: _appVersion.isEmpty
+                  ? kBuildAppVersion
+                  : _appVersion,
             );
           },
         ),
@@ -637,9 +727,7 @@ class _SettingsPageState extends State<SettingsPage> {
           leading: const Icon(Icons.lyrics_outlined),
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const LyricsPreviewPage(),
-              ),
+              MaterialPageRoute(builder: (_) => const LyricsPreviewPage()),
             );
           },
         ),

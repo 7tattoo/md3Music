@@ -1,26 +1,52 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../data/models/download_task.dart';
 import '../data/models/song.dart';
 import '../data/repositories/downloads_repository.dart';
+import '../data/repositories/settings_repository.dart';
 import '../services/download_manager.dart';
 import '../services/kugou_api/kugou_api_client.dart';
+import '../services/metadata_writer.dart';
 
+/// 下载服务 Provider。
+///
+/// 协调 [DownloadManager]（DIO 下载）+ [DownloadsRepository]（任务持久化）+
+/// [SettingsRepository]（下载目录配置）+ [MetadataWriter]（嵌入元数据）。
+///
+/// 主要职责：
+/// 1. 接收 UI/Service 的下载请求，按用户配置的下载目录写入文件
+/// 2. 文件名采用 `artist - title.ext` 规则（同名自动追加 `(2)`/`(3)`）
+///    并在完成后修正扩展名（避免 URL 扩展名与实际格式不符导致的双后缀）
+/// 3. 下载完成后异步调用原生 [MetadataWriter] 嵌入标题/艺术家/专辑/
+///    封面/歌词，便于在其他播放器中正确显示
+/// 4. 维护 [tasks] 列表供 UI 订阅
 class DownloadsProvider extends ChangeNotifier {
   final DownloadsRepository _repository = DownloadsRepository();
   final DownloadManager _manager = DownloadManager();
+  final SettingsRepository _settingsRepository = SettingsRepository();
+  final KugouApiClient _api = KugouApiClient();
+
   List<DownloadTask> _tasks = [];
   StreamSubscription<DownloadTask>? _subscription;
+
+  /// 用于取消文件下载时的封面图保存。
+  final Map<String, CancelToken> _artworkCancels = {};
 
   List<DownloadTask> get tasks => _tasks;
   List<DownloadTask> get completedTasks =>
       _tasks.where((t) => t.status == DownloadStatus.completed).toList();
-  List<DownloadTask> get activeTasks =>
-      _tasks.where((t) =>
-          t.status == DownloadStatus.downloading ||
-          t.status == DownloadStatus.waiting).toList();
+  List<DownloadTask> get activeTasks => _tasks
+      .where(
+        (t) =>
+            t.status == DownloadStatus.downloading ||
+            t.status == DownloadStatus.waiting,
+      )
+      .toList();
 
   DownloadsProvider() {
     loadTasks();
@@ -30,6 +56,10 @@ class DownloadsProvider extends ChangeNotifier {
   @override
   void dispose() {
     _subscription?.cancel();
+    for (final c in _artworkCancels.values) {
+      c.cancel();
+    }
+    _artworkCancels.clear();
     super.dispose();
   }
 
@@ -42,21 +72,33 @@ class DownloadsProvider extends ChangeNotifier {
     final index = _tasks.indexWhere((t) => t.songId == updatedTask.songId);
     if (index >= 0) {
       _tasks[index] = updatedTask;
+    } else {
+      _tasks.add(updatedTask);
     }
     _repository.saveTask(updatedTask);
     notifyListeners();
+
+    // 任务刚完成时触发元数据嵌入（仅在 completed 状态变化时执行一次）。
+    if (updatedTask.status == DownloadStatus.completed &&
+        updatedTask.localPath != null) {
+      // ignore: discarded_futures
+      _embedMetadata(updatedTask);
+    }
   }
 
   bool isDownloading(String songId) {
-    return _tasks.any((t) =>
-        t.songId == songId &&
-        (t.status == DownloadStatus.downloading ||
-         t.status == DownloadStatus.waiting));
+    return _tasks.any(
+      (t) =>
+          t.songId == songId &&
+          (t.status == DownloadStatus.downloading ||
+              t.status == DownloadStatus.waiting),
+    );
   }
 
   bool isDownloaded(String songId) {
-    return _tasks.any((t) =>
-        t.songId == songId && t.status == DownloadStatus.completed);
+    return _tasks.any(
+      (t) => t.songId == songId && t.status == DownloadStatus.completed,
+    );
   }
 
   String? getLocalPath(String songId) {
@@ -64,37 +106,60 @@ class DownloadsProvider extends ChangeNotifier {
     return task?.localPath;
   }
 
+  /// 计算当前生效的下载目录。
+  /// 用户通过设置自定义的目录优先；否则使用 Android 应用专属外部目录
+  /// /storage/emulated/0/Android/data/<package>/files/downloads
+  /// （文件管理器可见，卸装 App 时自动清理，零权限要求）。
+  Future<String> _resolveDownloadDir() async {
+    final customDir = await _settingsRepository.getDownloadDir();
+    if (customDir != null && customDir.isNotEmpty) {
+      return customDir;
+    }
+    final external = await getExternalStorageDirectory();
+    if (external != null) {
+      // 不用 path.join（path 不在 pubspec 直接依赖中），用平台原生分隔符。
+      // Android 上 getExternalStorageDirectory() 已返回
+      // /storage/emulated/0/Android/data/<package>/files，带 / 分隔符。
+      final sep = Platform.pathSeparator;
+      return '${external.path}${sep}downloads';
+    }
+    // 兜底：极端情况下拿不到外部目录时使用应用私有目录
+    final docs = await getApplicationDocumentsDirectory();
+    final sep = Platform.pathSeparator;
+    return '${docs.path}${sep}downloads';
+  }
+
   Future<void> downloadSong(Song song, {String quality = '128'}) async {
     if (isDownloading(song.id)) return;
 
-    
     String? downloadUrl = song.url;
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
-            try {
-        final api = KugouApiClient();
-                final result = await api.getSongUrl(
+      try {
+        final result = await _api.getSongUrl(
           song.id,
           quality: quality,
           albumId: song.albumId,
           albumAudioId: song.albumAudioId,
         );
-                if (result != null && result.url.isNotEmpty) {
+        if (result != null && result.url.isNotEmpty) {
           downloadUrl = result.url;
         }
       } catch (e) {
-                return;
+        debugPrint('[DownloadsProvider] getSongUrl failed: $e');
+        return;
       }
     }
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
-            return;
+      return;
     }
 
-        final task = DownloadTask(
+    final task = DownloadTask(
       songId: song.id,
       title: song.title,
       artist: song.artist,
+      album: song.album,
       artworkUri: song.artworkUri,
       downloadUrl: downloadUrl,
     );
@@ -103,16 +168,30 @@ class DownloadsProvider extends ChangeNotifier {
     notifyListeners();
 
     await _repository.saveTask(task);
-        _manager.download(task);
+    final dir = await _resolveDownloadDir();
+    _manager.download(task, dir);
   }
 
   void cancelDownload(String songId) {
+    _artworkCancels[songId]?.cancel();
+    _artworkCancels.remove(songId);
     _manager.cancel(songId);
   }
 
   Future<void> removeTask(String songId) async {
+    _artworkCancels[songId]?.cancel();
+    _artworkCancels.remove(songId);
     _manager.cancel(songId);
-    await _manager.deleteFile(songId);
+
+    final task = _tasks.where((t) => t.songId == songId).firstOrNull;
+    final dir = await _resolveDownloadDir();
+    await _manager.deleteFile(
+      songId,
+      downloadDir: dir,
+      artist: task?.artist,
+      title: task?.title,
+      downloadUrl: task?.downloadUrl,
+    );
     _tasks.removeWhere((t) => t.songId == songId);
     await _repository.removeTask(songId);
     notifyListeners();
@@ -131,6 +210,166 @@ class DownloadsProvider extends ChangeNotifier {
     }
     await _repository.saveTask(retryTask);
     notifyListeners();
-    _manager.download(retryTask);
+    final dir = await _resolveDownloadDir();
+    _manager.download(retryTask, dir);
+  }
+
+  /// 下载完成后嵌入元数据（标题/艺术家/专辑/封面/歌词）。
+  ///
+  /// 流程：
+  /// 1. 若 task 有 artworkUri，先下载到临时文件 `artwork_<songId>.<ext>`
+  ///    若 artworkUri 为空，尝试通过酷狗 getImages API 获取封面
+  /// 2. 若 task 有 songId，尝试通过酷狗 API 拉取歌词（不阻塞主流程）
+  /// 3. 调用 [MetadataWriter.writeMetadata] 写入标签
+  /// 4. 清理临时封面文件
+  ///
+  /// 整个流程 fire-and-forget，失败仅 debugPrint，不影响下载/播放。
+  Future<void> _embedMetadata(DownloadTask task) async {
+    try {
+      final filePath = task.localPath;
+      if (filePath == null) return;
+
+      debugPrint(
+        '[DownloadsProvider] embedMetadata start: songId=${task.songId}, '
+        'title=${task.title}, artist=${task.artist}, '
+        'artworkUri=${task.artworkUri}, filePath=$filePath',
+      );
+
+      String? artworkPath;
+      // 1. 封面图：优先用 task.artworkUri，若为空则尝试酷狗 getImages API
+      if (task.artworkUri != null && task.artworkUri!.isNotEmpty) {
+        try {
+          artworkPath = await _downloadArtworkToTemp(task);
+          debugPrint(
+            '[DownloadsProvider] artwork downloaded from task: $artworkPath',
+          );
+        } catch (e) {
+          debugPrint(
+            '[DownloadsProvider] artwork download from task failed: $e',
+          );
+        }
+      }
+
+      // artworkUri 为空时，尝试通过酷狗 getImages API 获取封面
+      if (artworkPath == null) {
+        try {
+          final imgResult = await _api.getImages(task.songId);
+          final imgUrl =
+              imgResult?['img_url'] ??
+              imgResult?['imgurl'] ??
+              imgResult?['img_5'] ??
+              imgResult?['sizable_cover'];
+          if (imgUrl != null && imgUrl.toString().isNotEmpty) {
+            final tempDir = await getTemporaryDirectory();
+            final ext = _extFromUrl(imgUrl.toString()) ?? 'jpg';
+            final sep = Platform.pathSeparator;
+            final tempPath = '${tempDir.path}${sep}artwork_${task.songId}.$ext';
+            final cancel = CancelToken();
+            _artworkCancels[task.songId] = cancel;
+            try {
+              await _api.dio.download(
+                imgUrl.toString().replaceAll('{size}', '400'),
+                tempPath,
+                cancelToken: cancel,
+              );
+              artworkPath = tempPath;
+              debugPrint(
+                '[DownloadsProvider] artwork downloaded from getImages: $artworkPath',
+              );
+            } finally {
+              _artworkCancels.remove(task.songId);
+            }
+          }
+        } catch (e) {
+          debugPrint('[DownloadsProvider] getImages fallback failed: $e');
+        }
+      }
+
+      if (artworkPath == null) {
+        debugPrint(
+          '[DownloadsProvider] no artwork available for ${task.songId}',
+        );
+      }
+
+      // 2. 歌词：尝试从酷狗拉取（best-effort，失败也不影响嵌入）
+      // 注意：嵌入音频文件必须用标准 LRC 格式（[mm:ss.xx]歌词），
+      // 不能用 KRC 逐字格式（<start,duration,?>字），否则播放器无法解析。
+      String? lyrics;
+      try {
+        debugPrint(
+          '[DownloadsProvider] fetching lyric for hash=${task.songId}, title=${task.title}',
+        );
+        final lyric = await _api.getLyric(
+          task.songId,
+          songName: task.title,
+          fmt: 'lrc',
+        );
+        // 优先用 LRC 明文（标准格式），降级到原始 content
+        final raw = lyric?.displayLrcLyric ?? lyric?.content;
+        if (raw != null && raw.isNotEmpty) {
+          lyrics = raw;
+          debugPrint('[DownloadsProvider] lyric fetched: ${raw.length} chars');
+        } else {
+          debugPrint(
+            '[DownloadsProvider] lyric returned empty for ${task.songId}',
+          );
+        }
+      } catch (e) {
+        debugPrint('[DownloadsProvider] fetch lyric failed: $e');
+      }
+
+      // 3. 写入标签
+      debugPrint(
+        '[DownloadsProvider] calling writeMetadata: artwork=$artworkPath, '
+        'lyricsLen=${lyrics?.length ?? 0}',
+      );
+      final ok = await MetadataWriter.writeMetadata(
+        filePath: filePath,
+        title: task.title,
+        artist: task.artist,
+        album: task.album ?? '',
+        artworkPath: artworkPath,
+        lyrics: lyrics,
+      );
+      debugPrint('[DownloadsProvider] writeMetadata ok=$ok for ${task.songId}');
+
+      // 4. 清理临时封面文件
+      if (artworkPath != null) {
+        try {
+          await File(artworkPath).delete();
+          debugPrint('[DownloadsProvider] temp artwork deleted: $artworkPath');
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('[DownloadsProvider] embedMetadata unexpected error: $e');
+    }
+  }
+
+  /// 下载封面图到临时文件，返回本地路径。
+  /// 使用 KugouApiClient.dio 复用同一 Cookie/UA。
+  Future<String?> _downloadArtworkToTemp(DownloadTask task) async {
+    final tempDir = await getTemporaryDirectory();
+    final ext = _extFromUrl(task.artworkUri!) ?? 'jpg';
+    final sep = Platform.pathSeparator;
+    final path = '${tempDir.path}${sep}artwork_${task.songId}.$ext';
+    final cancel = CancelToken();
+    _artworkCancels[task.songId] = cancel;
+    try {
+      await _api.dio.download(task.artworkUri!, path, cancelToken: cancel);
+      return path;
+    } finally {
+      _artworkCancels.remove(task.songId);
+    }
+  }
+
+  String? _extFromUrl(String url) {
+    try {
+      final path = Uri.parse(url).path;
+      final dot = path.lastIndexOf('.');
+      if (dot < 0) return null;
+      final ext = path.substring(dot + 1).toLowerCase();
+      if (RegExp(r'^[a-z0-9]{2,4}$').hasMatch(ext)) return ext;
+    } catch (_) {}
+    return null;
   }
 }
