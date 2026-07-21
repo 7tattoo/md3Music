@@ -317,14 +317,14 @@ class DownloadsProvider extends ChangeNotifier {
         debugPrint('[DownloadsProvider] fetch lyric failed: $e');
       }
 
-      // 3. 写入标签
+      // 3. 写入标签（使用 displayName 剥离音频扩展名）
       debugPrint(
         '[DownloadsProvider] calling writeMetadata: artwork=$artworkPath, '
         'lyricsLen=${lyrics?.length ?? 0}',
       );
       final ok = await MetadataWriter.writeMetadata(
         filePath: filePath,
-        title: task.title,
+        title: task.displayName,
         artist: task.artist,
         album: task.album ?? '',
         artworkPath: artworkPath,
