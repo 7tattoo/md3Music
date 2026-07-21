@@ -355,9 +355,9 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
         children: [
           Expanded(child: _pages[_selectedIndex]),
           const MiniPlayer(),
-    );
+        ],
+      ),
   }
-
   /// 显示"退出 App"确认对话框。
   ///
   /// 点击退出按钮会触发：
