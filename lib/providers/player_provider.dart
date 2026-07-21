@@ -693,6 +693,126 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  /// 从播放列表中删除指定索引的歌曲。
+  ///
+  /// 同步更新 _playlist / _originalPlaylist / _currentIndex。
+  /// 底层 audio_service 队列的处理策略：
+  /// - 删除非当前歌曲：**不重建** audio_service 队列，避免打断当前播放。
+  ///   音频结束事件由 _handlePlaybackCompleted 监听，所有跳转/切歌都使用
+  ///   Dart 端 _playlist + _resolveAndPlayCurrentSong，不依赖 audio_service
+  ///   内部队列，因此陈旧的内部队列不会造成问题。
+  /// - 删除当前歌曲：必须重建 audio_service 队列并加载新当前歌曲。
+  /// - 列表清空：停止 audio_service。
+  /// 边界处理：
+  /// - 列表为空：清空所有播放状态
+  /// - 删除的是当前播放歌曲：自动切到同索引位置的新歌
+  /// - 删除的在当前歌曲之前：_currentIndex 前移
+  /// - 删除的在当前歌曲之后：索引不变
+  Future<void> removeFromPlaylist(int index) async {
+    if (index < 0 || index >= _playlist.length) return;
+
+    final removedSong = _playlist[index];
+    final wasCurrent = index == _currentIndex;
+
+    // 1. 维护 Dart 端列表
+    _playlist.removeAt(index);
+
+    // 同步 _originalPlaylist（shuffle 关闭时用于还原原始顺序）
+    final origIndex =
+        _originalPlaylist.indexWhere((s) => s.id == removedSong.id);
+    if (origIndex != -1) _originalPlaylist.removeAt(origIndex);
+
+    // 2. 维护当前播放索引
+    if (_playlist.isEmpty) {
+      _currentIndex = -1;
+      _currentSong = null;
+      _isPlaying = false;
+      _position = Duration.zero;
+      _duration = null;
+      _resolveError = null;
+    } else if (wasCurrent) {
+      // 删除的就是当前播放歌曲：跳到（原 index 处的）新歌
+      // index 可能在删除后越界，需要 clamp
+      _currentIndex = index.clamp(0, _playlist.length - 1);
+      _currentSong = _playlist[_currentIndex];
+      _resolveError = null;
+    } else if (index < _currentIndex) {
+      // 删除的在当前歌曲之前：索引前移
+      _currentIndex--;
+    }
+
+    // 3. 同步底层 audio_service 队列
+    if (_audioService == null) {
+      // 无 audio_service（初始化未完成），仅更新 Dart 端状态
+    } else if (_playlist.isEmpty) {
+      // 列表清空：停止播放
+      await _audioService!.stop();
+      _updateNotification();
+    } else if (wasCurrent) {
+      // 删除的是当前播放歌曲：必须重建队列并加载新当前歌曲
+      final sources = _playlist.map(_createAudioSource).toList();
+      await _audioService!.setPlaylist(
+        sources,
+        startIndex: _currentIndex >= 0 ? _currentIndex : 0,
+      );
+      if (_currentSong != null) {
+        await _resolveAndPlayCurrentSong();
+      }
+    }
+    // else: 删除非当前歌曲，不动 audio_service，避免打断当前播放
+    _updateNotification();
+
+    notifyListeners();
+  }
+
+  /// 重排播放列表中的歌曲顺序。
+  ///
+  /// 参数遵循 Flutter ReorderableListView 的约定：当 oldIndex < newIndex
+  /// 时，newIndex 需要 -1 才是实际插入位置。
+  ///
+  /// 只更新 Dart 端 _playlist / _originalPlaylist / _currentIndex，
+  /// **不重建** audio_service 队列。
+  /// 原理：项目所有切歌逻辑（_handlePlaybackCompleted → next() →
+  /// _resolveAndPlayCurrentSong）都使用 Dart 端 _currentIndex 和 _currentSong
+  /// 加载 URL，不依赖 audio_service 内部队列。audio_service 当前正在播放的
+  /// source 不会因为 _playlist 顺序变化而失效，重建反而会打断当前播放。
+  Future<void> reorderPlaylist(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= _playlist.length) return;
+
+    // ReorderableListView 的 newIndex 在 oldIndex 之前时需 -1 的标准处理
+    if (oldIndex < newIndex) newIndex -= 1;
+    if (oldIndex == newIndex) return;
+    if (newIndex < 0 || newIndex >= _playlist.length) return;
+
+    // 1. 维护 Dart 端列表
+    final song = _playlist.removeAt(oldIndex);
+    _playlist.insert(newIndex, song);
+
+    // 同步 _originalPlaylist：按相同偏移量调整
+    final origOld = _originalPlaylist.indexWhere((s) => s.id == song.id);
+    if (origOld != -1) {
+      _originalPlaylist.removeAt(origOld);
+      final origNew = origOld.clamp(0, _originalPlaylist.length);
+      _originalPlaylist.insert(origNew, song);
+    }
+
+    // 2. 维护当前播放索引
+    if (oldIndex == _currentIndex) {
+      // 拖动的是当前播放歌曲：索引跟随到新位置
+      _currentIndex = newIndex;
+    } else if (oldIndex < _currentIndex && newIndex >= _currentIndex) {
+      // 当前歌曲被「向后挤」一位
+      _currentIndex--;
+    } else if (oldIndex > _currentIndex && newIndex <= _currentIndex) {
+      // 当前歌曲被「向前挤」一位
+      _currentIndex++;
+    }
+
+    // 3. 不重建 audio_service 队列，避免打断当前播放
+    _updateNotification();
+    notifyListeners();
+  }
+
   Future<void> toggleLoopMode() async {
     switch (_loopMode) {
       case AppLoopMode.off:

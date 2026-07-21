@@ -17,6 +17,7 @@ import '../../widgets/apple_lyrics/apple_lyrics_view.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
 import '../../widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
+import '../../widgets/player_playlist_dialog.dart';
 import 'comments_view.dart';
 
 const List<AudioQuality> _audioQualities = [
@@ -124,7 +125,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       if (mounted) {
         // 优先取 KRC 明文（逐字），降级 LRC 明文（行级），最后降级 displayLyric
         final lyric = kugouProvider.lyric;
-        final lyricText = lyric?.displayKrcLyric ??
+        final lyricText =
+            lyric?.displayKrcLyric ??
             lyric?.displayLrcLyric ??
             lyric?.displayLyric ??
             '';
@@ -296,8 +298,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
           child: Image.network(
             artworkUri,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                const ColoredBox(color: Colors.black),
+            errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
           ),
         ),
       ),
@@ -309,9 +310,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   /// 颜色 rgba(0,0,0,0.35) 对应 `Color(0x59000000)`
   /// （0x59 = 89 ≈ 0.35 * 255）。
   Widget _buildDarkOverlay() {
-    return const Positioned.fill(
-      child: ColoredBox(color: Color(0x59000000)),
-    );
+    return const Positioned.fill(child: ColoredBox(color: Color(0x59000000)));
   }
 
   /// 迷你条布局（Task 19）：封面缩略图 + 标题/艺术家 + 播放/暂停 + 下一首 + 顶部进度条。
@@ -377,22 +376,28 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                               fit: BoxFit.cover,
                               placeholder: (_, _) => Container(
                                 color: colorScheme.surfaceContainerHighest,
-                                child: Icon(Icons.music_note,
-                                    size: 20,
-                                    color: colorScheme.onSurfaceVariant),
+                                child: Icon(
+                                  Icons.music_note,
+                                  size: 20,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                               errorWidget: (_, _, _) => Container(
                                 color: colorScheme.surfaceContainerHighest,
-                                child: Icon(Icons.music_note,
-                                    size: 20,
-                                    color: colorScheme.onSurfaceVariant),
+                                child: Icon(
+                                  Icons.music_note,
+                                  size: 20,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             )
                           : Container(
                               color: colorScheme.surfaceContainerHighest,
-                              child: Icon(Icons.music_note,
-                                  size: 20,
-                                  color: colorScheme.onSurfaceVariant),
+                              child: Icon(
+                                Icons.music_note,
+                                size: 20,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
                     ),
                   ),
@@ -413,20 +418,17 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                           currentSong.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                  color: colorScheme.onSurfaceVariant),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
                       ],
                     ),
                   ),
                   // 播放/暂停按钮（迷你条状态下也要能控制播放）
                   IconButton(
-                    icon: Icon(playerProvider.isPlaying
-                        ? Icons.pause
-                        : Icons.play_arrow),
+                    icon: Icon(
+                      playerProvider.isPlaying ? Icons.pause : Icons.play_arrow,
+                    ),
                     onPressed: () {
                       if (playerProvider.isPlaying) {
                         playerProvider.pause();
@@ -522,41 +524,50 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   final size = constraints.maxWidth.clamp(120.0, 300.0);
                   return Center(
                     child: SizedBox(
-                    width: size,
-                    height: size,
-                    // 横屏封面缩放动画（与竖屏一致，暂停 0.85 / 播放 1.0 带回弹）
-                    child: AnimatedScale(
-                      scale: playerProvider.isPlaying ? 1.0 : 0.85,
-                      duration: const Duration(milliseconds: 500),
-                      curve: Curves.easeOutBack,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: currentSong.artworkUri != null
-                            ? CachedNetworkImage(
-                                imageUrl: currentSong.artworkUri!,
-                                fit: BoxFit.cover,
-                                placeholder: (_, _) => Container(
-                                  color: Colors.white12,
-                                  child: Icon(Icons.music_note,
-                                    size: 48, color: Colors.white54),
+                      width: size,
+                      height: size,
+                      // 横屏封面缩放动画（与竖屏一致，暂停 0.85 / 播放 1.0 带回弹）
+                      child: AnimatedScale(
+                        scale: playerProvider.isPlaying ? 1.0 : 0.85,
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOutBack,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: currentSong.artworkUri != null
+                              ? CachedNetworkImage(
+                                  imageUrl: currentSong.artworkUri!,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, _) => Container(
+                                    color: Colors.white12,
+                                    child: Icon(
+                                      Icons.music_note,
+                                      size: 48,
+                                      color: Colors.white54,
+                                    ),
+                                  ),
+                                  errorWidget: (_, _, _) => Container(
+                                    color: Colors.white12,
+                                    child: Icon(
+                                      Icons.music_note,
+                                      size: 48,
+                                      color: Colors.white54,
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white12,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Icon(
+                                    Icons.music_note,
+                                    size: 48,
+                                    color: Colors.white54,
+                                  ),
                                 ),
-                                errorWidget: (_, _, _) => Container(
-                                  color: Colors.white12,
-                                  child: Icon(Icons.music_note,
-                                    size: 48, color: Colors.white54),
-                                ),
-                              )
-                            : Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white12,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Icon(Icons.music_note,
-                                    size: 48, color: Colors.white54),
-                              ),
+                        ),
                       ),
                     ),
-                  ),
                   );
                 },
               ),
@@ -572,7 +583,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: TabBar(
                     controller: _tabController,
-                    tabs: const [Tab(text: '封面'), Tab(text: '歌词'), Tab(text: '评论')],
+                    tabs: const [
+                      Tab(text: '封面'),
+                      Tab(text: '歌词'),
+                      Tab(text: '评论'),
+                    ],
                     labelStyle: Theme.of(context).textTheme.labelMedium,
                     // 模糊深色背景下用白色文字与指示器（不读 MD3 主题色）
                     labelColor: Colors.white,
@@ -592,16 +607,22 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                       GestureDetector(
                         onTap: () => _tabController.animateTo(1),
                         behavior: HitTestBehavior.opaque,
-                        child: _buildSongInfo(playerProvider, currentSong, colorScheme),
+                        child: _buildSongInfo(
+                          playerProvider,
+                          currentSong,
+                          colorScheme,
+                        ),
                       ),
                       _isLoadingLyrics
                           ? const Center(child: CircularProgressIndicator())
                           : AppleLyricsView(
                               lines: _parsedLyrics,
-                              currentTimeMs: playerProvider.position.inMilliseconds,
+                              currentTimeMs:
+                                  playerProvider.position.inMilliseconds,
                               isPlaying: playerProvider.isPlaying,
-                              onSeek: (ms) =>
-                                  playerProvider.seek(Duration(milliseconds: ms)),
+                              onSeek: (ms) => playerProvider.seek(
+                                Duration(milliseconds: ms),
+                              ),
                             ),
                       CommentsView(
                         songHash: currentSong.id,
@@ -615,7 +636,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                 // 控制区
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _buildControls(playerProvider, colorScheme, isExpanded: true),
+                  child: _buildControls(
+                    playerProvider,
+                    colorScheme,
+                    isExpanded: true,
+                  ),
                 ),
               ],
             ),
@@ -658,10 +683,12 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                           ? const Center(child: CircularProgressIndicator())
                           : AppleLyricsView(
                               lines: _parsedLyrics,
-                              currentTimeMs: playerProvider.position.inMilliseconds,
+                              currentTimeMs:
+                                  playerProvider.position.inMilliseconds,
                               isPlaying: playerProvider.isPlaying,
-                              onSeek: (ms) =>
-                                  playerProvider.seek(Duration(milliseconds: ms)),
+                              onSeek: (ms) => playerProvider.seek(
+                                Duration(milliseconds: ms),
+                              ),
                             ),
                       CommentsView(
                         songHash: currentSong.id,
@@ -719,7 +746,10 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down,
+                  color: Colors.white,
+                ),
                 // 点击下拉按钮 → 收起为迷你条（Task 19）
                 onPressed: _collapse,
               ),
@@ -878,10 +908,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             currentSong.displayName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: (isExpanded
-                    ? Theme.of(context).textTheme.titleMedium
-                    : Theme.of(context).textTheme.titleLarge)
-                ?.copyWith(color: Colors.white),
+            style:
+                (isExpanded
+                        ? Theme.of(context).textTheme.titleMedium
+                        : Theme.of(context).textTheme.titleLarge)
+                    ?.copyWith(color: Colors.white),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
@@ -889,9 +920,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             currentSong.artist,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white70,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.white70),
             textAlign: TextAlign.center,
           ),
           if (!isExpanded) const Spacer(),
@@ -915,10 +946,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
               currentSong.displayName,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(color: Colors.white),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(color: Colors.white),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
@@ -926,9 +956,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
               currentSong.artist,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.white70,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: Colors.white70),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 2),
@@ -936,9 +966,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
               currentSong.album,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white70,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.white70),
               textAlign: TextAlign.center,
             ),
           ],
@@ -993,9 +1023,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
           width: 40,
           child: Text(
             _formatDuration(position),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: Colors.white),
             textAlign: TextAlign.center,
           ),
         ),
@@ -1022,9 +1052,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
           width: 40,
           child: Text(
             _formatDuration(duration),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: Colors.white),
             textAlign: TextAlign.center,
           ),
         ),
@@ -1404,9 +1434,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: const LyricPreferencesPanel(),
-      ),
+      builder: (context) => SafeArea(child: const LyricPreferencesPanel()),
     );
   }
 
@@ -1598,83 +1626,14 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   }
 
   void _showPlaylist(PlayerProvider playerProvider) {
+    // AM 风格播放页：直接复用 PlayerPlaylistDialog（与 MD3 风格统一）
+    // - 圆角 / 背景色 / 拖拽排序 / 左滑删除全部一致
+    // - useDisplayName: true 让标题列显示 displayName（AM 风格习惯）
+    // - playerProvider 参数保留以匹配调用点签名，内部由 Provider.of 获取
     showDialog(
       context: context,
-      builder: (dialogContext) {
-        final playlist = playerProvider.playlist;
-        return AlertDialog(
-          title: const Center(child: Text('播放列表')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              playlist.isEmpty
-                  ? const Text('播放列表为空')
-                  : SizedBox(
-                      width: 300,
-                      height: 400,
-                      child: ListView.builder(
-                        itemCount: playlist.length,
-                        itemBuilder: (context, index) {
-                          final song = playlist[index];
-                          final isCurrent =
-                              index == playerProvider.currentIndex;
-                          return ListTile(
-                            leading: isCurrent
-                                ? const Icon(
-                                    Icons.play_arrow,
-                                    color: Colors.blue,
-                                  )
-                                : Text('${index + 1}'),
-                            title: Text(
-                              song.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: isCurrent ? FontWeight.bold : null,
-                                color: isCurrent ? Colors.blue : null,
-                              ),
-                            ),
-                            subtitle: Text(
-                              song.artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () {
-                              playerProvider.playSongAt(index);
-                              Navigator.pop(dialogContext);
-                            },
-                          );
-                        },
-                      ),
-                    ),
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: SizedBox(
-                  width: 300,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: playlist.isEmpty
-                            ? null
-                            : () {
-                                playerProvider.clearPlaylist();
-                                Navigator.pop(dialogContext);
-                              },
-                        child: const Text('清空'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        child: const Text('关闭'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (dialogContext) =>
+          const PlayerPlaylistDialog(useDisplayName: true),
     );
   }
 }
