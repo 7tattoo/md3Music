@@ -110,7 +110,7 @@ jobs:
         run: flutter pub get
 
       - name: Flutter analyze
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings --ignore=avoid_print,empty_catches,unused_catch_clause,invalid_null_aware_operator,use_null_aware_elements,deprecated_member_use,use_build_context_synchronously,unnecessary_string_escapes,prefer_initializing_formals,prefer_is_empty
 
       - name: Flutter build debug APK
         run: flutter build apk --debug

@@ -10,6 +10,7 @@
 /// 详见 spec.md "Requirement: 统一歌词模型" 与 tasks.md Task 5.3。
 library;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:md3music/widgets/apple_lyrics/models/lyric_line.dart';
 import 'package:md3music/widgets/apple_lyrics/parsers/krc_parser.dart';
 import 'package:md3music/widgets/apple_lyrics/parsers/lrc_parser.dart';
@@ -106,7 +107,7 @@ class LyricParserChain {
       List<LyricLine> lines, String translationText) {
     final translationLines = LrcParser.parse(translationText);
     // 诊断日志：确认翻译 LRC 解析结果
-    print('[LyriconDebug._mergeTranslation] '
+    debugPrint('[LyriconDebug._mergeTranslation] '
         'lines.len=${lines.length}, translationText.len=${translationText.length}, '
         'translationLines.len=${translationLines.length}, '
         'hasTimestamps=${translationLines.any((l) => l.startTime > 0)}');
@@ -142,7 +143,7 @@ class LyricParserChain {
           : lines[i].copyWith(translation: matched));
     }
     // 诊断日志：合并命中率
-    print('[LyriconDebug._mergeTranslation] matched=$matchedCount/${lines.length}');
+    debugPrint('[LyriconDebug._mergeTranslation] matched=$matchedCount/${lines.length}');
     return result;
   }
 
