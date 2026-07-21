@@ -571,10 +571,12 @@ class PlayerProvider extends ChangeNotifier {
 
   Future<void> pause() async {
     await _audioService?.pause();
+    _saveState();
   }
 
   Future<void> resume() async {
     await _audioService?.play();
+    _saveState();
   }
 
   Future<void> seek(Duration position) async {
@@ -586,6 +588,7 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     }
     await _audioService?.seek(position);
+    _saveState();
     // 同步进度到 Lyricon（仅 enabled 时推送，避免无意义 IPC；
     // seek 由用户拖动进度条或切歌/上一首/下一首触发，频率自然不高，无需额外节流）
     if (LyriconProviderService.instance.enabled) {
