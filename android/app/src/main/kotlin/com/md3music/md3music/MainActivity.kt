@@ -290,15 +290,6 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
-                "setDisplayRoma" -> {
-                    val enabled = call.argument<Boolean>("enabled") ?: false
-                    try {
-                        provider?.player?.setDisplayRoma(enabled)
-                        result.success(true)
-                    } catch (_: Exception) {
-                        result.success(false)
-                    }
-                }
                 else -> result.notImplemented()
             }
         }

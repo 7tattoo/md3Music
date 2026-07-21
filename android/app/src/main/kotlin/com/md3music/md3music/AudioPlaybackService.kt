@@ -117,10 +117,12 @@ class AudioPlaybackService : Service() {
             // 调试日志：让用户用 adb logcat -s LyriconDebug 验证实际数据
             // 关注点：lyrics.size 是否为 0；首行 begin/end 是否合法（begin < end）
             val first = lyrics.firstOrNull()
+            val withTranslation = lyrics.count { !it.translation.isNullOrEmpty() }
             android.util.Log.d("LyriconDebug",
                 "buildLyriconSong: name='${song.name}', artist='${song.artist}', " +
                 "duration=${song.duration}, lyrics.size=${lyrics.size}, " +
-                "first=${first?.let { "begin=${it.begin}, end=${it.end}, text='${it.text}', words=${it.words?.size ?: 0}" }}"
+                "withTranslation=$withTranslation, " +
+                "first=${first?.let { "begin=${it.begin}, end=${it.end}, text='${it.text}', translation='${it.translation}', words=${it.words?.size ?: 0}" }}"
             )
             return song
         }
@@ -165,6 +167,44 @@ class AudioPlaybackService : Service() {
             }
         } catch (_: Exception) {
             null
+        }
+
+        // 自动恢复用户上次保存的 Lyricon 启用状态：
+        // 冷启动后用户没播放前 provider 不存在，setEnabled 静默失败；
+        // 这里在 Service onCreate（首次 startForegroundService 即首次播放时）
+        // 创建 provider 后立即读 SharedPreferences 恢复 enabled，并通知 Dart
+        // 端通过 auto_restored 事件触发重推当前歌曲。
+        restoreLyriconStateIfNeeded()
+    }
+
+    /// 从 SharedPreferences 读取 flutter. 前缀的开关状态并恢复。
+    /// Flutter SharedPreferences 在 Android 端存储于 FlutterSharedPreferences.xml，
+    /// key 带 `flutter.` 前缀。
+    private fun restoreLyriconStateIfNeeded() {
+        val provider = lyriconProvider ?: run {
+            android.util.Log.w("LyriconDebug", "restoreLyriconStateIfNeeded: provider is null")
+            return
+        }
+        try {
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val enabled = prefs.getBoolean("flutter.lyricon_enabled", false)
+            val displayTranslation = prefs.getBoolean("flutter.lyricon_display_translation", true)
+            android.util.Log.d("LyriconDebug",
+                "restoreLyriconStateIfNeeded: enabled=$enabled, displayTranslation=$displayTranslation, " +
+                "channelSet=${lyriconChannel != null}")
+            if (enabled) {
+                provider.register()
+                android.util.Log.d("LyriconDebug", "restoreLyriconStateIfNeeded: provider.register() done")
+                // 通知 Dart 端：Provider 已自动恢复 enabled 状态
+                // 让 Dart 端同步 _state 并重推当前歌曲
+                lyriconChannel?.invokeMethod("onConnectionStateChanged", "auto_restored")
+            }
+            // 同步恢复 displayTranslation 偏好（Roma 已删除，不再恢复）
+            try { provider.player.setDisplayTranslation(displayTranslation) } catch (e: Exception) {
+                android.util.Log.w("LyriconDebug", "setDisplayTranslation failed: ${e.message}")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LyriconDebug", "restoreLyriconStateIfNeeded failed", e)
         }
     }
 

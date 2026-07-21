@@ -69,6 +69,13 @@ class LyriconProviderService {
       case 'reconnected':
         _state = LyriconConnectionState.connected;
         break;
+      case 'auto_restored':
+        // Kotlin 端在 AudioPlaybackService.onCreate 自动恢复后回调此事件。
+        // 这里直接进 connecting：Provider 已 register，但 Lyricon 中心服务
+        // 尚未回调 onConnected，等异步连接成功后再切到 connected。
+        // 同时让 PlayerProvider 监听到此状态变化后重推当前歌曲。
+        _state = LyriconConnectionState.connecting;
+        break;
       case 'disconnected':
         _state = LyriconConnectionState.disconnected;
         break;
@@ -233,13 +240,6 @@ class LyriconProviderService {
   Future<void> setDisplayTranslation(bool enabled) async {
     try {
       await _channel.invokeMethod('setDisplayTranslation', {'enabled': enabled});
-    } catch (_) {}
-  }
-
-  /// 切换罗马音显示。
-  Future<void> setDisplayRoma(bool enabled) async {
-    try {
-      await _channel.invokeMethod('setDisplayRoma', {'enabled': enabled});
     } catch (_) {}
   }
 }
