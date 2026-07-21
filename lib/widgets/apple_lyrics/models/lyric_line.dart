@@ -81,6 +81,27 @@ class LyricLine {
   /// 行结束时间 = [startTime] + [duration]。
   int get endTime => startTime + duration;
 
+  /// 复制并选择性覆盖部分字段。
+  ///
+  /// 主要供 [LyricParserChain] 合并翻译时使用：保留原行的 startTime / duration /
+  /// text / words 不变，仅替换 translation 字段。其余字段如需覆盖也可显式传入。
+  LyricLine copyWith({
+    int? startTime,
+    int? duration,
+    String? text,
+    List<LyricWord>? words,
+    String? translation,
+    bool clearTranslation = false,
+  }) {
+    return LyricLine(
+      startTime: startTime ?? this.startTime,
+      duration: duration ?? this.duration,
+      text: text ?? this.text,
+      words: words ?? this.words,
+      translation: clearTranslation ? null : (translation ?? this.translation),
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

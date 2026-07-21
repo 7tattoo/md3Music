@@ -50,7 +50,6 @@ class _SettingsPageState extends State<SettingsPage> {
   // Lyricon 词幕推送相关状态
   bool _lyriconEnabled = false;
   bool _lyriconDisplayTranslation = true;
-  bool _lyriconDisplayRoma = false;
 
   @override
   void initState() {
@@ -75,17 +74,15 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  /// 从 SettingsRepository 加载 Lyricon 三个偏好
+  /// 从 SettingsRepository 加载 Lyricon 偏好（主开关 + 翻译开关）
   Future<void> _loadLyriconSettings() async {
     final enabled = await _settingsRepository.getLyriconEnabled();
     final displayTranslation =
         await _settingsRepository.getLyriconDisplayTranslation();
-    final displayRoma = await _settingsRepository.getLyriconDisplayRoma();
     if (mounted) {
       setState(() {
         _lyriconEnabled = enabled;
         _lyriconDisplayTranslation = displayTranslation;
-        _lyriconDisplayRoma = displayRoma;
       });
     }
   }
@@ -94,7 +91,9 @@ class _SettingsPageState extends State<SettingsPage> {
   String _getLyriconStateText() {
     switch (LyriconProviderService.instance.state) {
       case LyriconConnectionState.disabled:
-        return '未启用';
+        // 用户已开启主开关但 Provider 还未恢复（Service 未启动），
+        // 提示用户播放一首歌即可触发自动恢复
+        return _lyriconEnabled ? '等待播放器启动...' : '未启用';
       case LyriconConnectionState.connecting:
         return '连接中...';
       case LyriconConnectionState.connected:
@@ -274,20 +273,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   });
                   LyriconProviderService.instance.setDisplayTranslation(value);
                   _settingsRepository.setLyriconDisplayTranslation(value);
-                }
-              : null,
-        ),
-        // 次级开关：罗马音（主开关关闭时禁用）
-        SwitchListTile(
-          title: const Text('罗马音'),
-          value: _lyriconDisplayRoma,
-          onChanged: _lyriconEnabled
-              ? (value) {
-                  setState(() {
-                    _lyriconDisplayRoma = value;
-                  });
-                  LyriconProviderService.instance.setDisplayRoma(value);
-                  _settingsRepository.setLyriconDisplayRoma(value);
                 }
               : null,
         ),

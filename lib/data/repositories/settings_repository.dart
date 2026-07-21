@@ -191,14 +191,4 @@ class SettingsRepository {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('lyricon_display_translation', v);
   }
-
-  Future<bool> getLyriconDisplayRoma() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('lyricon_display_roma') ?? false;
-  }
-
-  Future<void> setLyriconDisplayRoma(bool v) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('lyricon_display_roma', v);
-  }
 }
