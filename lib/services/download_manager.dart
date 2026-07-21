@@ -147,6 +147,7 @@ class DownloadManager {
   /// [quality] 参数用于确定正确的文件扩展名。
   Future<String> _buildFilePath(String dir, DownloadTask task, {String? quality}) async {
     final ext = _getExtFromQuality(quality) ?? _getExtFromUrl(task.downloadUrl);
+    print('[DownloadManager] _buildFilePath: quality=$quality, ext=$ext, url=${task.downloadUrl}');
     final safeArtist = _sanitize(task.artist);
     // 去掉标题中已带的音频扩展名，避免双后缀（如 "歌名.mp3" + ".flac"）
     final safeTitle = _sanitize(_stripAudioExtension(task.title));
@@ -172,10 +173,17 @@ class DownloadManager {
   Future<String> _fixFileExtension(String filePath) async {
     try {
       final file = File(filePath);
-      if (!await file.exists()) return filePath;
+      if (!await file.exists()) {
+        print('[DownloadManager] _fixFileExtension: file not found: $filePath');
+        return filePath;
+      }
 
       final bytes = await file.openRead(0, 12).first;
-      if (bytes.length < 4) return filePath;
+      if (bytes.length < 4) {
+        print('[DownloadManager] _fixFileExtension: file too small: $filePath');
+        return filePath;
+      }
+      print('[DownloadManager] _fixFileExtension: checking $filePath, first bytes: ${bytes.take(4).map((b) => b.toRadixString(16)).join(' ')}');
 
       // 检测实际格式
       String? actualExt;
@@ -207,7 +215,12 @@ class DownloadManager {
       final currentExt = filePath.substring(dotIdx + 1).toLowerCase();
 
       // 扩展名已正确，无需修改
-      if (currentExt == actualExt) return filePath;
+      if (currentExt == actualExt) {
+        print('[DownloadManager] _fixFileExtension: extension already correct: $currentExt');
+        return filePath;
+      }
+
+      print('[DownloadManager] _fixFileExtension: currentExt=$currentExt, actualExt=$actualExt, renaming...');
 
       // 替换扩展名（处理双后缀情况如 .mp3.flac → .flac）
       // 先去掉所有已知音频扩展名后缀
@@ -225,6 +238,7 @@ class DownloadManager {
         }
       }
       final newPath = '$baseName.$actualExt';
+      print('[DownloadManager] _fixFileExtension: renaming $filePath -> $newPath');
       await file.rename(newPath);
       return newPath;
     } catch (e) {

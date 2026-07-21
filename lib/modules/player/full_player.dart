@@ -965,14 +965,55 @@ class _FullPlayerState extends State<FullPlayer>
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('开始下载: ${song.title}'),
-        duration: const Duration(seconds: 2),
+    // 弹出音质选择对话框
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('下载: ${song.displayName ?? song.title}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(song.artist ?? '', style: Theme.of(ctx).textTheme.bodyMedium),
+            const SizedBox(height: 16),
+            Text('选择音质', style: Theme.of(ctx).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            _buildDownloadQualityOption(ctx, '标准音质 (128kbps)', '128', song, downloadsProvider),
+            _buildDownloadQualityOption(ctx, '高音质 (320kbps)', '320', song, downloadsProvider),
+            _buildDownloadQualityOption(ctx, '无损音质 (FLAC)', 'flac', song, downloadsProvider),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+        ],
       ),
     );
-    // 触发下载
-    downloadsProvider.downloadSong(song);
+  }
+
+  Widget _buildDownloadQualityOption(
+    BuildContext context,
+    String label,
+    String quality,
+    dynamic song,
+    DownloadsProvider provider,
+  ) {
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.music_note, size: 20),
+      title: Text(label, style: const TextStyle(fontSize: 14)),
+      onTap: () {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('开始下载: ${song.title}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        provider.downloadSong(song, quality: quality);
+      },
+    );
   }
 
   void _showMoreMenu(BuildContext context) {
