@@ -1005,9 +1005,10 @@ class _FullPlayerState extends State<FullPlayer>
       title: Text(label, style: const TextStyle(fontSize: 14)),
       onTap: () {
         Navigator.pop(context);
+        final displayName = song.displayName ?? song.title;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('开始下载: ${song.title}'),
+            content: Text('开始下载: $displayName'),
             duration: const Duration(seconds: 2),
           ),
         );

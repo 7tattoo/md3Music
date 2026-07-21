@@ -134,6 +134,12 @@ class SongListItem extends StatelessWidget {
       title: Text(label, style: const TextStyle(fontSize: 14)),
       onTap: () {
         Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('开始下载: ${song.displayName}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
         provider.downloadSong(song, quality: quality);
       },
     );
