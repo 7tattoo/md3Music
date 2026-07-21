@@ -856,15 +856,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _audioService!.stop();
       _updateNotification();
     } else if (wasCurrent) {
-      // 删除的是当前播放歌曲：必须重建队列并加载新当前歌曲
+      // 删除的是当前播放歌曲：重建队列并播放新当前歌曲
       final sources = _playlist.map(_createAudioSource).toList();
       await _audioService!.setPlaylist(
         sources,
         startIndex: _currentIndex >= 0 ? _currentIndex : 0,
       );
-      if (_currentSong != null) {
-        await _resolveAndPlayCurrentSong();
-      }
+      // setPlaylist 已经加载了 startIndex 对应的歌曲并设为 ready 状态，
+      // 直接 play 即可。不能调 _resolveAndPlayCurrentSong，因为它会调
+      // setUrl() 覆盖掉刚设好的队列，导致后续 next/prev 无法正常工作。
+      await _audioService!.seek(Duration.zero);
+      await _audioService!.play();
     }
     // else: 删除非当前歌曲，不动 audio_service，避免打断当前播放
     _updateNotification();

@@ -87,7 +87,8 @@ class _PlayerPlaylistDialogState extends State<PlayerPlaylistDialog> {
 
     // 每个列表项高度约 72px（ListTile 默认高度）
     const itemHeight = 72.0;
-    final targetOffset = (currentIndex * itemHeight) - 200.0; // 200px 大约是列表高度的一半
+    final viewportHeight = _scrollController.position.viewportDimension;
+    final targetOffset = (currentIndex * itemHeight) - (viewportHeight / 2) + (itemHeight / 2);
     final maxScroll = _scrollController.position.maxScrollExtent;
     final offset = targetOffset.clamp(0.0, maxScroll);
 
