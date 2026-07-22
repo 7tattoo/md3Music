@@ -1,6 +1,7 @@
 import 'dart:io' show exit;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'core/layout/responsive_layout.dart';
@@ -127,6 +128,22 @@ class _AppView extends StatelessWidget {
         useOledBlack: themeProvider.useOledBlack,
       ),
       themeMode: themeProvider.themeMode,
+      // 根据主题设置系统导航栏颜色
+      builder: (context, child) {
+        final brightness = Theme.of(context).brightness;
+        final surfaceColor = Theme.of(context).colorScheme.surface;
+        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
+          systemNavigationBarColor: surfaceColor,
+          systemNavigationBarIconBrightness: brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
+        ));
+        return child!;
+      },
       navigatorKey: appNavigatorKey,
       initialRoute: '/',
       routes: {

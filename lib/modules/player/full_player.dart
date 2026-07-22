@@ -185,9 +185,7 @@ class _FullPlayerState extends State<FullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
-    // 竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
-    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 16;
-
+    // 竖屏 edgeToEdge 模式：保持默认 padding
     return SafeArea(
       bottom: false,
       child: Column(
@@ -229,7 +227,7 @@ class _FullPlayerState extends State<FullPlayer>
             ),
           ),
           Padding(
-            padding: EdgeInsets.only(bottom: bottomPadding),
+            padding: const EdgeInsets.only(bottom: 16),
             child: _buildControls(playerProvider, colorScheme),
           ),
         ],
@@ -243,9 +241,7 @@ class _FullPlayerState extends State<FullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
-    // 竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
-    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 8;
-
+    // 横屏/竖屏 edgeToEdge 模式：保持默认 padding
     return SafeArea(
       bottom: false,
       child: Row(
@@ -379,7 +375,7 @@ class _FullPlayerState extends State<FullPlayer>
 
                 // 控制区：底部 padding 包含导航栏高度
                 Padding(
-                  padding: EdgeInsets.only(bottom: bottomPadding),
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: _buildControls(playerProvider, colorScheme, isExpanded: true),
                 ),
               ],
@@ -395,9 +391,7 @@ class _FullPlayerState extends State<FullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
-    // 竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
-    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 8;
-
+    // 横屏/竖屏 edgeToEdge 模式：保持默认 padding
     return SafeArea(
       bottom: false,
       child: Row(
@@ -525,7 +519,7 @@ class _FullPlayerState extends State<FullPlayer>
                 ),
                 // 底部 padding 包含导航栏高度
                 Padding(
-                  padding: EdgeInsets.only(bottom: bottomPadding),
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: _buildControls(playerProvider, colorScheme, isExpanded: true),
                 ),
               ],
