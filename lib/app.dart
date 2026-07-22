@@ -130,20 +130,7 @@ class _AppView extends StatelessWidget {
       themeMode: themeProvider.themeMode,
       // 根据主题设置系统导航栏颜色
       builder: (context, child) {
-        // 使用 addPostFrameCallback 确保在 build 完成后更新系统 UI
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!context.mounted) return;
-          final brightness = Theme.of(context).brightness;
-          final surfaceColor = Theme.of(context).colorScheme.surface;
-          final isDark = brightness == Brightness.dark;
-          SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-            systemNavigationBarColor: surfaceColor,
-            systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-          ));
-        });
-        return child!;
+        return _SystemUiUpdater(child: child!);
       },
       navigatorKey: appNavigatorKey,
       initialRoute: '/',
@@ -175,6 +162,40 @@ class _AppView extends StatelessWidget {
       },
     );
   }
+}
+
+/// 根据主题更新系统 UI（状态栏和导航栏颜色）
+class _SystemUiUpdater extends StatefulWidget {
+  final Widget child;
+
+  const _SystemUiUpdater({required this.child});
+
+  @override
+  State<_SystemUiUpdater> createState() => _SystemUiUpdaterState();
+}
+
+class _SystemUiUpdaterState extends State<_SystemUiUpdater> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateSystemUi();
+  }
+
+  void _updateSystemUi() {
+    final brightness = Theme.of(context).brightness;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final isDark = brightness == Brightness.dark;
+
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      systemNavigationBarColor: surfaceColor,
+      systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _MainLayout extends StatefulWidget {

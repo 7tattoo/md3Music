@@ -503,7 +503,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
-    // 竖屏 edgeToEdge 模式：保持默认 padding，不需要额外避让导航栏
+    // 竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 8;
+
     return SafeArea(
       bottom: false,
       child: Column(
@@ -545,7 +547,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: EdgeInsets.only(bottom: bottomPadding),
             child: _buildControls(playerProvider, colorScheme),
           ),
         ],
