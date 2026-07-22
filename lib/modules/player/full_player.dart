@@ -35,6 +35,10 @@ class _FullPlayerState extends State<FullPlayer>
   bool _isLoadingLyrics = false;
   String? _lastSongId;
 
+  // Pad 模式：左侧已有封面，隐藏"封面"Tab，只保留 2 个 Tab
+  bool _isPadMode = false;
+  int _currentTabLength = 3;
+
   @override
   void initState() {
     super.initState();
@@ -43,12 +47,42 @@ class _FullPlayerState extends State<FullPlayer>
     // 进入播放器时根据当前方向应用沉浸模式
     applyImmersiveForOrientation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPadMode();
       final song = context.read<PlayerProvider>().currentSong;
       if (song != null) {
         _fetchLyrics(song);
       }
       context.read<PlayerProvider>().addListener(_onPlayerSongChanged);
     });
+  }
+
+  /// 检测是否为 Pad 模式（宽度 >= 600），并动态调整 TabController
+  void _checkPadMode() {
+    if (!mounted) return;
+    final width = MediaQuery.sizeOf(context).width;
+    final shouldBePadMode = width >= 600;
+    final newTabLength = shouldBePadMode ? 2 : 3;
+
+    if (_currentTabLength != newTabLength) {
+      final currentIndex = _tabController.index.clamp(0, newTabLength - 1);
+      _tabController.dispose();
+      _currentTabLength = newTabLength;
+      _tabController = TabController(
+        length: newTabLength,
+        vsync: this,
+        initialIndex: shouldBePadMode && currentIndex == 0 ? 0 : currentIndex,
+      );
+      _isPadMode = shouldBePadMode;
+      setState(() {});
+    } else {
+      _isPadMode = shouldBePadMode;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkPadMode();
   }
 
   @override
@@ -151,7 +185,11 @@ class _FullPlayerState extends State<FullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
+    // 竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 16;
+
     return SafeArea(
+      bottom: false,
       child: Column(
         children: [
           _buildTopBar(),
@@ -191,7 +229,7 @@ class _FullPlayerState extends State<FullPlayer>
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: EdgeInsets.only(bottom: bottomPadding),
             child: _buildControls(playerProvider, colorScheme),
           ),
         ],
@@ -205,13 +243,14 @@ class _FullPlayerState extends State<FullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
-    // 横屏启用沉浸模式后系统栏隐藏，SafeArea 仅处理顶部安全区即可，
-    // bottom: false 让 Scaffold 背景色延伸到屏幕底部，避免出现黑色底框
+    // 竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 8;
+
     return SafeArea(
       bottom: false,
       child: Row(
         children: [
-          // ── 左侧：封面 ──
+          // ── 左侧：封面 + 歌曲信息 ──
           Expanded(
             flex: 4,
             child: Padding(
@@ -220,76 +259,106 @@ class _FullPlayerState extends State<FullPlayer>
                 builder: (context, constraints) {
                   // 横屏时封面最大不超过可用宽度，保持正方形
                   final size = constraints.maxWidth.clamp(120.0, 300.0);
-                  return Center(
-                    child: SizedBox(
-                      width: size,
-                      height: size,
-                      // 暂停缩放动画（与 AM 风格统一：播放 1.0 / 暂停 0.85 带回弹）
-                      child: AnimatedScale(
-                        scale: playerProvider.isPlaying ? 1.0 : 0.85,
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeOutBack,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: currentSong.artworkUri != null
-                              ? CachedNetworkImage(
-                                  imageUrl: currentSong.artworkUri!,
-                                  fit: BoxFit.cover,
-                                  placeholder: (_, _) => Container(
-                                    color: colorScheme.surfaceContainerHighest,
-                                    child: Icon(Icons.music_note,
-                                      size: 48, color: colorScheme.onSurfaceVariant),
-                                  ),
-                                  errorWidget: (_, _, _) => Container(
-                                    color: colorScheme.surfaceContainerHighest,
-                                    child: Icon(Icons.music_note,
-                                      size: 48, color: colorScheme.onSurfaceVariant),
-                                  ),
-                                )
-                              : Container(
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Icon(Icons.music_note,
-                                    size: 48, color: colorScheme.onSurfaceVariant),
-                                ),
+                  return Stack(
+                    children: [
+                      // 封面居中
+                      Center(
+                        child: SizedBox(
+                          width: size,
+                          height: size,
+                          child: AnimatedScale(
+                            scale: playerProvider.isPlaying ? 1.0 : 0.85,
+                            duration: const Duration(milliseconds: 500),
+                            curve: Curves.easeOutBack,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: currentSong.artworkUri != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: currentSong.artworkUri!,
+                                      fit: BoxFit.cover,
+                                      placeholder: (_, _) => Container(
+                                        color: colorScheme.surfaceContainerHighest,
+                                        child: Icon(Icons.music_note,
+                                          size: 48, color: colorScheme.onSurfaceVariant),
+                                      ),
+                                      errorWidget: (_, _, _) => Container(
+                                        color: colorScheme.surfaceContainerHighest,
+                                        child: Icon(Icons.music_note,
+                                          size: 48, color: colorScheme.onSurfaceVariant),
+                                      ),
+                                    )
+                                  : Container(
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(Icons.music_note,
+                                        size: 48, color: colorScheme.onSurfaceVariant),
+                                    ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      // 歌曲信息：垂直方向 80% 位置，水平居中
+                      Positioned(
+                        top: constraints.maxHeight * 0.8,
+                        left: 0,
+                        right: 0,
+                        child: Column(
+                          children: [
+                            Text(
+                              currentSong.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              currentSong.artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            Text(
+                              currentSong.album,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
             ),
           ),
-          // ── 右侧：Tab + 内容 + 控制 ──
+          // ── 右侧：TopBar + Tab + 内容 + 控制 ──
           Expanded(
             flex: 6,
             child: Column(
               children: [
-                // 标签栏（封面/歌词/评论）
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: TabBar(
-                    controller: _tabController,
-                    tabs: const [Tab(text: '封面'), Tab(text: '歌词'), Tab(text: '评论')],
-                    labelStyle: Theme.of(context).textTheme.labelMedium,
-                    indicatorSize: TabBarIndicatorSize.label,
-                    isScrollable: false,
-                    tabAlignment: TabAlignment.center,
-                  ),
-                ),
+                _buildTopBar(),
 
-                // 内容区（歌曲信息 / 歌词 / 评论）
+                // 内容区（歌词 / 评论，Pad 模式下无封面 Tab）
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      GestureDetector(
-                        onTap: () => _tabController.animateTo(1),
-                        behavior: HitTestBehavior.opaque,
-                        child: _buildSongInfo(playerProvider, currentSong, colorScheme),
-                      ),
+                      if (!_isPadMode)
+                        GestureDetector(
+                          onTap: () => _tabController.animateTo(1),
+                          behavior: HitTestBehavior.opaque,
+                          child: _buildSongInfo(playerProvider, currentSong, colorScheme),
+                        ),
                       _isLoadingLyrics
                           ? const Center(child: CircularProgressIndicator())
                           : LyricsView(
@@ -308,9 +377,9 @@ class _FullPlayerState extends State<FullPlayer>
                   ),
                 ),
 
-                // 控制区
+                // 控制区：底部 padding 包含导航栏高度
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: EdgeInsets.only(bottom: bottomPadding),
                   child: _buildControls(playerProvider, colorScheme, isExpanded: true),
                 ),
               ],
@@ -326,17 +395,104 @@ class _FullPlayerState extends State<FullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
+    // 竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 8;
+
     return SafeArea(
+      bottom: false,
       child: Row(
         children: [
           Expanded(
             flex: 4,
-            child: Center(
-              child: _buildArtworkView(
-                playerProvider,
-                currentSong,
-                colorScheme,
-                isExpanded: true,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final maxSize = (constraints.maxWidth - 32).clamp(0.0, 380.0);
+                  return Stack(
+                    children: [
+                      // 封面居中
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: maxSize,
+                            maxHeight: maxSize,
+                          ),
+                          child: AspectRatio(
+                            aspectRatio: 1,
+                            child: AnimatedScale(
+                              scale: playerProvider.isPlaying ? 1.0 : 0.85,
+                              duration: const Duration(milliseconds: 500),
+                              curve: Curves.easeOutBack,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: currentSong.artworkUri != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: currentSong.artworkUri!,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, _) => Container(
+                                          color: colorScheme.surfaceContainerHighest,
+                                          child: Icon(Icons.music_note,
+                                            size: 48, color: colorScheme.onSurfaceVariant),
+                                        ),
+                                        errorWidget: (_, _, _) => Container(
+                                          color: colorScheme.surfaceContainerHighest,
+                                          child: Icon(Icons.music_note,
+                                            size: 48, color: colorScheme.onSurfaceVariant),
+                                        ),
+                                      )
+                                    : Container(
+                                        decoration: BoxDecoration(
+                                          color: colorScheme.surfaceContainerHighest,
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        child: Icon(Icons.music_note,
+                                          size: 48, color: colorScheme.onSurfaceVariant),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 歌曲信息：垂直方向 80% 位置，水平居中
+                      Positioned(
+                        top: constraints.maxHeight * 0.8,
+                        left: 0,
+                        right: 0,
+                        child: Column(
+                          children: [
+                            Text(
+                              currentSong.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              currentSong.artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            Text(
+                              currentSong.album,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -349,7 +505,8 @@ class _FullPlayerState extends State<FullPlayer>
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      _buildSongInfo(playerProvider, currentSong, colorScheme),
+                      if (!_isPadMode)
+                        _buildSongInfo(playerProvider, currentSong, colorScheme),
                       _isLoadingLyrics
                           ? const Center(child: CircularProgressIndicator())
                           : LyricsView(
@@ -366,8 +523,11 @@ class _FullPlayerState extends State<FullPlayer>
                     ],
                   ),
                 ),
-                _buildControls(playerProvider, colorScheme, isExpanded: true),
-                const SizedBox(height: 8),
+                // 底部 padding 包含导航栏高度
+                Padding(
+                  padding: EdgeInsets.only(bottom: bottomPadding),
+                  child: _buildControls(playerProvider, colorScheme, isExpanded: true),
+                ),
               ],
             ),
           ),
@@ -377,6 +537,10 @@ class _FullPlayerState extends State<FullPlayer>
   }
 
   Widget _buildTopBar() {
+    final tabs = _isPadMode
+        ? const [Tab(text: '歌词'), Tab(text: '评论')]
+        : const [Tab(text: '封面'), Tab(text: '歌词'), Tab(text: '评论')];
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
@@ -388,11 +552,7 @@ class _FullPlayerState extends State<FullPlayer>
           Expanded(
             child: TabBar(
               controller: _tabController,
-              tabs: const [
-                Tab(text: '封面'),
-                Tab(text: '歌词'),
-                Tab(text: '评论'),
-              ],
+              tabs: tabs,
               labelStyle: Theme.of(context).textTheme.labelMedium,
               indicatorSize: TabBarIndicatorSize.label,
             ),
@@ -865,25 +1025,80 @@ class _FullPlayerState extends State<FullPlayer>
     showDialog(
       context: context,
       builder: (context) {
-        return SimpleDialog(
-          title: const Center(child: Text('播放速度')),
-          children: speeds.map((speed) {
-            return SimpleDialogOption(
-              onPressed: () {
-                playerProvider.setSpeed(speed);
-                Navigator.pop(context);
-              },
-              child: Text(
-                speed == 1.0 ? '1.0x (正常)' : '${speed}x',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: playerProvider.speed == speed
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
+        return StatefulBuilder(
+          builder: (context, setState) {
+            // 找到当前速度对应的索引
+            int currentIndex = speeds.indexOf(playerProvider.speed);
+            if (currentIndex == -1) currentIndex = 3; // 默认 1.0x
+
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 标题 + 当前倍速
+                      Text(
+                        '播放速度',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${speeds[currentIndex]}x',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // 横条滑块
+                      Slider(
+                        value: currentIndex.toDouble(),
+                        min: 0,
+                        max: (speeds.length - 1).toDouble(),
+                        divisions: speeds.length - 1,
+                        label: '${speeds[currentIndex]}x',
+                        onChanged: (value) {
+                          setState(() {
+                            currentIndex = value.round();
+                          });
+                          playerProvider.setSpeed(speeds[currentIndex]);
+                        },
+                      ),
+                      // 节点标签
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: speeds.map((s) {
+                          final isSelected = s == speeds[currentIndex];
+                          return Text(
+                            s == 1.0 ? '1x' : '${s}x',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      // 关闭按钮
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('关闭'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
-          }).toList(),
+          },
         );
       },
     );

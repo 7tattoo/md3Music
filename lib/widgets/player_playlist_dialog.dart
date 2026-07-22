@@ -103,17 +103,11 @@ class _PlayerPlaylistDialogState extends State<PlayerPlaylistDialog> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final theme = Theme.of(context);
-    final isLandscape = size.width > size.height;
 
     // 统一布局：Center + Material（居中 + 28 圆角）
-    // - 竖屏：300x500 居中（与音质选择 SimpleDialog 视觉一致）
-    // - 横屏：clamp(360, 500) x 0.9*size.height 居中
-    //   横屏宽度不超过屏幕 40%，避免遮挡左侧全屏播放页
-    //   高度占 90%，避开系统状态栏/手势条
-    // - 之前用 Stack + Positioned(right: 0) 横屏右半边布局，与 AlertDialog
-    //   居中习惯不符，破坏 AM 风格播放页的体验，已弃用。
-    final double width = isLandscape ? (size.width * 0.4).clamp(360, 500) : 300;
-    final double height = isLandscape ? size.height * 0.9 : 500;
+    // 宽度 60%，高度 60%，四方向均留 20% 余量
+    final double width = size.width * 0.6;
+    final double height = size.height * 0.6;
 
     return Center(
       child: Material(
@@ -123,8 +117,6 @@ class _PlayerPlaylistDialogState extends State<PlayerPlaylistDialog> {
         // - color: surface
         // - surfaceTintColor: surfaceTint（启用 M3 elevation tint 叠加）
         // - elevation: 6（SimpleDialog 默认值）
-        // 之前漏了 surfaceTintColor + elevation，渲染出"纯 surface"（更平更浅），
-        // 与 SimpleDialog 的"surface + 11% surfaceTint 叠加"色调不一致。
         color: theme.colorScheme.surface,
         surfaceTintColor: theme.colorScheme.surfaceTint,
         elevation: 6,
