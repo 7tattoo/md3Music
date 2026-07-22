@@ -19,9 +19,13 @@ import io.github.proify.lyricon.lyric.model.Song
 
 class MainActivity : FlutterActivity() {
     private val FLOATING_CHANNEL = "com.md3music.md3music/floating_lyric"
+    private val FOLDER_PICKER_CHANNEL = "com.md3music.md3music/folder_picker"
     private var pendingDesktopLyricAction: String? = null
+    private var folderPickerResult: MethodChannel.Result? = null
 
     companion object {
+        private const val FOLDER_PICKER_REQUEST_CODE = 9999
+
         // 静态引用：让 Service 也能调用 MethodChannel（无 FlutterEngine 缓存时走这里）
         private var cachedEngine: FlutterEngine? = null
         private var cachedChannel: MethodChannel? = null
@@ -303,6 +307,63 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+
+        // 注册文件夹选择器 MethodChannel
+        val folderPickerChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            FOLDER_PICKER_CHANNEL
+        )
+        folderPickerChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "pickFolder" -> {
+                    folderPickerResult = result
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                    }
+                    startActivityForResult(intent, FOLDER_PICKER_REQUEST_CODE)
+                }
+                "getPersistedUriPermission" -> {
+                    val treeUri = call.argument<String>("uri")
+                    if (treeUri != null) {
+                        try {
+                            val uri = Uri.parse(treeUri)
+                            contentResolver.takePersistableUriPermission(
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                            )
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("PERMISSION_ERROR", e.message, null)
+                        }
+                    } else {
+                        result.error("INVALID_URI", "URI is null", null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == FOLDER_PICKER_REQUEST_CODE) {
+            if (resultCode == RESULT_OK && data?.data != null) {
+                val treeUri = data.data!!
+                // 持久化 URI 权限
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        treeUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                } catch (_: Exception) {}
+                folderPickerResult?.success(treeUri.toString())
+            } else {
+                folderPickerResult?.success(null)
+            }
+            folderPickerResult = null
         }
     }
 

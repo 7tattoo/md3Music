@@ -17,6 +17,7 @@ import '../../widgets/apple_lyrics/apple_lyrics_view.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
 import '../../widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
+import '../../utils/landscape_immersive.dart';
 import '../../widgets/player_playlist_dialog.dart';
 import 'comments_view.dart';
 
@@ -66,6 +67,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
+    // 进入播放器时根据当前方向应用沉浸模式
+    applyImmersiveForOrientation();
     // 创建弹簧驱动 ticker（muted 机制自动处理路由不可见时暂停）
     _springTicker = createTicker(_onSpringTick);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -83,6 +86,12 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     if (song != null && song.id != _lastSongId) {
       _fetchLyrics(song);
     }
+  }
+
+  @override
+  void didChangeMetrics() {
+    // 用户旋转设备时重新应用沉浸模式
+    applyImmersiveForOrientation();
   }
 
   @override
@@ -104,6 +113,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     WidgetsBinding.instance.removeObserver(this);
     _springTicker.dispose();
     _tabController.dispose();
+    // 退出播放器时恢复系统栏显示
+    restoreSystemUi();
     super.dispose();
   }
 
@@ -1356,14 +1367,56 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('开始下载: ${song.title}'),
-        duration: const Duration(seconds: 2),
+    // 弹出音质选择对话框
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('下载: ${song.displayName ?? song.title}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(song.artist ?? '', style: Theme.of(ctx).textTheme.bodyMedium),
+            const SizedBox(height: 16),
+            Text('选择音质', style: Theme.of(ctx).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            _buildDownloadQualityOption(ctx, '标准音质 (128kbps)', '128', song, downloadsProvider),
+            _buildDownloadQualityOption(ctx, '高音质 (320kbps)', '320', song, downloadsProvider),
+            _buildDownloadQualityOption(ctx, '无损音质 (FLAC)', 'flac', song, downloadsProvider),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+        ],
       ),
     );
-    // 触发下载
-    downloadsProvider.downloadSong(song);
+  }
+
+  Widget _buildDownloadQualityOption(
+    BuildContext context,
+    String label,
+    String quality,
+    dynamic song,
+    DownloadsProvider provider,
+  ) {
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.music_note, size: 20),
+      title: Text(label, style: const TextStyle(fontSize: 14)),
+      onTap: () {
+        Navigator.pop(context);
+        final displayName = song.displayName ?? song.title;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('开始下载: $displayName'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        provider.downloadSong(song, quality: quality);
+      },
+    );
   }
 
   void _showMoreMenu(BuildContext context) {

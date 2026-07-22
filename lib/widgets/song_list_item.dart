@@ -53,7 +53,7 @@ class SongListItem extends StatelessWidget {
               onTap: () {
                 Navigator.pop(ctx);
                 final player = context.read<PlayerProvider>();
-                player.appendPlaylist([song]);
+                player.insertAfterCurrent([song]);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('已加入下一首'),
@@ -134,6 +134,12 @@ class SongListItem extends StatelessWidget {
       title: Text(label, style: const TextStyle(fontSize: 14)),
       onTap: () {
         Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('开始下载: ${song.displayName}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
         provider.downloadSong(song, quality: quality);
       },
     );

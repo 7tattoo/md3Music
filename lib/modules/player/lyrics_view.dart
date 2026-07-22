@@ -129,6 +129,18 @@ class LyricsViewState extends State<LyricsView> {
     final krcLineRegex = RegExp(r'^\[(\d+),(\d+)\](.*)$');
     // KRC 词时间标签：<offset,duration> 或 <offset,duration,property>
     final krcWordTag = RegExp(r'<(-?\d+),(-?\d+)(?:,-?\d+)?>');
+    // LRC offset 标签: [offset:+/-xxx]
+    final offsetRegex = RegExp(r'^\[offset:([+-]?\d+)\]');
+
+    // 先提取 offset（毫秒偏移量）
+    int offsetMs = 0;
+    for (final raw in lines) {
+      final offsetMatch = offsetRegex.firstMatch(raw.trim());
+      if (offsetMatch != null) {
+        offsetMs = int.tryParse(offsetMatch.group(1)!) ?? 0;
+        break;
+      }
+    }
 
     for (final raw in lines) {
       final line = raw.trim();
@@ -146,7 +158,7 @@ class LyricsViewState extends State<LyricsView> {
         _parsedLyrics.add(
           _LyricLine(
             timestamp: Duration(
-              milliseconds: minutes * 60000 + seconds * 1000 + millis,
+              milliseconds: minutes * 60000 + seconds * 1000 + millis - offsetMs,
             ),
             text: text,
           ),
@@ -162,7 +174,7 @@ class LyricsViewState extends State<LyricsView> {
         if (text.isEmpty) continue;
         _parsedLyrics.add(
           _LyricLine(
-            timestamp: Duration(milliseconds: startMs),
+            timestamp: Duration(milliseconds: startMs - offsetMs),
             text: text,
           ),
         );

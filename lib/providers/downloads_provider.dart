@@ -132,23 +132,22 @@ class DownloadsProvider extends ChangeNotifier {
   Future<void> downloadSong(Song song, {String quality = '128'}) async {
     if (isDownloading(song.id)) return;
 
-    String? downloadUrl = song.url;
-
-    if (downloadUrl == null || downloadUrl.isEmpty) {
-      try {
-        final result = await _api.getSongUrl(
-          song.id,
-          quality: quality,
-          albumId: song.albumId,
-          albumAudioId: song.albumAudioId,
-        );
-        if (result != null && result.url.isNotEmpty) {
-          downloadUrl = result.url;
-        }
-      } catch (e) {
-        debugPrint('[DownloadsProvider] getSongUrl failed: $e');
-        return;
+    // 始终调用 API 获取指定音质的下载链接，不使用 song.url 缓存
+    // 因为播放时获取的 URL 可能是最高音质（VIP 用户），与用户选择的音质不一致
+    String? downloadUrl;
+    try {
+      final result = await _api.getSongUrl(
+        song.id,
+        quality: quality,
+        albumId: song.albumId,
+        albumAudioId: song.albumAudioId,
+      );
+      if (result != null && result.url.isNotEmpty) {
+        downloadUrl = result.url;
       }
+    } catch (e) {
+      debugPrint('[DownloadsProvider] getSongUrl failed: $e');
+      return;
     }
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
@@ -169,7 +168,7 @@ class DownloadsProvider extends ChangeNotifier {
 
     await _repository.saveTask(task);
     final dir = await _resolveDownloadDir();
-    _manager.download(task, dir);
+    _manager.download(task, dir, quality: quality);
   }
 
   void cancelDownload(String songId) {
@@ -318,14 +317,14 @@ class DownloadsProvider extends ChangeNotifier {
         debugPrint('[DownloadsProvider] fetch lyric failed: $e');
       }
 
-      // 3. 写入标签
+      // 3. 写入标签（使用 displayName 剥离音频扩展名）
       debugPrint(
         '[DownloadsProvider] calling writeMetadata: artwork=$artworkPath, '
         'lyricsLen=${lyrics?.length ?? 0}',
       );
       final ok = await MetadataWriter.writeMetadata(
         filePath: filePath,
-        title: task.title,
+        title: task.displayName,
         artist: task.artist,
         album: task.album ?? '',
         artworkPath: artworkPath,

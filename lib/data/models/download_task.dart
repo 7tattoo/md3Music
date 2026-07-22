@@ -13,6 +13,13 @@ class DownloadTask {
   final double progress;
   final String? error;
 
+  /// 剥离音频文件扩展名的标题（用于 UI 显示和元数据嵌入）。
+  String get displayName {
+    final pattern = RegExp(r'\.(mp3|flac|wav|ape|m4a|ogg|aac|wma|opus)$',
+        caseSensitive: false);
+    return title.replaceFirst(pattern, '');
+  }
+
   const DownloadTask({
     required this.songId,
     required this.title,

@@ -16,6 +16,12 @@ class DownloadsPage extends StatefulWidget {
 }
 
 class _DownloadsPageState extends State<DownloadsPage> {
+  /// 剥离歌曲标题中的音频扩展名（如 "Style.mp3" → "Style"）
+  String _stripAudioExtension(String name) {
+    final pattern = RegExp(r'\.(mp3|flac|aac|ogg|wav|m4a)$', caseSensitive: false);
+    return name.replaceFirst(pattern, '');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -82,7 +88,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
     return ListTile(
       leading: _buildArtwork(task.artworkUri, cs),
       title: Text(
-        task.title,
+        _stripAudioExtension(task.title),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -114,7 +120,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
     return ListTile(
       leading: _buildArtwork(task.artworkUri, cs),
       title: Text(
-        task.title,
+        _stripAudioExtension(task.title),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

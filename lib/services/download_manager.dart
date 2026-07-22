@@ -28,7 +28,8 @@ class DownloadManager {
 
   /// 下载文件到 [downloadDir]。
   /// 文件名格式：`${artist} - ${title}.${ext}`，同名自动追加 ` (2)` / ` (3)` 序号。
-  Future<void> download(DownloadTask task, String downloadDir) async {
+  /// [quality] 参数用于确定正确的文件扩展名（如 'flac' → .flac, '128' → .mp3）。
+  Future<void> download(DownloadTask task, String downloadDir, {String? quality}) async {
     if (_cancelTokens.containsKey(task.songId)) {
       return;
     }
@@ -41,7 +42,7 @@ class DownloadManager {
 
     try {
       await ensureDir(downloadDir);
-      var filePath = await _buildFilePath(downloadDir, task);
+      var filePath = await _buildFilePath(downloadDir, task, quality: quality);
 
       await _dio.download(
         task.downloadUrl,
@@ -143,8 +144,10 @@ class DownloadManager {
   }
 
   /// 构造下载文件路径：`${artist} - ${title}.${ext}`，同名追加序号。
-  Future<String> _buildFilePath(String dir, DownloadTask task) async {
-    final ext = _getExtFromUrl(task.downloadUrl);
+  /// [quality] 参数用于确定正确的文件扩展名。
+  Future<String> _buildFilePath(String dir, DownloadTask task, {String? quality}) async {
+    final ext = _getExtFromQuality(quality) ?? _getExtFromUrl(task.downloadUrl);
+    print('[DownloadManager] _buildFilePath: quality=$quality, ext=$ext, url=${task.downloadUrl}');
     final safeArtist = _sanitize(task.artist);
     // 去掉标题中已带的音频扩展名，避免双后缀（如 "歌名.mp3" + ".flac"）
     final safeTitle = _sanitize(_stripAudioExtension(task.title));
@@ -170,10 +173,17 @@ class DownloadManager {
   Future<String> _fixFileExtension(String filePath) async {
     try {
       final file = File(filePath);
-      if (!await file.exists()) return filePath;
+      if (!await file.exists()) {
+        print('[DownloadManager] _fixFileExtension: file not found: $filePath');
+        return filePath;
+      }
 
       final bytes = await file.openRead(0, 12).first;
-      if (bytes.length < 4) return filePath;
+      if (bytes.length < 4) {
+        print('[DownloadManager] _fixFileExtension: file too small: $filePath');
+        return filePath;
+      }
+      print('[DownloadManager] _fixFileExtension: checking $filePath, first bytes: ${bytes.take(4).map((b) => b.toRadixString(16)).join(' ')}');
 
       // 检测实际格式
       String? actualExt;
@@ -205,7 +215,12 @@ class DownloadManager {
       final currentExt = filePath.substring(dotIdx + 1).toLowerCase();
 
       // 扩展名已正确，无需修改
-      if (currentExt == actualExt) return filePath;
+      if (currentExt == actualExt) {
+        print('[DownloadManager] _fixFileExtension: extension already correct: $currentExt');
+        return filePath;
+      }
+
+      print('[DownloadManager] _fixFileExtension: currentExt=$currentExt, actualExt=$actualExt, renaming...');
 
       // 替换扩展名（处理双后缀情况如 .mp3.flac → .flac）
       // 先去掉所有已知音频扩展名后缀
@@ -223,6 +238,7 @@ class DownloadManager {
         }
       }
       final newPath = '$baseName.$actualExt';
+      print('[DownloadManager] _fixFileExtension: renaming $filePath -> $newPath');
       await file.rename(newPath);
       return newPath;
     } catch (e) {
@@ -258,6 +274,16 @@ class DownloadManager {
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     return cleaned.isEmpty ? 'unknown' : cleaned;
+  }
+
+  /// 根据音质参数确定文件扩展名。
+  ///
+  /// - 'flac' → 'flac'
+  /// - '128' / '320' / 其他 → 'mp3'
+  String? _getExtFromQuality(String? quality) {
+    if (quality == null) return null;
+    if (quality.toLowerCase() == 'flac') return 'flac';
+    return 'mp3';
   }
 
   String _getExtFromUrl(String url) {

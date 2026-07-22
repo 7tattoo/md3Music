@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart' as just_audio;
 import 'package:provider/provider.dart';
 
@@ -10,6 +11,7 @@ import '../core/services/lyricon_provider_service.dart';
 import '../core/services/media_notification_service.dart';
 import '../data/models/song.dart';
 import '../data/repositories/history_repository.dart';
+import '../data/repositories/player_state_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import '../main.dart';
 import '../widgets/apple_lyrics/models/lyric_line.dart';
@@ -30,7 +32,7 @@ enum AudioQuality {
   final String label;
 }
 
-class PlayerProvider extends ChangeNotifier {
+class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Song? _currentSong;
   bool _isPlaying = false;
   Duration _position = Duration.zero;
@@ -81,7 +83,14 @@ class PlayerProvider extends ChangeNotifier {
   // 歌词异步拉取的竞态 token：每次切歌自增，过期结果被丢弃
   int _lyriconFetchToken = 0;
 
+  // —— 播放状态持久化 ——
+  final _stateRepo = PlayerStateRepository();
+  bool _stateRestored = false;
+  // 保存防抖计时器：避免 positionStream 每 200ms 都写磁盘
+  Timer? _saveDebounce;
+
   PlayerProvider() {
+    WidgetsBinding.instance.addObserver(this);
     _initAudioService();
     // 监听自身变化检测切歌 → 推送 Lyricon（仅 enabled 时实际推送）
     addListener(_handleLyriconSongChange);
@@ -108,6 +117,8 @@ class PlayerProvider extends ChangeNotifier {
       await _audioService.init();
       _initStreams();
       await _loadDefaultQuality();
+      // 恢复上次播放状态
+      await _restoreState();
     } catch (e) {}
   }
 
@@ -129,6 +140,66 @@ class PlayerProvider extends ChangeNotifier {
     return AudioServiceLoader.load();
   }
 
+  /// 冷启动恢复上次播放状态：加载歌曲、播放列表、恢复位置。
+  Future<void> _restoreState() async {
+    if (_stateRestored) return;
+    _stateRestored = true;
+    try {
+      final state = await _stateRepo.restoreState();
+      if (state == null) return;
+
+      _currentSong = state.currentSong;
+      _playlist = List.from(state.playlist);
+      _originalPlaylist = List.from(state.playlist);
+      _currentIndex = state.currentIndex;
+      _loopMode = AppLoopMode.values.firstWhere(
+        (m) => m.name == state.loopMode,
+        orElse: () => AppLoopMode.off,
+      );
+      _shuffleEnabled = state.shuffleEnabled;
+      _position = Duration.zero; // 先置零，等 setUrl 成功后 seek 到目标位置
+
+      // 设置循环模式
+      if (_audioService != null) {
+        await _audioService.setLoopMode(_loopMode == AppLoopMode.one
+            ? just_audio.LoopMode.one
+            : _loopMode == AppLoopMode.all
+                ? just_audio.LoopMode.all
+                : just_audio.LoopMode.off);
+        await _audioService.setShuffleModeEnabled(_shuffleEnabled);
+      }
+
+      // 构建播放源并 seek 到保存的位置（不自动播放，等用户手动触发）
+      final ok = await _resolveAndPlayCurrentSong(seekTo: state.position, play: false);
+      if (ok) {
+        _position = state.position;
+      }
+      notifyListeners();
+    } catch (e) {}
+  }
+
+  /// 防抖保存播放状态：positionStream 每 200ms 触发一次，
+  /// 用 3 秒防抖避免频繁写磁盘，仅保存关键字段。
+  void _scheduleSave() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 3), _saveState);
+  }
+
+  /// 立即保存播放状态（切歌、暂停、循环模式变更时调用）。
+  void _saveState() {
+    _saveDebounce?.cancel();
+    try {
+      _stateRepo.saveState(
+        currentSong: _currentSong,
+        playlist: _playlist,
+        currentIndex: _currentIndex,
+        position: _position,
+        loopMode: _loopMode.name,
+        shuffleEnabled: _shuffleEnabled,
+      );
+    } catch (_) {}
+  }
+
   void _initStreams() {
     if (_audioService == null || !_audioInitialized) return;
 
@@ -137,6 +208,8 @@ class PlayerProvider extends ChangeNotifier {
         _position = position;
         _updateNotificationPosition();
         notifyListeners();
+        // 防抖保存位置（3 秒）
+        _scheduleSave();
         // 直接转发给 Lyricon，无节流。
         // positionStream 本身就是 ~200ms 周期（just_audio 默认），是天然节流。
         // MethodChannel 是异步的，不阻塞 Dart UI；setPosition 是 fire-and-forget。
@@ -263,6 +336,7 @@ class PlayerProvider extends ChangeNotifier {
     _position = Duration.zero;
     _recordHistory(song);
     _updateNotification();
+    _saveState();
     notifyListeners();
 
     if (_audioService != null) {
@@ -287,6 +361,7 @@ class PlayerProvider extends ChangeNotifier {
     _position = Duration.zero;
     _recordHistory(song);
     _updateNotification();
+    _saveState();
     notifyListeners();
 
     try {
@@ -304,6 +379,7 @@ class PlayerProvider extends ChangeNotifier {
         _currentSong = resolvedSong;
         _playlist = [resolvedSong];
         _isResolvingUrl = false;
+        _saveState();
         notifyListeners();
 
         if (_audioService != null) {
@@ -333,6 +409,7 @@ class PlayerProvider extends ChangeNotifier {
     _resolveError = null;
     _position = Duration.zero;
     _recordHistory(songs[startIndex]);
+    _saveState();
     notifyListeners();
 
     if (_currentSong!.isOnline && _currentSong!.url == null) {
@@ -496,10 +573,12 @@ class PlayerProvider extends ChangeNotifier {
 
   Future<void> pause() async {
     await _audioService?.pause();
+    _saveState();
   }
 
   Future<void> resume() async {
     await _audioService?.play();
+    _saveState();
   }
 
   Future<void> seek(Duration position) async {
@@ -511,6 +590,7 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     }
     await _audioService?.seek(position);
+    _saveState();
     // 同步进度到 Lyricon（仅 enabled 时推送，避免无意义 IPC；
     // seek 由用户拖动进度条或切歌/上一首/下一首触发，频率自然不高，无需额外节流）
     if (LyriconProviderService.instance.enabled) {
@@ -520,7 +600,7 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> _resolveAndPlayCurrentSong() async {
+  Future<bool> _resolveAndPlayCurrentSong({Duration? seekTo, bool play = true}) async {
     if (_currentSong == null) return false;
 
     if (_currentSong!.isOnline && _currentSong!.url == null) {
@@ -561,7 +641,7 @@ class PlayerProvider extends ChangeNotifier {
           ? _currentSong!.url
           : _currentSong!.localPath;
       if (playbackUrl != null && playbackUrl.isNotEmpty) {
-        await _setUrlAndPlay(playbackUrl);
+        await _setUrlAndPlay(playbackUrl, seekTo: seekTo, playAfter: play);
       }
     }
     return true;
@@ -588,6 +668,7 @@ class PlayerProvider extends ChangeNotifier {
     _resolveError = null;
     _position = Duration.zero; // 切歌时重置位置，避免恢复时跳到上一首的进度
     _updateNotification();
+    _saveState();
 
     final ok = await _resolveAndPlayCurrentSong();
     if (!ok) {
@@ -620,10 +701,12 @@ class PlayerProvider extends ChangeNotifier {
       _position = Duration.zero;
 
       if (await _resolveAndPlayCurrentSong()) {
+        _saveState();
         return;
       }
       _resolveError = '无法获取播放链接';
     }
+    _saveState();
     notifyListeners();
   }
 
@@ -634,6 +717,7 @@ class PlayerProvider extends ChangeNotifier {
     _currentSong = _playlist[index];
     _resolveError = null;
     _position = Duration.zero;
+    _saveState();
     notifyListeners();
 
     await _resolveAndPlayCurrentSong();
@@ -649,6 +733,7 @@ class PlayerProvider extends ChangeNotifier {
     _position = Duration.zero;
     _duration = null;
     _resolveError = null;
+    _stateRepo.clearState();
     _updateNotification();
     notifyListeners();
   }
@@ -672,6 +757,46 @@ class PlayerProvider extends ChangeNotifier {
       }
       _prefetchNextSongs(_currentIndex);
     }
+  }
+
+  /// 在当前播放歌曲之后插入歌曲（"下一首播放"功能）。
+  Future<void> insertAfterCurrent(List<Song> songs) async {
+    if (_playlist.isEmpty || _currentIndex < 0) {
+      // 播放列表为空，直接追加
+      await appendPlaylist(songs);
+      return;
+    }
+
+    final newSongs = <Song>[];
+    final insertIndex = _currentIndex + 1;
+    for (final song in songs) {
+      if (!_playlist.any((s) => s.id == song.id)) {
+        newSongs.add(song);
+      }
+    }
+
+    if (newSongs.isEmpty) return;
+
+    // 在当前歌曲之后插入
+    _playlist.insertAll(insertIndex, newSongs);
+    // 同步 originalPlaylist
+    _originalPlaylist.insertAll(
+      (_originalPlaylist.indexWhere((s) => s.id == _playlist[_currentIndex].id) + 1).clamp(0, _originalPlaylist.length),
+      newSongs,
+    );
+    notifyListeners();
+
+    // 重建 audio_service 队列以反映新顺序
+    if (_audioService != null && _currentSong != null) {
+      final sources = _playlist
+          .map((song) => _createAudioSource(song))
+          .toList();
+      await _audioService.setPlaylist(sources, startIndex: _currentIndex);
+      // seek 到当前位置，保持播放连续性
+      await _audioService.seek(_position);
+      if (_isPlaying) await _audioService.play();
+    }
+    _prefetchNextSongs(_currentIndex);
   }
 
   /// 从播放列表中删除指定索引的歌曲。
@@ -731,15 +856,29 @@ class PlayerProvider extends ChangeNotifier {
       await _audioService!.stop();
       _updateNotification();
     } else if (wasCurrent) {
-      // 删除的是当前播放歌曲：必须重建队列并加载新当前歌曲
+      // 删除的是当前播放歌曲：先解析新当前歌曲的 URL，再重建队列播放
+      if (_currentSong != null && _currentSong!.isOnline && _currentSong!.url == null) {
+        try {
+          final result = await KugouApiClient().getSongUrl(
+            _currentSong!.id,
+            quality: _audioQuality.value,
+            albumId: _currentSong!.albumId,
+            albumAudioId: _currentSong!.albumAudioId,
+          );
+          if (result != null && result.url.isNotEmpty) {
+            final resolvedSong = _currentSong!.copyWith(url: result.url);
+            _currentSong = resolvedSong;
+            _playlist[_currentIndex] = resolvedSong;
+          }
+        } catch (_) {}
+      }
       final sources = _playlist.map(_createAudioSource).toList();
       await _audioService!.setPlaylist(
         sources,
         startIndex: _currentIndex >= 0 ? _currentIndex : 0,
       );
-      if (_currentSong != null) {
-        await _resolveAndPlayCurrentSong();
-      }
+      await _audioService!.seek(Duration.zero);
+      await _audioService!.play();
     }
     // else: 删除非当前歌曲，不动 audio_service，避免打断当前播放
     _updateNotification();
@@ -807,6 +946,7 @@ class PlayerProvider extends ChangeNotifier {
         _loopMode = AppLoopMode.off;
         break;
     }
+    _saveState();
     notifyListeners();
   }
 
@@ -829,6 +969,7 @@ class PlayerProvider extends ChangeNotifier {
         if (_currentIndex < 0) _currentIndex = 0;
       }
     }
+    _saveState();
     notifyListeners();
   }
 
@@ -1024,8 +1165,9 @@ class PlayerProvider extends ChangeNotifier {
             // 复用 LyricParserChain 自动识别 KRC/LRC/纯文本（与
             // DesktopLyricService 同一解析入口，不重复实现解析逻辑）
             final text = kugou.lyric?.displayLyric;
+            final translationText = kugou.lyric?.translatedContent;
             if (text != null && text.isNotEmpty) {
-              lines = LyricParserChain.parse(text);
+              lines = LyricParserChain.parse(text, translationText: translationText);
             }
           } catch (_) {}
         }
@@ -1043,7 +1185,21 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      // App 进入后台或即将被杀死，立即保存播放状态
+      _saveState();
+      _saveDebounce?.cancel();
+    }
+  }
+
+  @override
   void dispose() {
+    _saveState(); // 退出时立即保存
+    _saveDebounce?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     removeListener(_handleLyriconSongChange);
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
