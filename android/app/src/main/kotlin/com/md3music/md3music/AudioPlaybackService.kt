@@ -13,6 +13,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.os.Handler
+import android.os.Looper
 import android.graphics.Typeface
 import android.os.Build
 import android.os.IBinder
@@ -84,6 +86,17 @@ class AudioPlaybackService : Service() {
             lyriconChannel = channel
         }
 
+        /** 在主线程安全调用 lyriconChannel.invokeMethod，避免 SDK 回调在后台线程触发崩溃 */
+        private fun invokeLyriconChannelOnMain(method: String, argument: Any?) {
+            val channel = lyriconChannel ?: return
+            val handler = Handler(Looper.getMainLooper())
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                channel.invokeMethod(method, argument)
+            } else {
+                handler.post { channel.invokeMethod(method, argument) }
+            }
+        }
+
         fun getLyriconProvider(): LyriconProvider? = lyriconProvider
 
         /** 由 MainActivity 的 lyricon channel handler 调用，把 Dart 端 Map 转成 SDK 的 Song */
@@ -151,16 +164,16 @@ class AudioPlaybackService : Service() {
                     // SDK 的 ConnectionListener 是 interface，必须用 object 表达式实现
                     service.addConnectionListener(object : ConnectionListener {
                         override fun onConnected(provider: LyriconProvider) {
-                            lyriconChannel?.invokeMethod("onConnectionStateChanged", "connected")
+                            invokeLyriconChannelOnMain("onConnectionStateChanged", "connected")
                         }
                         override fun onReconnected(provider: LyriconProvider) {
-                            lyriconChannel?.invokeMethod("onConnectionStateChanged", "reconnected")
+                            invokeLyriconChannelOnMain("onConnectionStateChanged", "reconnected")
                         }
                         override fun onDisconnected(provider: LyriconProvider) {
-                            lyriconChannel?.invokeMethod("onConnectionStateChanged", "disconnected")
+                            invokeLyriconChannelOnMain("onConnectionStateChanged", "disconnected")
                         }
                         override fun onConnectTimeout(provider: LyriconProvider) {
-                            lyriconChannel?.invokeMethod("onConnectionStateChanged", "timeout")
+                            invokeLyriconChannelOnMain("onConnectionStateChanged", "timeout")
                         }
                     })
                 } catch (_: Exception) {}
@@ -197,7 +210,7 @@ class AudioPlaybackService : Service() {
                 android.util.Log.d("LyriconDebug", "restoreLyriconStateIfNeeded: provider.register() done")
                 // 通知 Dart 端：Provider 已自动恢复 enabled 状态
                 // 让 Dart 端同步 _state 并重推当前歌曲
-                lyriconChannel?.invokeMethod("onConnectionStateChanged", "auto_restored")
+                invokeLyriconChannelOnMain("onConnectionStateChanged", "auto_restored")
             }
             // 同步恢复 displayTranslation 偏好（Roma 已删除，不再恢复）
             try { provider.player.setDisplayTranslation(displayTranslation) } catch (e: Exception) {
