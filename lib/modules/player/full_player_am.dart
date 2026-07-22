@@ -504,7 +504,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     ColorScheme colorScheme,
   ) {
     // 竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
-    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 8;
+    // 使用 viewPadding.bottom 和固定最小值 32 确保控件不被遮挡
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 32;
 
     return SafeArea(
       bottom: false,
@@ -561,7 +562,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
-    // 横屏/竖屏 edgeToEdge 模式：保持默认 padding
+    // 横屏/竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 8;
+
     return SafeArea(
       bottom: false,
       child: Row(
@@ -713,9 +716,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   ),
                 ),
 
-                // 控制区
+                // 控制区：底部 padding 包含导航栏高度
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: EdgeInsets.only(bottom: bottomPadding),
                   child: _buildControls(
                     playerProvider,
                     colorScheme,
@@ -735,7 +738,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     dynamic currentSong,
     ColorScheme colorScheme,
   ) {
-    // 横屏/竖屏 edgeToEdge 模式：保持默认 padding
+    // 横屏/竖屏 edgeToEdge 模式：底部需要额外 padding 避免被导航栏遮挡
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom + 8;
+
     return SafeArea(
       bottom: false,
       child: Row(
@@ -878,9 +883,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                     ],
                   ),
                 ),
-                // 控制区
+                // 控制区：底部 padding 包含导航栏高度
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: EdgeInsets.only(bottom: bottomPadding),
                   child: _buildControls(playerProvider, colorScheme, isExpanded: true),
                 ),
               ],
