@@ -130,18 +130,19 @@ class _AppView extends StatelessWidget {
       themeMode: themeProvider.themeMode,
       // 根据主题设置系统导航栏颜色
       builder: (context, child) {
-        final brightness = Theme.of(context).brightness;
-        final surfaceColor = Theme.of(context).colorScheme.surface;
-        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: brightness == Brightness.dark
-              ? Brightness.light
-              : Brightness.dark,
-          systemNavigationBarColor: surfaceColor,
-          systemNavigationBarIconBrightness: brightness == Brightness.dark
-              ? Brightness.light
-              : Brightness.dark,
-        ));
+        // 使用 addPostFrameCallback 确保在 build 完成后更新系统 UI
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          final brightness = Theme.of(context).brightness;
+          final surfaceColor = Theme.of(context).colorScheme.surface;
+          final isDark = brightness == Brightness.dark;
+          SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarColor: surfaceColor,
+            systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          ));
+        });
         return child!;
       },
       navigatorKey: appNavigatorKey,

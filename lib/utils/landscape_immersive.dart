@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -30,11 +31,13 @@ void applyImmersiveForOrientation() {
   }
 }
 
-/// 退出全屏播放器时恢复系统栏显示。
-void restoreSystemUi() {
+/// 退出全屏播放器时恢复系统栏显示，根据当前主题设置导航栏颜色。
+void restoreSystemUi({Color? navigationBarColor, Brightness? statusBarBrightness}) {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Color(0x00000000),
-    systemNavigationBarColor: Color(0x00000000),
+  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+    statusBarColor: const Color(0x00000000),
+    statusBarIconBrightness: statusBarBrightness ?? Brightness.dark,
+    systemNavigationBarColor: navigationBarColor ?? const Color(0x00000000),
+    systemNavigationBarIconBrightness: statusBarBrightness ?? Brightness.dark,
   ));
 }

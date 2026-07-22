@@ -117,8 +117,7 @@ class _FullPlayerState extends State<FullPlayer>
     } catch (_) {}
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
-    // 退出播放器时恢复系统栏显示
-    restoreSystemUi();
+    // 注意：不在这里调用 restoreSystemUi，由 MaterialApp.builder 在主页重建时处理
     super.dispose();
   }
 
