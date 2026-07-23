@@ -401,7 +401,9 @@ class _SettingsPageState extends State<SettingsPage> {
               Expanded(
                 child: Text(
                   '设备类型',
-                  style: Theme.of(context).textTheme.bodyLarge,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ),
             ],
