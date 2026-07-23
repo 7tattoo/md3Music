@@ -202,15 +202,15 @@ class _SystemUiUpdaterState extends State<_SystemUiUpdater> with WidgetsBindingO
   }
 
   void _updateSystemUi() {
-    // 恢复为 edgeToEdge 模式（从播放器沉浸模式恢复）
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-
     final brightness = Theme.of(context).brightness;
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final isDark = brightness == Brightness.dark;
 
+    // 主界面使用非沉浸模式：状态栏不透明（用 surface 色填充），
+    // 导航栏跟随 surface 色，确保从播放器沉浸模式返回后恢复正常显示。
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
+      statusBarColor: surfaceColor,
       statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       systemNavigationBarColor: surfaceColor,
       systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,

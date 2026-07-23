@@ -32,6 +32,10 @@ void applyImmersiveForOrientation() {
 }
 
 /// 退出全屏播放器时恢复系统栏显示，根据当前主题设置导航栏颜色。
+///
+/// 先恢复为 [SystemUiMode.edgeToEdge]（透明状态栏 + 导航栏），
+/// 随后主界面的 [_SystemUiUpdater] 会立即将状态栏设为不透明的 surface 色，
+/// 确保主界面不使用 edgeToEdge 模式。
 void restoreSystemUi({Color? navigationBarColor, Brightness? statusBarBrightness}) {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
