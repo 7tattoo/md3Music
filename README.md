@@ -3,14 +3,67 @@
 <div align="center">
 
 基于酷狗音乐 API 的 Flutter 音乐播放器，采用 Material Design 3 设计规范。
-**内置 Node.js 服务器+云端 API (networkapi)**，。
+**内置 Node.js 服务器 + 云端 API (networkapi)**。
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.12+-02569B?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android-green)]()
-[![Version](https://img.shields.io/badge/Version-3.3.0-blue)]()
+[![Version](https://img.shields.io/badge/Version-3.4.0-blue)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 </div>
+
+---
+
+## 📷 界面预览
+
+### 手机 · Material Design 3
+
+<p align="center">
+  <img src="img/phone/md3/0f720b0e915226a9d5a8ea184e81a06d.jpg" width="220" alt="手机 MD3 界面 1" />
+  <img src="img/phone/md3/58eddb6fd3ca614e60be7cb2fd4399d1.jpg" width="220" alt="手机 MD3 界面 2" />
+  <img src="img/phone/md3/ade7e5ef5165adcf0fef302e2500c6db.jpg" width="220" alt="手机 MD3 界面 3" />
+</p>
+
+### 手机 · Apple Music 风格
+
+<p align="center">
+  <img src="img/phone/applemusic/06c1d2f4c9d505eebd5f22929bce3a03.jpg" width="220" alt="手机 Apple Music 风格 1" />
+  <img src="img/phone/applemusic/6fdf0863425dc6ac4be62ca4630d00bf.jpg" width="220" alt="手机 Apple Music 风格 2" />
+  <img src="img/phone/applemusic/8b1cbabc78824b4d4c20e91d48ffd2a6.jpg" width="220" alt="手机 Apple Music 风格 3" />
+</p>
+
+### 手机 · 其他界面
+
+<p align="center">
+  <img src="img/phone/other/1a910009176c619f456736cbfa434eb4.jpg" width="180" alt="手机其他界面 1" />
+  <img src="img/phone/other/1de8fefeb7bd0fcd2407799eeb736276.jpg" width="180" alt="手机其他界面 2" />
+  <img src="img/phone/other/1ebc26c2078a5468531dc1efb2a0be2b.jpg" width="180" alt="手机其他界面 3" />
+  <img src="img/phone/other/45e83716a07dd5b19c0241445117664d.jpg" width="180" alt="手机其他界面 4" />
+  <img src="img/phone/other/6546f5b8be1c44ec9709e514f0d5dce0.jpg" width="180" alt="手机其他界面 5" />
+  <img src="img/phone/other/a7ca9d5ad72e5ee65cdb65b74de6f937.jpg" width="180" alt="手机其他界面 6" />
+</p>
+
+### 平板 · Material Design 3
+
+<p align="center">
+  <img src="img/pad/md3/47fc8b072e30bf05134ab14d98079fac.jpg" width="420" alt="平板 MD3 界面 1" />
+  <img src="img/pad/md3/adc640b5a5902cf39c960d3cf287da22.jpg" width="420" alt="平板 MD3 界面 2" />
+</p>
+
+### 平板 · Apple Music 风格
+
+<p align="center">
+  <img src="img/pad/applemusic/919678959eeded94228d8cbc003409df.jpg" width="420" alt="平板 Apple Music 风格 1" />
+  <img src="img/pad/applemusic/a57b3aa463c33dad0c450cb6d39e8030.jpg" width="420" alt="平板 Apple Music 风格 2" />
+</p>
+
+### 平板 · 其他界面
+
+<p align="center">
+  <img src="img/pad/other/7343c95bccbc61f8ba795418685e1bcb.jpg" width="280" alt="平板其他界面 1" />
+  <img src="img/pad/other/94e59e208e26dd23b07e4e9b010e26b0.jpg" width="280" alt="平板其他界面 2" />
+  <img src="img/pad/other/fc9be62b3cc5bca413b057cde2c92f1b.jpg" width="280" alt="平板其他界面 3" />
+</p>
 
 ---
 
@@ -216,6 +269,9 @@ md3Music/
 │   ├── index.js                # 服务器入口
 │   ├── module/                 # API 模块
 │   └── package.json            # npm 依赖配置
+├── img/                        # 界面预览截图（README 用）
+│   ├── phone/                  # 手机：md3 / applemusic / other
+│   └── pad/                    # 平板：md3 / applemusic / other
 ├── assets/                     # 资源文件
 │   ├── images/                 # 图片资源
 │   ├── fonts/                  # 字体文件
