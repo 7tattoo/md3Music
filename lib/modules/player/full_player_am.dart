@@ -48,6 +48,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   // Pad 模式：左侧已有封面，隐藏"封面"Tab，只保留 2 个 Tab
   bool _isPadMode = false;
   int _currentTabLength = 3;
+  // 手机横屏模式：保留封面Tab，但隐藏左侧歌曲信息
+  bool _isPhoneLandscape = false;
 
   // === Task 19: 上滑展开 / 下拉收起手势 ===
   // 当前是否处于展开（全屏）状态。默认 true，进入页面即全屏。
@@ -90,7 +92,10 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   void _checkPadMode() {
     if (!mounted) return;
     final width = MediaQuery.sizeOf(context).width;
-    final shouldBePadMode = context.read<DeviceProvider>().isPad || width >= 600;
+    final deviceIsPad = context.read<DeviceProvider>().isPad;
+    final shouldBePadMode = deviceIsPad || width >= 600;
+    // 手机横屏：宽度 >= 600 但设备不是 Pad
+    final shouldBePhoneLandscape = !deviceIsPad && width >= 600;
     final newTabLength = shouldBePadMode ? 2 : 3;
 
     if (_currentTabLength != newTabLength) {
@@ -104,9 +109,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
         initialIndex: shouldBePadMode && currentIndex == 0 ? 0 : currentIndex,
       );
       _isPadMode = shouldBePadMode;
+      _isPhoneLandscape = shouldBePhoneLandscape;
       setState(() {});
     } else {
       _isPadMode = shouldBePadMode;
+      _isPhoneLandscape = shouldBePhoneLandscape;
     }
   }
 
@@ -630,8 +637,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                           ),
                         ),
                       ),
-                      // 歌曲信息：垂直方向 80% 位置，水平居中
-                      Positioned(
+                      // 歌曲信息：垂直方向 80% 位置，水平居中（手机横屏时隐藏）
+                      if (!_isPhoneLandscape)
+                        Positioned(
                         top: constraints.maxHeight * 0.8,
                         left: 0,
                         right: 0,
@@ -684,12 +692,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
               children: [
                 _buildTopBar(),
 
-                // 内容区（歌词 / 评论，Pad 模式下无封面 Tab）
+                // 内容区（歌词 / 评论 / 封面信息）
+                // Pad模式下无封面Tab；手机横屏保留封面Tab
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      if (!_isPadMode)
+                      if (!_isPadMode || _isPhoneLandscape)
                         GestureDetector(
                           onTap: () => _tabController.animateTo(1),
                           behavior: HitTestBehavior.opaque,
@@ -810,8 +819,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                           ),
                         ),
                       ),
-                      // 歌曲信息：垂直方向 80% 位置，水平居中
-                      Positioned(
+                      // 歌曲信息：垂直方向 80% 位置，水平居中（手机横屏时隐藏）
+                      if (!_isPhoneLandscape)
+                        Positioned(
                         top: constraints.maxHeight * 0.8,
                         left: 0,
                         right: 0,
@@ -866,7 +876,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      if (!_isPadMode)
+                      if (!_isPadMode || _isPhoneLandscape)
                         _buildSongInfo(playerProvider, currentSong, colorScheme),
                       _isLoadingLyrics
                           ? const Center(child: CircularProgressIndicator())
@@ -903,8 +913,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
 
   Widget _buildTopBar() {
     // Apple Music 风格顶部栏：下拉手柄（Task 19 绑定垂直拖动手势）+ 导航行
-    // Pad 模式下只显示 2 个 Tab（歌词、评论），手机模式显示 3 个 Tab
-    final tabs = _isPadMode
+    // Pad 模式下只显示 2 个 Tab（歌词、评论），手机横屏保留全部 3 个 Tab
+    final tabs = _isPadMode && !_isPhoneLandscape
         ? const [Tab(text: '歌词'), Tab(text: '评论')]
         : const [Tab(text: '封面'), Tab(text: '歌词'), Tab(text: '评论')];
 
