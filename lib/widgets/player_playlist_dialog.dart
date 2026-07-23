@@ -105,26 +105,43 @@ class _PlayerPlaylistDialogState extends State<PlayerPlaylistDialog> {
     final size = MediaQuery.sizeOf(context);
     final theme = Theme.of(context);
     final isPad = context.read<DeviceProvider>().isPad;
+    final isLandscape = size.width > size.height;
 
-    // Pad: 60% 宽高；手机: 90% 宽高
-    final double width = size.width * (isPad ? 0.6 : 0.9);
-    final double height = size.height * (isPad ? 0.6 : 0.9);
+    final double width;
+    final double height;
+    final EdgeInsets margin;
+
+    if (isPad) {
+      // Pad: 60% 宽高，居中
+      width = size.width * 0.6;
+      height = size.height * 0.6;
+      margin = EdgeInsets.zero;
+    } else if (isLandscape) {
+      // 手机横屏：宽 50%，高 90%，靠右，右边距 10%
+      width = size.width * 0.5;
+      height = size.height * 0.9;
+      margin = EdgeInsets.only(right: size.width * 0.1);
+    } else {
+      // 手机竖屏：宽 80%，高 70%，居中
+      width = size.width * 0.8;
+      height = size.height * 0.7;
+      margin = EdgeInsets.zero;
+    }
 
     return Center(
-      child: Material(
-        borderRadius: BorderRadius.circular(28),
-        clipBehavior: Clip.antiAlias,
-        // 背景色与 Flutter Material 3 SimpleDialog / AlertDialog 完全一致：
-        // - color: surface
-        // - surfaceTintColor: surfaceTint（启用 M3 elevation tint 叠加）
-        // - elevation: 6（SimpleDialog 默认值）
-        color: theme.colorScheme.surface,
-        surfaceTintColor: theme.colorScheme.surfaceTint,
-        elevation: 6,
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: _buildDialogBody(),
+      child: Padding(
+        padding: margin,
+        child: Material(
+          borderRadius: BorderRadius.circular(28),
+          clipBehavior: Clip.antiAlias,
+          color: theme.colorScheme.surface,
+          surfaceTintColor: theme.colorScheme.surfaceTint,
+          elevation: 6,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: _buildDialogBody(),
+          ),
         ),
       ),
     );
