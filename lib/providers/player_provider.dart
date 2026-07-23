@@ -659,7 +659,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _fetchClimaxData() async {
     final song = _currentSong;
     if (song == null || !song.isOnline) return;
-    // 已有数据则跳过
     if (song.climaxStart != null) return;
     try {
       final climax = await KugouApiClient().getSongClimax(
@@ -667,13 +666,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         albumAudioId: song.albumAudioId,
       );
       if (climax == null) return;
-      final start = double.tryParse(climax.climaxStart ?? '');
-      final end = double.tryParse(climax.climaxEnd ?? '');
-      if (start == null || end == null) return;
-      // 确认当前歌曲未切换
+      final startMs = double.tryParse(climax.startTime ?? '');
+      final endMs = double.tryParse(climax.endTime ?? '');
+      if (startMs == null || endMs == null) return;
       if (_currentSong?.id != song.id) return;
-      _currentSong = song.copyWith(climaxStart: start, climaxEnd: end);
-      // 同步更新播放列表中的引用
+      // API 返回毫秒，转为秒存储
+      _currentSong = song.copyWith(
+        climaxStart: startMs / 1000.0,
+        climaxEnd: endMs / 1000.0,
+      );
       final idx = _playlist.indexWhere((s) => s.id == song.id);
       if (idx >= 0) _playlist[idx] = _currentSong!;
       notifyListeners();
