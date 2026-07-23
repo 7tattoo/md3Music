@@ -6,10 +6,11 @@ import '../../services/kugou_api/kugou_models.dart';
 
 /// 评论列表视图。
 ///
-/// 在 FullPlayer 中作为 TabBarView 第三个 Tab 展示，背景为模糊封面 + 黑蒙版。
-/// 由于背景永远是深色封面图，统一使用白色文字方案。
+/// 在 FullPlayer 中作为 TabBarView 第三个 Tab 展示。
 ///
-/// 辅助文字（用户名、时间）使用 70% 透明白。
+/// - AM 风格（[isAmStyle] = true）：背景为模糊封面 + 黑蒙版，统一白色文字。
+/// - MD3 风格（[isAmStyle] = false，默认）：跟随莫奈色主题，用户名用主色调，
+///   评论正文和时间戳根据深浅色模式自动适配。
 ///
 /// **mask alpha 渐变**：列表顶部/底部各 24px 范围用 ShaderMask + BlendMode.dstIn
 /// 实现 alpha 渐变（比歌词页更窄），让滚动内容从背景柔和淡入、淡出到背景，
@@ -21,11 +22,15 @@ class CommentsView extends StatefulWidget {
   /// 封面 URL（保留参数兼容性，不再用于智能反色）。
   final String? artworkUri;
 
+  /// 是否为 AM 风格播放器。true 时使用白色文字方案，false 时跟随主题色。
+  final bool isAmStyle;
+
   const CommentsView({
     super.key,
     required this.songHash,
     this.albumAudioId,
     this.artworkUri,
+    this.isAmStyle = false,
   });
 
   @override
@@ -36,12 +41,6 @@ class _CommentsViewState extends State<CommentsView> {
   List<KugouComment> _comments = [];
   bool _isLoading = false;
   String? _error;
-
-  /// 主文字颜色（评论正文）— 固定白色
-  Color _primaryTextColor = Colors.white;
-
-  /// 辅助文字颜色（用户名、时间戳）— 70% 透明白
-  Color _secondaryTextColor = const Color(0xB3FFFFFF);
 
   @override
   void initState() {
@@ -89,9 +88,27 @@ class _CommentsViewState extends State<CommentsView> {
 
   @override
   Widget build(BuildContext context) {
+    // 根据风格和主题计算颜色
+    final Color primaryTextColor;
+    final Color secondaryTextColor;
+    final Color usernameColor;
+
+    if (widget.isAmStyle) {
+      // AM 风格：固定白色文字
+      primaryTextColor = Colors.white;
+      secondaryTextColor = const Color(0xB3FFFFFF);
+      usernameColor = const Color(0xB3FFFFFF);
+    } else {
+      // MD3 风格：跟随莫奈色主题
+      final colorScheme = Theme.of(context).colorScheme;
+      primaryTextColor = colorScheme.onSurface;
+      secondaryTextColor = colorScheme.onSurfaceVariant;
+      usernameColor = colorScheme.primary;
+    }
+
     if (_isLoading) {
       return Center(
-        child: CircularProgressIndicator(color: _primaryTextColor),
+        child: CircularProgressIndicator(color: primaryTextColor),
       );
     }
 
@@ -105,20 +122,20 @@ class _CommentsViewState extends State<CommentsView> {
               Icon(
                 Icons.error_outline,
                 size: 48,
-                color: _secondaryTextColor,
+                color: secondaryTextColor,
               ),
               const SizedBox(height: 12),
               Text(
                 '加载评论失败',
                 style: TextStyle(
-                  color: _secondaryTextColor,
+                  color: secondaryTextColor,
                   fontSize: 16,
                 ),
               ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: _fetchComments,
-                style: TextButton.styleFrom(foregroundColor: _primaryTextColor),
+                style: TextButton.styleFrom(foregroundColor: primaryTextColor),
                 child: const Text('重试'),
               ),
             ],
@@ -135,12 +152,12 @@ class _CommentsViewState extends State<CommentsView> {
             Icon(
               Icons.comment_outlined,
               size: 48,
-              color: _secondaryTextColor,
+              color: secondaryTextColor,
             ),
             const SizedBox(height: 12),
             Text(
               '暂无评论',
-              style: TextStyle(color: _secondaryTextColor, fontSize: 16),
+              style: TextStyle(color: secondaryTextColor, fontSize: 16),
             ),
           ],
         ),
@@ -177,7 +194,7 @@ class _CommentsViewState extends State<CommentsView> {
         itemCount: _comments.length,
         separatorBuilder: (_, _) => Divider(
           height: 1,
-          color: _secondaryTextColor.withValues(alpha: 0.2),
+          color: secondaryTextColor.withValues(alpha: 0.2),
         ),
         itemBuilder: (context, index) {
           final comment = _comments[index];
@@ -188,11 +205,11 @@ class _CommentsViewState extends State<CommentsView> {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: _secondaryTextColor.withValues(alpha: 0.2),
+                  backgroundColor: usernameColor.withValues(alpha: 0.15),
                   child: Text(
                     comment.username.isNotEmpty ? comment.username[0] : '?',
                     style: TextStyle(
-                      color: _primaryTextColor,
+                      color: usernameColor,
                       fontSize: 14,
                     ),
                   ),
@@ -207,15 +224,16 @@ class _CommentsViewState extends State<CommentsView> {
                           Text(
                             comment.username,
                             style: TextStyle(
-                              color: _secondaryTextColor,
+                              color: usernameColor,
                               fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                           const Spacer(),
                           Text(
                             _formatTime(comment.time),
                             style: TextStyle(
-                              color: _secondaryTextColor
+                              color: secondaryTextColor
                                   .withValues(alpha: 0.6),
                               fontSize: 11,
                             ),
@@ -226,7 +244,7 @@ class _CommentsViewState extends State<CommentsView> {
                       Text(
                         comment.content,
                         style: TextStyle(
-                          color: _primaryTextColor,
+                          color: primaryTextColor,
                           fontSize: 14,
                           height: 1.4,
                         ),
