@@ -182,6 +182,9 @@ class _SystemUiUpdaterState extends State<_SystemUiUpdater> {
   }
 
   void _updateSystemUi() {
+    // 恢复为 edgeToEdge 模式（从播放器沉浸模式恢复）
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
     final brightness = Theme.of(context).brightness;
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final isDark = brightness == Brightness.dark;
