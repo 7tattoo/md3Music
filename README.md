@@ -48,15 +48,15 @@
 ### 平板 · Apple Music 风格
 
 <p align="center">
-  <img src="img/pad/md3/47fc8b072e30bf05134ab14d98079fac.jpg" width="420" alt="平板 Apple Music 风格 1" />
-  <img src="img/pad/md3/adc640b5a5902cf39c960d3cf287da22.jpg" width="420" alt="平板 Apple Music 风格 2" />
+  <img src="img/pad/applemusic/47fc8b072e30bf05134ab14d98079fac.jpg" width="420" alt="平板 Apple Music 风格 1" />
+  <img src="img/pad/applemusic/adc640b5a5902cf39c960d3cf287da22.jpg" width="420" alt="平板 Apple Music 风格 2" />
 </p>
 
 ### 平板 · Material Design 3
 
 <p align="center">
-  <img src="img/pad/applemusic/919678959eeded94228d8cbc003409df.jpg" width="420" alt="平板 MD3 界面 1" />
-  <img src="img/pad/applemusic/a57b3aa463c33dad0c450cb6d39e8030.jpg" width="420" alt="平板 MD3 界面 2" />
+  <img src="img/pad/md3/919678959eeded94228d8cbc003409df.jpg" width="420" alt="平板 MD3 界面 1" />
+  <img src="img/pad/md3/a57b3aa463c33dad0c450cb6d39e8030.jpg" width="420" alt="平板 MD3 界面 2" />
 </p>
 
 ### 平板 · 更多界面
