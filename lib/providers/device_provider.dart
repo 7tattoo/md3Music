@@ -37,6 +37,9 @@ class DeviceProvider extends ChangeNotifier {
     return size.shortestSide >= 600;
   }
 
+  /// 自动检测结果的中文描述（仅在 [deviceType] 为 [DeviceType.auto] 时有意义）。
+  String get autoDetectedLabel => _autoDetect() ? 'Pad' : '手机';
+
   DeviceProvider() {
     _load();
   }

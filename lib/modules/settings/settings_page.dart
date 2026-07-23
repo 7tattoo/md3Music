@@ -392,6 +392,7 @@ class _SettingsPageState extends State<SettingsPage> {
             context.read<ThemeProvider>().setUseAmStylePlayer(v);
           },
         ),
+        const Divider(),
         // 设备类型选择
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -406,6 +407,19 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
         ),
+        if (_deviceType == DeviceType.auto)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '当前识别为：${context.read<DeviceProvider>().autoDetectedLabel}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SegmentedButton<DeviceType>(
