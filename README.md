@@ -32,15 +32,19 @@
   <img src="img/phone/applemusic/8b1cbabc78824b4d4c20e91d48ffd2a6.jpg" width="220" alt="手机 Apple Music 风格 3" />
 </p>
 
-### 手机 · 其他界面
+### 手机 · 更多界面
+
+主页、发现、歌单、设置等（非全屏播放页）。
 
 <p align="center">
-  <img src="img/phone/other/1a910009176c619f456736cbfa434eb4.jpg" width="180" alt="手机其他界面 1" />
-  <img src="img/phone/other/1de8fefeb7bd0fcd2407799eeb736276.jpg" width="180" alt="手机其他界面 2" />
-  <img src="img/phone/other/1ebc26c2078a5468531dc1efb2a0be2b.jpg" width="180" alt="手机其他界面 3" />
-  <img src="img/phone/other/45e83716a07dd5b19c0241445117664d.jpg" width="180" alt="手机其他界面 4" />
-  <img src="img/phone/other/6546f5b8be1c44ec9709e514f0d5dce0.jpg" width="180" alt="手机其他界面 5" />
-  <img src="img/phone/other/a7ca9d5ad72e5ee65cdb65b74de6f937.jpg" width="180" alt="手机其他界面 6" />
+  <img src="img/phone/other/1a910009176c619f456736cbfa434eb4.jpg" width="200" alt="手机更多界面 1" />
+  <img src="img/phone/other/1de8fefeb7bd0fcd2407799eeb736276.jpg" width="200" alt="手机更多界面 2" />
+  <img src="img/phone/other/1ebc26c2078a5468531dc1efb2a0be2b.jpg" width="200" alt="手机更多界面 3" />
+</p>
+<p align="center">
+  <img src="img/phone/other/45e83716a07dd5b19c0241445117664d.jpg" width="200" alt="手机更多界面 4" />
+  <img src="img/phone/other/6546f5b8be1c44ec9709e514f0d5dce0.jpg" width="200" alt="手机更多界面 5" />
+  <img src="img/phone/other/a7ca9d5ad72e5ee65cdb65b74de6f937.jpg" width="200" alt="手机更多界面 6" />
 </p>
 
 ### 平板 · Material Design 3
@@ -57,12 +61,18 @@
   <img src="img/pad/applemusic/a57b3aa463c33dad0c450cb6d39e8030.jpg" width="420" alt="平板 Apple Music 风格 2" />
 </p>
 
-### 平板 · 其他界面
+### 平板 · 更多界面
+
+主页、发现、歌单等（非全屏播放页）。
 
 <p align="center">
-  <img src="img/pad/other/7343c95bccbc61f8ba795418685e1bcb.jpg" width="280" alt="平板其他界面 1" />
-  <img src="img/pad/other/94e59e208e26dd23b07e4e9b010e26b0.jpg" width="280" alt="平板其他界面 2" />
-  <img src="img/pad/other/fc9be62b3cc5bca413b057cde2c92f1b.jpg" width="280" alt="平板其他界面 3" />
+  <img src="img/pad/other/7343c95bccbc61f8ba795418685e1bcb.jpg" width="560" alt="平板更多界面 1" />
+</p>
+<p align="center">
+  <img src="img/pad/other/94e59e208e26dd23b07e4e9b010e26b0.jpg" width="560" alt="平板更多界面 2" />
+</p>
+<p align="center">
+  <img src="img/pad/other/fc9be62b3cc5bca413b057cde2c92f1b.jpg" width="560" alt="平板更多界面 3" />
 </p>
 
 ---
