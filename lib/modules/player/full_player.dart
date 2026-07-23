@@ -41,6 +41,8 @@ class _FullPlayerState extends State<FullPlayer>
   int _currentTabLength = 3;
   // 手机横屏模式：保留封面Tab，但隐藏左侧歌曲信息
   bool _isPhoneLandscape = false;
+  // 拖动进度条前的播放状态，用于拖动结束后恢复
+  bool _wasPlayingBeforeDrag = false;
 
   @override
   void initState() {
@@ -831,12 +833,25 @@ class _FullPlayerState extends State<FullPlayer>
                     1.0,
                   )
                 : 0.0,
+            onChangeStart: (_) {
+              // 拖动开始时暂停播放，记录拖动前的播放状态
+              _wasPlayingBeforeDrag = playerProvider.isPlaying;
+              if (playerProvider.isPlaying) {
+                playerProvider.pause();
+              }
+            },
             onChanged: (value) {
               final newPosition = Duration(
                 milliseconds: (duration.inMilliseconds * value).round(),
               );
               playerProvider.seek(newPosition);
               _lyricsKey.currentState?.forceScrollToPosition(newPosition);
+            },
+            onChangeEnd: (_) {
+              // 拖动结束时恢复播放（如果拖动前正在播放）
+              if (_wasPlayingBeforeDrag) {
+                playerProvider.resume();
+              }
             },
           ),
         ),

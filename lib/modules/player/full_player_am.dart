@@ -50,6 +50,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   int _currentTabLength = 3;
   // 手机横屏模式：保留封面Tab，但隐藏左侧歌曲信息
   bool _isPhoneLandscape = false;
+  // 拖动进度条前的播放状态，用于拖动结束后恢复
+  bool _wasPlayingBeforeDrag = false;
 
   // === Task 19: 上滑展开 / 下拉收起手势 ===
   // 当前是否处于展开（全屏）状态。默认 true，进入页面即全屏。
@@ -1243,12 +1245,22 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                 : 0.0,
             activeColor: Colors.white,
             inactiveColor: Colors.white24,
+            onChangeStart: (_) {
+              _wasPlayingBeforeDrag = playerProvider.isPlaying;
+              if (playerProvider.isPlaying) {
+                playerProvider.pause();
+              }
+            },
             onChanged: (value) {
               final newPosition = Duration(
                 milliseconds: (duration.inMilliseconds * value).round(),
               );
               playerProvider.seek(newPosition);
-              // AppleLyricsView 内部通过 currentTimeMs 参数自动跟随滚动，无需外部强制
+            },
+            onChangeEnd: (_) {
+              if (_wasPlayingBeforeDrag) {
+                playerProvider.resume();
+              }
             },
           ),
         ),
