@@ -278,15 +278,6 @@ class _AppleLyricsViewState extends State<AppleLyricsView>
   LineRenderer _lineRendererFor(int index) =>
       _lineRenderers.putIfAbsent(index, () => LineRenderer());
 
-  /// 计算指定行的播放进度（0~1），用于 [WordRenderer.tick] 的 progress 参数。
-  double _lineProgress(int lineIndex, int currentTimeMs) {
-    if (lineIndex < 0 || lineIndex >= widget.lines.length) return 0.0;
-    final line = widget.lines[lineIndex];
-    if (line.duration <= 0) return 0.0;
-    final p = (currentTimeMs - line.startTime) / line.duration;
-    return p.clamp(0.0, 1.0).toDouble();
-  }
-
   // ============== 动画推进 ==============
 
   void _onTick(Duration elapsed) {
@@ -342,14 +333,14 @@ class _AppleLyricsViewState extends State<AppleLyricsView>
     _scaleController.tick(dt);
 
     // 4. 推进每行的 renderer
-    // 性能优化：非当前行用 LineRenderer（整行单一 alpha，1 次 layout/帧），
-    // 当前行用 WordRenderer（逐字 alpha + 上浮，N 次 layout/帧）。
-    // 视口内约 10 行，从 10×N 次 layout 降为 9+N 次，主线程 CPU 显著下降。
-    final progress = _lineProgress(_currentLineIndex, widget.currentTimeMs);
-    for (int i = 0; i < widget.lines.length; i++) {
+    // 性能优化：只 tick 视口附近的行（前后各 15 行），避免 200+ 行全量 tick。
+    // 当前行用 WordRenderer（逐字 alpha + 上浮），其他行用 LineRenderer。
+    final int overscan = 15;
+    final int startIdx = math.max(0, _currentLineIndex - overscan);
+    final int endIdx = math.min(widget.lines.length, _currentLineIndex + overscan);
+    for (int i = startIdx; i < endIdx; i++) {
       final line = widget.lines[i];
       final isActive = i == _currentLineIndex;
-      // 当前行使用 LineScaleController 的弹簧 scale；非当前行直接 inactive
       final scale = isActive
           ? (widget.enableScale
               ? _scaleController.currentScale
@@ -357,13 +348,11 @@ class _AppleLyricsViewState extends State<AppleLyricsView>
           : (widget.enableScale
               ? LyricLayout.inactiveScale
               : LyricLayout.activeScale);
-      // 当前行 + 有 word 时间戳 → WordRenderer（逐字模式）
-      // 否则 → LineRenderer（整行模式，含非当前行的 KRC 行）
       final bool useWordRenderer = isActive && line.hasWordTiming;
       if (useWordRenderer) {
         final renderer = _wordRendererFor(i);
         renderer.setLineState(isActive: true, scale: scale);
-        renderer.tick(dt, progress);
+        renderer.tick(dt, widget.currentTimeMs);
       } else {
         final renderer = _lineRendererFor(i);
         renderer.setLineState(isActive: isActive, scale: scale);
