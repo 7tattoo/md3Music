@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/layout/responsive_layout.dart';
+import '../../providers/device_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
@@ -60,7 +61,7 @@ class _FullPlayerState extends State<FullPlayer>
   void _checkPadMode() {
     if (!mounted) return;
     final width = MediaQuery.sizeOf(context).width;
-    final shouldBePadMode = width >= 600;
+    final shouldBePadMode = context.read<DeviceProvider>().isPad || width >= 600;
     final newTabLength = shouldBePadMode ? 2 : 3;
 
     if (_currentTabLength != newTabLength) {

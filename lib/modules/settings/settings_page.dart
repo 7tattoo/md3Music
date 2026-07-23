@@ -13,6 +13,7 @@ import '../../core/services/folder_picker_service.dart';
 import '../../core/services/lyricon_provider_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/settings_repository.dart';
+import '../../providers/device_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
@@ -52,6 +53,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _lyriconDisplayTranslation = true;
   // 自定义下载目录：null/空表示使用默认目录
   String? _downloadDir;
+  // 设备类型选择
+  DeviceType _deviceType = DeviceType.auto;
 
   @override
   void initState() {
@@ -114,6 +117,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final useDynamicColor = context.read<ThemeProvider>().useDynamicColor;
     // 从 ThemeProvider 同步「Apple Music 风格播放页」开关状态
     final useAmStylePlayer = context.read<ThemeProvider>().useAmStylePlayer;
+    // 从 DeviceProvider 同步设备类型
+    final deviceType = context.read<DeviceProvider>().deviceType;
     // 读取自定义下载目录
     final downloadDir = await _settingsRepository.getDownloadDir();
 
@@ -124,6 +129,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _apiServerController.text = apiServerUrl;
       _useDynamicColor = useDynamicColor;
       _useAmStylePlayer = useAmStylePlayer;
+      _deviceType = deviceType;
       _downloadDir = downloadDir;
     });
   }
@@ -385,6 +391,48 @@ class _SettingsPageState extends State<SettingsPage> {
             setState(() => _useAmStylePlayer = v);
             context.read<ThemeProvider>().setUseAmStylePlayer(v);
           },
+        ),
+        // 设备类型选择
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '设备类型',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SegmentedButton<DeviceType>(
+            segments: const [
+              ButtonSegment(
+                value: DeviceType.auto,
+                label: Text('自动'),
+                icon: Icon(Icons.brightness_auto),
+              ),
+              ButtonSegment(
+                value: DeviceType.phone,
+                label: Text('手机'),
+                icon: Icon(Icons.smartphone),
+              ),
+              ButtonSegment(
+                value: DeviceType.pad,
+                label: Text('Pad'),
+                icon: Icon(Icons.tablet),
+              ),
+            ],
+            selected: {_deviceType},
+            onSelectionChanged: (modes) {
+              final type = modes.first;
+              setState(() => _deviceType = type);
+              context.read<DeviceProvider>().setDeviceType(type);
+            },
+          ),
         ),
         const SizedBox(height: 8),
       ],

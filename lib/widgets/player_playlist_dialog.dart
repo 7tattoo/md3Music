@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/song.dart';
+import '../providers/device_provider.dart';
 import '../providers/player_provider.dart';
 
 /// 自定义长按延迟 700ms 的 Reorderable 监听器。
@@ -103,11 +104,11 @@ class _PlayerPlaylistDialogState extends State<PlayerPlaylistDialog> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final theme = Theme.of(context);
+    final isPad = context.read<DeviceProvider>().isPad;
 
-    // 统一布局：Center + Material（居中 + 28 圆角）
-    // 宽度 60%，高度 60%，四方向均留 20% 余量
-    final double width = size.width * 0.6;
-    final double height = size.height * 0.6;
+    // Pad: 60% 宽高；手机: 90% 宽高
+    final double width = size.width * (isPad ? 0.6 : 0.9);
+    final double height = size.height * (isPad ? 0.6 : 0.9);
 
     return Center(
       child: Material(
