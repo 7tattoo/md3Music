@@ -33,9 +33,6 @@ class WordRenderer {
   /// 当前行缩放，0.97（inactive）~1.0（active）。默认 inactive。
   double _scale = LyricLayout.inactiveScale;
 
-  /// 当前行播放进度（0~1，相对当前行）。默认 0。
-  double _currentLineProgress = 0.0;
-
   /// 当前绑定的 LyricLine。用于检测 line 切换并重置 alpha map。
   LyricLine? _boundLine;
 
@@ -104,9 +101,6 @@ class WordRenderer {
   /// 当前是否为当前行。
   bool get isActive => _isActive;
 
-  /// 当前行播放进度（0~1）。
-  double get currentLineProgress => _currentLineProgress;
-
   // ============== 状态设置 ==============
 
   /// 设置当前行状态。
@@ -123,37 +117,63 @@ class WordRenderer {
 
   /// 推进动画。
   ///
-  /// [dt] 距上一帧的时间间隔（秒）。[progress] 当前行播放进度 0~1，
-  /// 用于判断每个 word 是"已播"、"当前"、"未播"，分别计算目标 alpha。
+  /// [dt] 距上一帧的时间间隔（秒）。[currentTimeMs] 当前播放位置（毫秒），
+  /// 用于根据每个 word 的 [LyricWord.startTime] / [LyricWord.duration]
+  /// 精确判断当前正在演唱的 word 及 word 内进度。
   /// 用指数衰减公式 `alpha += (target - alpha) * (1 - exp(-speed * dt))`
   /// 平滑过渡：变亮用 [LyricLayout.attackSpeed]（50.0），变暗用 [LyricLayout.releaseSpeed]（7.0）。
   /// 差值小于 [LyricLayout.alphaEpsilon]（0.001）时吸附到目标。
-  void tick(double dt, double progress) {
-    _currentLineProgress = progress.clamp(0.0, 1.0).toDouble();
+  void tick(double dt, int currentTimeMs) {
     if (dt <= 0) return;
     if (_boundLine == null || _boundLine!.words.isEmpty) return;
 
     final double dark = dynamicDarkAlpha;
     final double bright = dynamicBrightAlpha;
-    final int wordCount = _boundLine!.words.length;
+    final words = _boundLine!.words;
+    final int wordCount = words.length;
+
+    // 找到当前正在演唱的 word 索引及 word 内进度
+    int currentWordIdx = -1;
+    double intraWordProgress = 0.0;
 
     for (int i = 0; i < wordCount; i++) {
-      final double target = _targetAlphaFor(i, wordCount, dark, bright);
+      final w = words[i];
+      if (currentTimeMs >= w.startTime &&
+          currentTimeMs < w.startTime + w.duration) {
+        currentWordIdx = i;
+        intraWordProgress = w.duration > 0
+            ? ((currentTimeMs - w.startTime) / w.duration).clamp(0.0, 1.0)
+            : 0.0;
+        break;
+      } else if (currentTimeMs >= w.startTime + w.duration &&
+          (i == wordCount - 1 || currentTimeMs < words[i + 1].startTime)) {
+        // 当前 word 已结束，下一个 word 还没开始 → 保持当前 word 为"已播"
+        currentWordIdx = i;
+        intraWordProgress = 1.0;
+      }
+    }
+
+    // 如果 currentTimeMs 在所有 word 之前，第一个 word 为当前
+    if (currentWordIdx == -1 && wordCount > 0 && currentTimeMs < words[0].startTime) {
+      currentWordIdx = 0;
+      intraWordProgress = 0.0;
+    }
+
+    for (int i = 0; i < wordCount; i++) {
+      final double target = _targetAlphaForExact(i, currentWordIdx, intraWordProgress, dark, bright);
       final double current = _wordAlphas[i] ?? dark;
-      // 变亮用 ATTACK（快），变暗用 RELEASE（慢）
       final double speed = target >= current
           ? LyricLayout.attackSpeed
           : LyricLayout.releaseSpeed;
       final double decay = 1.0 - exp(-speed * dt);
       double next = current + (target - current) * decay;
-      // 阈值收敛：差值小于 alphaEpsilon 直接吸附到目标
       if ((next - target).abs() < LyricLayout.alphaEpsilon) {
         next = target;
       }
       _wordAlphas[i] = next;
 
-      // AMLL 上浮特效：当前字上浮到 _maxLiftPx，其他字回到 0
-      final double targetY = _targetYOffsetFor(i, wordCount);
+      // AMLL 上浮特效
+      final double targetY = _targetYOffsetForExact(i, currentWordIdx, intraWordProgress);
       final double currentY = _wordYOffsets[i] ?? 0;
       final double ySpeed = targetY >= currentY
           ? _liftAttackSpeed
@@ -167,61 +187,41 @@ class WordRenderer {
     }
   }
 
-  /// 计算指定 word index 的目标 Y 偏移（AMLL 上浮特效）。
+  /// 计算指定 word index 的目标 Y 偏移（AMLL 上浮特效），基于逐字时间戳。
   ///
-  /// - 非当前行：所有 word Y=0（不上浮）。
+  /// - 非当前行：所有 word Y=0。
   /// - 当前行：
-  ///   - 已播字（index < 当前 word 索引）：Y=_maxLiftPx（保持上浮，不回落）。
-  ///   - 当前字（index == 当前 word 索引）：按 word 内进度 0 → _maxLiftPx 上浮。
-  ///     **使用 smoothstep 曲线（ease-in-out）**：`t' = t*t*(3-2*t)`
-  ///     起步和结束更柔，避免线性变化的生硬感。
-  ///   - 未播字（index > 当前 word 索引）：Y=0。
-  ///
-  /// 用户确认（grill-me Q2 (A) AMLL 原版）：已播字保持上浮状态，
-  /// 营造整行从左到右逐渐浮起的效果，而非"弹一下回落"。
-  ///
-  /// 用户反馈（grill-me 第三轮）：上浮动画不够细腻，一顿一顿的。
-  /// 改用 smoothstep 曲线让起步和结束更平滑。
-  double _targetYOffsetFor(int index, int wordCount) {
+  ///   - 已播字（index < currentWordIdx）：Y=_maxLiftPx（保持上浮）。
+  ///   - 当前字（index == currentWordIdx）：按 word 内进度 smoothstep 上浮。
+  ///   - 未播字（index > currentWordIdx）：Y=0。
+  double _targetYOffsetForExact(int index, int currentWordIdx, double intraWordProgress) {
     if (!_isActive) return 0;
-    final double wordPos = _currentLineProgress * wordCount;
-    final int currentIdx = wordPos.floor();
-    if (index < currentIdx) {
-      // 已播字：保持上浮
+    if (index < currentWordIdx) {
       return _maxLiftPx;
     }
-    if (index == currentIdx) {
-      // 当前 word 内进度（0~1），用 smoothstep 曲线（ease-in-out）
-      // smoothstep: t*t*(3-2*t)，起步和结束更柔
-      final double wp = wordPos - currentIdx;
-      final double eased = wp * wp * (3 - 2 * wp);
+    if (index == currentWordIdx) {
+      final double eased = intraWordProgress * intraWordProgress * (3 - 2 * intraWordProgress);
       return _maxLiftPx * eased;
     }
-    // 未播字：不上浮
     return 0;
   }
 
-  /// 计算指定 word index 的目标 alpha。
+  /// 计算指定 word index 的目标 alpha，基于逐字时间戳。
   ///
-  /// - 非当前行：所有 word 目标 = [dynamicDarkAlpha]（SOLID）。
-  /// - 当前行：根据 [_currentLineProgress] 映射到 word 索引位置：
-  ///   - 已播字（index < 当前 word 索引）目标 = [dynamicBrightAlpha]。
-  ///   - 未播字（index > 当前 word 索引）目标 = [dynamicDarkAlpha]。
-  ///   - 当前字（index == 当前 word 索引）按 word 内进度在 dark~bright 之间线性插值。
-  double _targetAlphaFor(
-      int index, int wordCount, double dark, double bright) {
+  /// - 非当前行：所有 word 目标 = [dynamicDarkAlpha]。
+  /// - 当前行：
+  ///   - 已播字（index < currentWordIdx）目标 = [dynamicBrightAlpha]。
+  ///   - 未播字（index > currentWordIdx）目标 = [dynamicDarkAlpha]。
+  ///   - 当前字（index == currentWordIdx）按 word 内进度在 dark~bright 之间线性插值。
+  double _targetAlphaForExact(
+      int index, int currentWordIdx, double intraWordProgress, double dark, double bright) {
     if (!_isActive) return dark;
-    // 当前行 GRADIENT：progress 映射到 word 索引位置
-    final double wordPos = _currentLineProgress * wordCount;
-    final int currentIdx = wordPos.floor();
-    if (index < currentIdx) {
+    if (index < currentWordIdx) {
       return bright;
-    } else if (index > currentIdx) {
+    } else if (index > currentWordIdx) {
       return dark;
     } else {
-      // 当前 word 内进度（0~1）线性插值 dark → bright
-      final double wp = wordPos - currentIdx;
-      return dark + (bright - dark) * wp;
+      return dark + (bright - dark) * intraWordProgress;
     }
   }
 
@@ -347,7 +347,6 @@ class WordRenderer {
   void reset() {
     _isActive = false;
     _scale = LyricLayout.inactiveScale;
-    _currentLineProgress = 0.0;
     _boundLine = null;
     _boundFontSize = -1;
     _wordWidths = const <double>[];

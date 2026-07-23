@@ -1146,7 +1146,12 @@ class KugouSongClimax {
   });
 
   factory KugouSongClimax.fromJson(Map<String, dynamic> json) {
-    final data = json['data'] as Map<String, dynamic>? ?? json;
+    // API 返回的 data 可能是 List（如 [{start_time, end_time, ...}]）或 Map
+    dynamic rawData = json['data'];
+    if (rawData is List && rawData.isNotEmpty) {
+      rawData = rawData.first;
+    }
+    final data = rawData is Map<String, dynamic> ? rawData : json;
     return KugouSongClimax(
       climaxStart: _strNull(data['climax_start'] ?? data['climaxStart']),
       climaxEnd: _strNull(data['climax_end'] ?? data['climaxEnd']),

@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/layout/responsive_layout.dart';
+import '../../data/models/song.dart';
 import '../../providers/device_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
@@ -1223,6 +1224,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     ColorScheme colorScheme,
   ) {
     // Apple Music 风格：深色背景下进度条与时间标签用白色
+    final song = playerProvider.currentSong;
+    final hasClimax = song?.climaxStart != null &&
+        song?.climaxEnd != null &&
+        duration.inMilliseconds > 0;
+
     return Row(
       children: [
         SizedBox(
@@ -1236,33 +1242,35 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
           ),
         ),
         Expanded(
-          child: Slider(
-            value: duration.inMilliseconds > 0
-                ? (position.inMilliseconds / duration.inMilliseconds).clamp(
-                    0.0,
-                    1.0,
-                  )
-                : 0.0,
-            activeColor: Colors.white,
-            inactiveColor: Colors.white24,
-            onChangeStart: (_) {
-              _wasPlayingBeforeDrag = playerProvider.isPlaying;
-              if (playerProvider.isPlaying) {
-                playerProvider.pause();
-              }
-            },
-            onChanged: (value) {
-              final newPosition = Duration(
-                milliseconds: (duration.inMilliseconds * value).round(),
-              );
-              playerProvider.seek(newPosition);
-            },
-            onChangeEnd: (_) {
-              if (_wasPlayingBeforeDrag) {
-                playerProvider.resume();
-              }
-            },
-          ),
+          child: hasClimax
+              ? _buildSliderWithClimaxMarker(
+                  playerProvider, position, duration, song!)
+              : Slider(
+                  value: duration.inMilliseconds > 0
+                      ? (position.inMilliseconds / duration.inMilliseconds)
+                          .clamp(0.0, 1.0)
+                      : 0.0,
+                  activeColor: Colors.white,
+                  inactiveColor: Colors.white24,
+                  onChangeStart: (_) {
+                    _wasPlayingBeforeDrag = playerProvider.isPlaying;
+                    if (playerProvider.isPlaying) {
+                      playerProvider.pause();
+                    }
+                  },
+                  onChanged: (value) {
+                    final newPosition = Duration(
+                      milliseconds:
+                          (duration.inMilliseconds * value).round(),
+                    );
+                    playerProvider.seek(newPosition);
+                  },
+                  onChangeEnd: (_) {
+                    if (_wasPlayingBeforeDrag) {
+                      playerProvider.resume();
+                    }
+                  },
+                ),
         ),
         SizedBox(
           width: 40,
@@ -1275,6 +1283,75 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
           ),
         ),
       ],
+    );
+  }
+
+  /// AM 风格：构建带有高潮点标记的进度条。
+  Widget _buildSliderWithClimaxMarker(
+    PlayerProvider playerProvider,
+    Duration position,
+    Duration duration,
+    Song song,
+  ) {
+    final climaxStart = song.climaxStart!;
+    final climaxEnd = song.climaxEnd!;
+    final totalMs = duration.inMilliseconds;
+    if (totalMs <= 0) return const SizedBox.shrink();
+
+    final climaxStartPos = (climaxStart * 1000 / totalMs).clamp(0.0, 1.0);
+    final climaxEndPos = (climaxEnd * 1000 / totalMs).clamp(0.0, 1.0);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final trackWidth = constraints.maxWidth;
+        final thumbRadius = 10.0;
+        final usableWidth = trackWidth - thumbRadius * 2;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Slider(
+              value: totalMs > 0
+                  ? (position.inMilliseconds / totalMs).clamp(0.0, 1.0)
+                  : 0.0,
+              activeColor: Colors.white,
+              inactiveColor: Colors.white24,
+              onChangeStart: (_) {
+                _wasPlayingBeforeDrag = playerProvider.isPlaying;
+                if (playerProvider.isPlaying) {
+                  playerProvider.pause();
+                }
+              },
+              onChanged: (value) {
+                final newPosition = Duration(
+                  milliseconds: (totalMs * value).round(),
+                );
+                playerProvider.seek(newPosition);
+              },
+              onChangeEnd: (_) {
+                if (_wasPlayingBeforeDrag) {
+                  playerProvider.resume();
+                }
+              },
+            ),
+            // 高潮区域高亮条（与进度条轨道重叠）
+            Positioned(
+              left: thumbRadius + usableWidth * climaxStartPos,
+              top: 18,
+              width: usableWidth * (climaxEndPos - climaxStartPos),
+              height: 4,
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

@@ -50,6 +50,7 @@ class LyricParserChain {
     '[total:',
     '[offset:',
     '[language:',
+    '[kana:',
   ];
 
   /// 自动检测格式并解析，按优先级 KRC → LRC → 纯文本。

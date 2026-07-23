@@ -70,12 +70,9 @@ void main() {
       renderer.setLineState(isActive: true, scale: LyricLayout.activeScale);
       renderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
 
-      // progress=0.25 时：wordPos = 0.25 * 4 = 1.0，currentIdx = 1
-      // word 0: index=0 < 1 → 已播 → bright=1.0
-      // word 1: index=1 == 1, wp=0 → 当前字起点 → dark=0.4
-      // word 2,3: 未播 → dark=0.4
+      // currentTimeMs=1000: word 0 (0-1000ms) 已结束，word 1 (1000-2000ms) 刚开始
       for (int i = 0; i < 100; i++) {
-        renderer.tick(0.016, 0.25);
+        renderer.tick(0.016, 1000);
       }
       expect(renderer.wordAlphas[0]!, closeTo(1.0, 0.01));
       expect(renderer.wordAlphas[1]!, closeTo(0.4, 0.01));
@@ -87,13 +84,13 @@ void main() {
       renderer.setLineState(isActive: true, scale: LyricLayout.activeScale);
       renderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
 
-      // 先到 progress=0.5 让前两字变亮
+      // 先到 currentTimeMs=2000 让前两字变亮
       for (int i = 0; i < 100; i++) {
-        renderer.tick(0.016, 0.5);
+        renderer.tick(0.016, 2000);
       }
-      // 再推进到 1.0：wordPos=4.0, currentIdx=4，所有字已播 → bright=1.0
+      // 再推进到 4000：所有字已结束 → bright=1.0
       for (int i = 0; i < 200; i++) {
-        renderer.tick(0.016, 1.0);
+        renderer.tick(0.016, 4000);
       }
       for (int i = 0; i < 4; i++) {
         expect(renderer.wordAlphas[i]!, closeTo(1.0, 0.01),
@@ -116,7 +113,7 @@ void main() {
       // progress=0 时所有字未播，目标 = dynamicDarkAlpha = 0.4
       renderer.setLineState(isActive: true, scale: LyricLayout.activeScale);
       for (int i = 0; i < 100; i++) {
-        renderer.tick(0.016, 0.0);
+        renderer.tick(0.016, 0);
       }
       for (final a in renderer.wordAlphas.values) {
         expect(a, closeTo(0.4, 0.01));
@@ -136,7 +133,7 @@ void main() {
       renderer.setLineState(
           isActive: false, scale: LyricLayout.inactiveScale);
       for (int i = 0; i < 200; i++) {
-        renderer.tick(0.016, 0.5);
+        renderer.tick(0.016, 2000);
       }
       for (final a in renderer.wordAlphas.values) {
         expect(a, closeTo(0.2, 0.01));
@@ -183,12 +180,9 @@ void main() {
       renderer.setLineState(isActive: true, scale: LyricLayout.activeScale);
       renderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
 
-      // progress=0.5: wordPos=2.0, currentIdx=2
-      // word 0,1: 已播 → bright=1.0
-      // word 2: 当前 wp=0 → dark=0.4
-      // word 3: 未播 → dark=0.4
+      // currentTimeMs=2000: word 0,1 已结束 → bright，word 2 开始 → dark
       for (int i = 0; i < 200; i++) {
-        renderer.tick(0.016, 0.5);
+        renderer.tick(0.016, 2000);
       }
       expect(renderer.wordAlphas[0]!, closeTo(1.0, 0.01));
       expect(renderer.wordAlphas[1]!, closeTo(1.0, 0.01));
@@ -202,7 +196,7 @@ void main() {
         ..setLineState(isActive: true, scale: LyricLayout.activeScale);
       upRenderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
       for (int i = 0; i < 5; i++) {
-        upRenderer.tick(0.016, 1.0); // progress=1.0：所有字已播，目标=1.0
+        upRenderer.tick(0.016, 4000); // 所有字已播，目标=1.0
       }
       final double upAlpha = upRenderer.wordAlphas[0]!;
 
@@ -212,11 +206,11 @@ void main() {
       downRenderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
       // 先把 alpha 推到接近 1.0
       for (int i = 0; i < 200; i++) {
-        downRenderer.tick(0.016, 1.0);
+        downRenderer.tick(0.016, 4000);
       }
-      // 然后切到 progress=0（目标 0.4）tick 5 次
+      // 然后切到 currentTimeMs=0（目标 0.4）tick 5 次
       for (int i = 0; i < 5; i++) {
-        downRenderer.tick(0.016, 0.0);
+        downRenderer.tick(0.016, 0);
       }
       final double downAlpha = downRenderer.wordAlphas[0]!;
 
@@ -230,7 +224,7 @@ void main() {
       renderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
       // 大量 tick 让 alpha 充分收敛
       for (int i = 0; i < 500; i++) {
-        renderer.tick(0.016, 1.0);
+        renderer.tick(0.016, 4000);
       }
       // 应完全等于目标 1.0（无残差）
       expect(renderer.wordAlphas[0]!, equals(1.0));
@@ -242,14 +236,13 @@ void main() {
       renderer.setLineState(isActive: true, scale: LyricLayout.activeScale);
       renderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
       for (int i = 0; i < 50; i++) {
-        renderer.tick(0.016, 0.5);
+        renderer.tick(0.016, 2000);
       }
       expect(renderer.wordAlphas, isNotEmpty);
 
       renderer.reset();
       expect(renderer.wordAlphas, isEmpty);
       expect(renderer.isActive, isFalse);
-      expect(renderer.currentLineProgress, 0.0);
       // factor 也应回到 inactive (0)
       expect(renderer.factor, closeTo(0.0, 1e-9));
     });
@@ -258,7 +251,7 @@ void main() {
       renderer.setLineState(isActive: true, scale: LyricLayout.activeScale);
       renderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
       for (int i = 0; i < 50; i++) {
-        renderer.tick(0.016, 0.5);
+        renderer.tick(0.016, 2000);
       }
       renderer.reset();
 
@@ -294,7 +287,7 @@ void main() {
       );
       renderer.setLineState(isActive: true, scale: LyricLayout.activeScale);
       renderer.paintLine(makeCanvas(), ui.Offset.zero, emptyLine, 24);
-      renderer.tick(0.016, 0.5);
+      renderer.tick(0.016, 2000);
       expect(renderer.wordAlphas, isEmpty);
     });
 
@@ -331,7 +324,7 @@ void main() {
       renderer.paintLine(makeCanvas(), ui.Offset.zero, line, 24);
       // 推进动画让 alpha 偏离初始值
       for (int i = 0; i < 50; i++) {
-        renderer.tick(0.016, 1.0);
+        renderer.tick(0.016, 4000);
       }
       expect(renderer.wordAlphas[0]!, closeTo(1.0, 0.01));
 

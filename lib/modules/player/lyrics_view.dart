@@ -178,6 +178,18 @@ class LyricsViewState extends State<LyricsView> {
             text: text,
           ),
         );
+        continue;
+      }
+
+      // KRC 孤立 word tag 行（无行级时间戳）：剥离标签后追加到上一行
+      if (krcWordTag.hasMatch(line)) {
+        final stripped = line.replaceAll(krcWordTag, '').trim();
+        if (stripped.isNotEmpty && _parsedLyrics.isNotEmpty) {
+          _parsedLyrics.last = _LyricLine(
+            timestamp: _parsedLyrics.last.timestamp,
+            text: '${_parsedLyrics.last.text}$stripped',
+          );
+        }
       }
     }
 
