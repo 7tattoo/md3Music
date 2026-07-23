@@ -927,7 +927,7 @@ class _FullPlayerState extends State<FullPlayer>
                 }
               },
             ),
-            // 高潮区域半透明高亮条
+            // 高潮区域高亮条（与进度条轨道重叠）
             Positioned(
               left: thumbRadius + usableWidth * climaxStartPos,
               top: 18,
@@ -936,21 +936,8 @@ class _FullPlayerState extends State<FullPlayer>
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.3),
+                    color: colorScheme.primary.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-            // 高潮起始标记（小三角）
-            Positioned(
-              left: thumbRadius + usableWidth * climaxStartPos - 4,
-              top: 12,
-              child: IgnorePointer(
-                child: CustomPaint(
-                  size: const Size(8, 6),
-                  painter: _TrianglePainter(
-                    color: colorScheme.primary,
                   ),
                 ),
               ),
@@ -1588,28 +1575,4 @@ class _FullPlayerState extends State<FullPlayer>
       ),
     );
   }
-}
-
-/// 绘制向下小三角的 CustomPainter，用于高潮点标记。
-class _TrianglePainter extends CustomPainter {
-  final Color color;
-
-  _TrianglePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    final path = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TrianglePainter oldDelegate) =>
-      oldDelegate.color != color;
 }

@@ -1334,7 +1334,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                 }
               },
             ),
-            // 高潮区域半透明白色高亮条
+            // 高潮区域高亮条（与进度条轨道重叠）
             Positioned(
               left: thumbRadius + usableWidth * climaxStartPos,
               top: 18,
@@ -1343,20 +1343,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.3),
+                    color: Colors.white.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(2),
                   ),
-                ),
-              ),
-            ),
-            // 高潮起始标记（小三角）
-            Positioned(
-              left: thumbRadius + usableWidth * climaxStartPos - 4,
-              top: 12,
-              child: IgnorePointer(
-                child: CustomPaint(
-                  size: const Size(8, 6),
-                  painter: _AmTrianglePainter(),
                 ),
               ),
             ),
@@ -2037,23 +2026,4 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
           const PlayerPlaylistDialog(useDisplayName: true),
     );
   }
-}
-
-/// AM 风格高潮点标记小三角（白色）。
-class _AmTrianglePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    final path = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _AmTrianglePainter oldDelegate) => false;
 }
