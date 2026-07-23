@@ -12,7 +12,7 @@ import 'package:flutter/widgets.dart';
 /// 调用时机：
 /// - 全屏播放器 initState 时首次调用
 /// - didChangeMetrics 回调中调用（用户旋转设备时响应）
-/// - 全屏播放器 dispose 时调 [restoreSystemUi] 恢复
+/// - 全屏播放器 dispose 时调 [restoreSystemUi] 恢复（确保从横屏沉浸模式正确退出）
 void applyImmersiveForOrientation() {
   final view = WidgetsBinding.instance.platformDispatcher.views.first;
   final isLandscape = view.physicalSize.width > view.physicalSize.height;
