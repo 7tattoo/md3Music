@@ -1475,7 +1475,7 @@ class _FullPlayerState extends State<FullPlayer>
       // 透明 barrier：横屏时点击左半边不关闭对话框（仍可操作播放器）
       barrierColor: Colors.transparent,
       builder: (dialogContext) => const PlayerPlaylistDialog(
-        useDisplayName: false, // MD3 风格用 title
+        useDisplayName: true,
       ),
     );
   }
