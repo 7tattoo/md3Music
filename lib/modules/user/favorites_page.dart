@@ -169,7 +169,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
         _loadPlaylists(forceNoCache: true);
       }
     }
-    controller.dispose();
+    // 延迟销毁控制器，确保对话框完全关闭后再销毁
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.dispose();
+    });
   }
 
   // ---- 批量管理 ----
