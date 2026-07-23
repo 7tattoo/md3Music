@@ -930,13 +930,11 @@ class _FullPlayerState extends State<FullPlayer>
             // 高潮区域半透明高亮条
             Positioned(
               left: thumbRadius + usableWidth * climaxStartPos,
-              top: 0,
+              top: 18,
               width: usableWidth * (climaxEndPos - climaxStartPos),
-              height: 40,
+              height: 4,
               child: IgnorePointer(
                 child: Container(
-                  margin: const EdgeInsets.only(top: 14),
-                  height: 4,
                   decoration: BoxDecoration(
                     color: colorScheme.primary.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(2),
@@ -947,7 +945,7 @@ class _FullPlayerState extends State<FullPlayer>
             // 高潮起始标记（小三角）
             Positioned(
               left: thumbRadius + usableWidth * climaxStartPos - 4,
-              top: 8,
+              top: 12,
               child: IgnorePointer(
                 child: CustomPaint(
                   size: const Size(8, 6),
