@@ -927,17 +927,20 @@ class _FullPlayerState extends State<FullPlayer>
                 }
               },
             ),
-            // 高潮区域高亮条（与进度条轨道重叠）
+            // 高潮区域高亮条：与进度条轨道同高、垂直居中对齐
             Positioned(
               left: thumbRadius + usableWidth * climaxStartPos,
-              top: 18,
+              top: 0,
+              bottom: 0,
               width: usableWidth * (climaxEndPos - climaxStartPos),
-              height: 4,
               child: IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(2),
+                child: Center(
+                  child: Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
               ),
