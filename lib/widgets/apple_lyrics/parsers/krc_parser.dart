@@ -48,6 +48,7 @@ class KrcParser {
     '[total:',
     '[offset:',
     '[language:',
+    '[kana:',
   ];
 
   /// 解析 KRC 明文为 LyricLine 列表，失败返回空列表
@@ -72,7 +73,22 @@ class KrcParser {
 
         // 行首时间戳匹配
         final lineMatch = _lineTimestampRegex.firstMatch(line);
-        if (lineMatch == null) continue;
+        if (lineMatch == null) {
+          // KRC 孤立 word tag 行（无行级时间戳）：剥离标签后追加到上一行
+          if (_wordTagRegex.hasMatch(line) && lines.isNotEmpty) {
+            final stripped = line.replaceAll(_wordTagRegex, '').trim();
+            if (stripped.isNotEmpty) {
+              final lastLine = lines.last;
+              lines[lines.length - 1] = LyricLine(
+                startTime: lastLine.startTime,
+                duration: lastLine.duration,
+                text: '${lastLine.text}$stripped',
+                words: lastLine.words,
+              );
+            }
+          }
+          continue;
+        }
 
         // 解析行 startTime / duration（损坏时跳过此行）
         final int lineStart;
