@@ -174,11 +174,31 @@ class _SystemUiUpdater extends StatefulWidget {
   State<_SystemUiUpdater> createState() => _SystemUiUpdaterState();
 }
 
-class _SystemUiUpdaterState extends State<_SystemUiUpdater> {
+class _SystemUiUpdaterState extends State<_SystemUiUpdater> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _updateSystemUi();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 当应用从后台恢复或从其他页面返回时，恢复系统 UI
+    if (state == AppLifecycleState.resumed) {
+      _updateSystemUi();
+    }
   }
 
   void _updateSystemUi() {
