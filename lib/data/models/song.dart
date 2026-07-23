@@ -13,6 +13,10 @@ class Song {
   final String? quality;
   final String? albumAudioId;
   final int? fileId;
+  /// 高潮部分开始时间（秒），由酷狗 /song/climax 接口返回。
+  final double? climaxStart;
+  /// 高潮部分结束时间（秒），由酷狗 /song/climax 接口返回。
+  final double? climaxEnd;
 
   const Song({
     required this.id,
@@ -29,6 +33,8 @@ class Song {
     this.quality,
     this.albumAudioId,
     this.fileId,
+    this.climaxStart,
+    this.climaxEnd,
   });
 
   String get displayDuration {
@@ -64,6 +70,8 @@ class Song {
       quality: json['quality'] as String?,
       albumAudioId: json['albumAudioId'] as String?,
       fileId: json['fileId'] as int?,
+      climaxStart: (json['climaxStart'] as num?)?.toDouble(),
+      climaxEnd: (json['climaxEnd'] as num?)?.toDouble(),
     );
   }
 
@@ -83,6 +91,8 @@ class Song {
       'quality': quality,
       'albumAudioId': albumAudioId,
       'fileId': fileId,
+      'climaxStart': climaxStart,
+      'climaxEnd': climaxEnd,
     };
   }
 
@@ -101,6 +111,8 @@ class Song {
     String? quality,
     String? albumAudioId,
     int? fileId,
+    double? climaxStart,
+    double? climaxEnd,
   }) {
     return Song(
       id: id ?? this.id,
@@ -117,6 +129,8 @@ class Song {
       quality: quality ?? this.quality,
       albumAudioId: albumAudioId ?? this.albumAudioId,
       fileId: fileId ?? this.fileId,
+      climaxStart: climaxStart ?? this.climaxStart,
+      climaxEnd: climaxEnd ?? this.climaxEnd,
     );
   }
 

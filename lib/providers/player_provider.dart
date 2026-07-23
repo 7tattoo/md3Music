@@ -507,6 +507,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     _prefetchNextSongs(startIndex);
+    _fetchClimaxData();
   }
 
   void _prefetchNextSongs(int startIndex) {
@@ -644,7 +645,41 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         await _setUrlAndPlay(playbackUrl, seekTo: seekTo, playAfter: play);
       }
     }
+
+    // 异步获取高潮时间（不阻塞播放）
+    _fetchClimaxData();
+
     return true;
+  }
+
+  /// 异步获取当前歌曲的高潮时间数据。
+  ///
+  /// 调用酷狗 /song/climax 接口，获取高潮起止时间后更新 [_currentSong]。
+  /// 不阻塞播放流程，失败时静默忽略。
+  Future<void> _fetchClimaxData() async {
+    final song = _currentSong;
+    if (song == null || !song.isOnline) return;
+    // 已有数据则跳过
+    if (song.climaxStart != null) return;
+    try {
+      final climax = await KugouApiClient().getSongClimax(
+        song.id,
+        albumAudioId: song.albumAudioId,
+      );
+      if (climax == null) return;
+      final start = double.tryParse(climax.climaxStart ?? '');
+      final end = double.tryParse(climax.climaxEnd ?? '');
+      if (start == null || end == null) return;
+      // 确认当前歌曲未切换
+      if (_currentSong?.id != song.id) return;
+      _currentSong = song.copyWith(climaxStart: start, climaxEnd: end);
+      // 同步更新播放列表中的引用
+      final idx = _playlist.indexWhere((s) => s.id == song.id);
+      if (idx >= 0) _playlist[idx] = _currentSong!;
+      notifyListeners();
+    } catch (_) {
+      // 静默忽略，高潮数据非必需
+    }
   }
 
   Future<void> next() async {
