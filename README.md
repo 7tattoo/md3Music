@@ -34,8 +34,6 @@
 
 ### 手机 · 更多界面
 
-主页、发现、歌单、设置等（非全屏播放页）。
-
 <p align="center">
   <img src="img/phone/other/1a910009176c619f456736cbfa434eb4.jpg" width="200" alt="手机更多界面 1" />
   <img src="img/phone/other/1de8fefeb7bd0fcd2407799eeb736276.jpg" width="200" alt="手机更多界面 2" />
@@ -47,23 +45,21 @@
   <img src="img/phone/other/a7ca9d5ad72e5ee65cdb65b74de6f937.jpg" width="200" alt="手机更多界面 6" />
 </p>
 
-### 平板 · Material Design 3
-
-<p align="center">
-  <img src="img/pad/md3/47fc8b072e30bf05134ab14d98079fac.jpg" width="420" alt="平板 MD3 界面 1" />
-  <img src="img/pad/md3/adc640b5a5902cf39c960d3cf287da22.jpg" width="420" alt="平板 MD3 界面 2" />
-</p>
-
 ### 平板 · Apple Music 风格
 
 <p align="center">
-  <img src="img/pad/applemusic/919678959eeded94228d8cbc003409df.jpg" width="420" alt="平板 Apple Music 风格 1" />
-  <img src="img/pad/applemusic/a57b3aa463c33dad0c450cb6d39e8030.jpg" width="420" alt="平板 Apple Music 风格 2" />
+  <img src="img/pad/md3/47fc8b072e30bf05134ab14d98079fac.jpg" width="420" alt="平板 Apple Music 风格 1" />
+  <img src="img/pad/md3/adc640b5a5902cf39c960d3cf287da22.jpg" width="420" alt="平板 Apple Music 风格 2" />
+</p>
+
+### 平板 · Material Design 3
+
+<p align="center">
+  <img src="img/pad/applemusic/919678959eeded94228d8cbc003409df.jpg" width="420" alt="平板 MD3 界面 1" />
+  <img src="img/pad/applemusic/a57b3aa463c33dad0c450cb6d39e8030.jpg" width="420" alt="平板 MD3 界面 2" />
 </p>
 
 ### 平板 · 更多界面
-
-主页、发现、歌单等（非全屏播放页）。
 
 <p align="center">
   <img src="img/pad/other/7343c95bccbc61f8ba795418685e1bcb.jpg" width="560" alt="平板更多界面 1" />
