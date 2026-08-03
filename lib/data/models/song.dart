@@ -1,0 +1,152 @@
+class Song {
+  final String id;
+  final String title;
+  final String artist;
+  final String album;
+  final Duration duration;
+  final String? url;
+  final String? localPath;
+  final String? artworkUri;
+  final bool isOnline;
+  final String? albumId;
+  final String? artistId;
+  final String? quality;
+  final String? albumAudioId;
+  final int? fileId;
+  /// 高潮部分开始时间（秒），由酷狗 /song/climax 接口返回。
+  final double? climaxStart;
+  /// 高潮部分结束时间（秒），由酷狗 /song/climax 接口返回。
+  final double? climaxEnd;
+  /// 本地收藏标志位（区别于云端"我喜欢"）。
+  /// true 表示用户在本机收藏过；旧 JSON 缺省时默认为 false，向后兼容。
+  final bool isLocallyFavorited;
+
+  const Song({
+    required this.id,
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.duration,
+    this.url,
+    this.localPath,
+    this.artworkUri,
+    this.isOnline = false,
+    this.albumId,
+    this.artistId,
+    this.quality,
+    this.albumAudioId,
+    this.fileId,
+    this.climaxStart,
+    this.climaxEnd,
+    this.isLocallyFavorited = false,
+  });
+
+  String get displayDuration {
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  /// 用于 UI 显示的标题——剥离常见音频文件扩展名后缀。
+  ///
+  /// 酷狗 API 返回的 `songname`/`FileName` 字段有时带 `.mp3`/`.flac` 等后缀，
+  /// 在 UI 显示时应当剥离。原始 [title] 字段保持不变用于搜索/收藏 key 等场景。
+  /// 支持的扩展名：mp3, flac, wav, ape, m4a, ogg, aac, wma, opus（大小写不敏感）。
+  String get displayName {
+    final pattern = RegExp(r'\.(mp3|flac|wav|ape|m4a|ogg|aac|wma|opus)$',
+        caseSensitive: false);
+    return title.replaceFirst(pattern, '');
+  }
+
+  factory Song.fromJson(Map<String, dynamic> json) {
+    return Song(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      artist: json['artist'] as String,
+      album: json['album'] as String,
+      duration: Duration(milliseconds: (json['duration'] as num).toInt()),
+      url: json['url'] as String?,
+      localPath: json['localPath'] as String?,
+      artworkUri: json['artworkUri'] as String?,
+      isOnline: (json['isOnline'] as bool?) ?? false,
+      albumId: json['albumId'] as String?,
+      artistId: json['artistId'] as String?,
+      quality: json['quality'] as String?,
+      albumAudioId: json['albumAudioId'] as String?,
+      fileId: json['fileId'] as int?,
+      climaxStart: (json['climaxStart'] as num?)?.toDouble(),
+      climaxEnd: (json['climaxEnd'] as num?)?.toDouble(),
+      isLocallyFavorited: (json['isLocallyFavorited'] as bool?) ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'duration': duration.inMilliseconds,
+      'url': url,
+      'localPath': localPath,
+      'artworkUri': artworkUri,
+      'isOnline': isOnline,
+      'albumId': albumId,
+      'artistId': artistId,
+      'quality': quality,
+      'albumAudioId': albumAudioId,
+      'fileId': fileId,
+      'climaxStart': climaxStart,
+      'climaxEnd': climaxEnd,
+      'isLocallyFavorited': isLocallyFavorited,
+    };
+  }
+
+  Song copyWith({
+    String? id,
+    String? title,
+    String? artist,
+    String? album,
+    Duration? duration,
+    String? url,
+    String? localPath,
+    String? artworkUri,
+    bool? isOnline,
+    String? albumId,
+    String? artistId,
+    String? quality,
+    String? albumAudioId,
+    int? fileId,
+    double? climaxStart,
+    double? climaxEnd,
+    bool? isLocallyFavorited,
+  }) {
+    return Song(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      album: album ?? this.album,
+      duration: duration ?? this.duration,
+      url: url ?? this.url,
+      localPath: localPath ?? this.localPath,
+      artworkUri: artworkUri ?? this.artworkUri,
+      isOnline: isOnline ?? this.isOnline,
+      albumId: albumId ?? this.albumId,
+      artistId: artistId ?? this.artistId,
+      quality: quality ?? this.quality,
+      albumAudioId: albumAudioId ?? this.albumAudioId,
+      fileId: fileId ?? this.fileId,
+      climaxStart: climaxStart ?? this.climaxStart,
+      climaxEnd: climaxEnd ?? this.climaxEnd,
+      isLocallyFavorited: isLocallyFavorited ?? this.isLocallyFavorited,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Song && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+}

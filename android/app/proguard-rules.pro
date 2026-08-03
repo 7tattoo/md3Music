@@ -1,0 +1,14 @@
+# JAudioTagger 依赖反射创建标签对象副本，必须保留所有类名和构造函数
+# 否则 R8 混淆后反射调用 NoSuchMethodException: Error finding constructor to create copy
+-keep class org.jaudiotagger.** { *; }
+-keep class org.jaudiotagger.tag.id3.** { *; }
+-keep class org.jaudiotagger.tag.flac.** { *; }
+-keep class org.jaudiotagger.tag.mp4.** { *; }
+-keep class org.jaudiotagger.tag.vorbiscomment.** { *; }
+-keep class org.jaudiotagger.audio.** { *; }
+-keep class org.jaudiotagger.tag.datatype.** { *; }
+-keep class org.jaudiotagger.tag.reference.** { *; }
+-keep class org.jaudiotagger.tag.images.** { *; }
+-keep class org.jaudiotagger.tag.lyrics.** { *; }
+-keep class org.jaudiotagger.tag.id3.framebody.** { *; }
+-keep class org.jaudiotagger.tag.id3.valuepair.** { *; }
