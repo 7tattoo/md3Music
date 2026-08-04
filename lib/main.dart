@@ -21,8 +21,6 @@ import 'services/kugou_server.dart';
 import 'widgets/apple_lyrics/layout/lyric_preferences.dart';
 import 'widgets/md3_lyric_preferences.dart';
 
-const String _kBatteryPromptShownKey = 'battery_prompt_shown';
-
 /// 顶级 Navigator 的 GlobalKey，预留供后续扩展使用。
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -152,15 +150,4 @@ Future<void> _requestPermissions() async {
       print('Notification permission request failed: $e');
     }
   }
-  // 忽略电池优化：只弹一次（不管用户选什么都标记为已弹）
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final alreadyShown = prefs.getBool(_kBatteryPromptShownKey) ?? false;
-    if (!alreadyShown) {
-      if (await Permission.ignoreBatteryOptimizations.isDenied) {
-        await Permission.ignoreBatteryOptimizations.request();
-      }
-      await prefs.setBool(_kBatteryPromptShownKey, true);
-    }
-  } catch (_) {}
 }
