@@ -17,15 +17,16 @@ class AudioService {
   AudioService._internal();
 
   final AudioPlayer _player = AudioPlayer(
-    // 增大 ExoPlayer 缓冲区：默认仅 ~10s，在国产安卓设备 CPU 降频时
-    // 流媒体下载速度跟不上播放速度，1-2 秒就耗尽缓冲触发 completed。
-    // 60s 缓冲给降频状态下的网络足够时间预加载数据。
+    // ExoPlayer 缓冲配置。曾增大到 60s 以缓解国产安卓设备 CPU 降频导致的欠载，
+    // 但欠载后 bufferForPlaybackAfterRebufferDuration=10s 会把"冻结"拉长到秒级，
+    // 恢复时位置还会前跳。这里压缩缓冲上限与欠载恢复阈值，缩短卡顿时长。
+    // 保留 min==max 的固定 30s 缓冲窗口（与 ExoPlayer 默认 50s/50s 同构）。
     audioLoadConfiguration: AudioLoadConfiguration(
       androidLoadControl: AndroidLoadControl(
         minBufferDuration: Duration(seconds: 30),
-        maxBufferDuration: Duration(seconds: 60),
+        maxBufferDuration: Duration(seconds: 30),
         bufferForPlaybackDuration: Duration(seconds: 3),
-        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 10),
+        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
       ),
     ),
   );

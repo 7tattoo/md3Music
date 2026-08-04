@@ -295,6 +295,21 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       _positionSubscription = _audioService.positionStream.listen((position) {
         _position = position;
+
+        // [修复] completed 事件不可靠时的切歌兜底：播放中位置已到达时长末尾，
+        // ExoPlayer 却未发 completed（0.9.x / 0.10.x 均观察到），视为播完触发切歌。
+        // 仅在 processingState 不是 completed 时兜底（正常 completed 已处理则不参与），
+        // 配合 _handlePlaybackCompleted 的防重入锁，避免双触发连跳两首。
+        if (_audioService != null &&
+            _isPlaying &&
+            _duration != null &&
+            _duration!.inMilliseconds > 0 &&
+            _audioService.player.processingState !=
+                just_audio.ProcessingState.completed) {
+          if (position.inMilliseconds >= _duration!.inMilliseconds) {
+            _handlePlaybackCompleted();
+          }
+        }
         _updateNotificationPosition();
         notifyListeners();
         // 防抖保存位置（3 秒）
@@ -374,6 +389,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _handlePlaybackCompleted() async {
     if (_handlingCompletion) return;
     _handlingCompletion = true;
+    // [诊断] completed 事件触发时的播放上下文：确认"卡顿→位置跳变"是否由异常重试引起。
+    // 复现时对照日志：若 isAbnormal=true 且随后出现 re-resolve seek，则跳变来自重试逻辑。
+    try {
+      final dPos = _position;
+      final dDur = _currentSong?.duration ?? Duration.zero;
+      final dAbnormal = dPos.inMilliseconds > 500 &&
+          dDur.inSeconds > 0 &&
+          dPos.inSeconds < dDur.inSeconds * 0.8;
+      debugPrint(
+        '[PlaybackCompleted] loop=${_loopMode.name} '
+        'song="${_currentSong?.displayName}" online=${_currentSong?.isOnline} '
+        'pos=${dPos.inMilliseconds}ms dur=${dDur.inMilliseconds}ms '
+        'isAbnormal=$dAbnormal hasUrl=${_currentSong?.url != null} '
+        'retries=$_abnormalEndRetries idx=$_currentIndex len=${_playlist.length}',
+      );
+    } catch (_) {}
     try {
       if (_loopMode == AppLoopMode.one) {
         // 单曲循环：检测在线歌曲是否异常结束（URL 过期 / 流中断），
@@ -403,6 +434,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             return;
           }
           // 清除旧 URL，从上次位置继续
+          debugPrint(
+            '[PlaybackCompleted] loop.one 异常重试: seekTo=${lastPosition.inMilliseconds}ms',
+          );
           _currentSong = _currentSong!.copyWith(url: null);
           _playlist[_currentIndex] = _currentSong!;
           final ok = await _resolveAndPlayCurrentSong(seekTo: lastPosition);
@@ -494,6 +528,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
           // 异常结束时从上次位置继续播放；正常播完从 0 开始
           final seekTo = isAbnormalEnd ? lastPosition : null;
+          debugPrint(
+            '[PlaybackCompleted] 末曲分支: isAbnormalEnd=$isAbnormalEnd '
+            'seekTo=${seekTo?.inMilliseconds ?? 0}ms retries=$_abnormalEndRetries',
+          );
           final ok = await _resolveAndPlayCurrentSong(seekTo: seekTo);
           if (ok) {
             _resolveError = null;
@@ -503,8 +541,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           notifyListeners();
         }
       } else {
-        // 不在末尾：正常切下一首（用户切歌会重置计数器）
-        next();
+        // 不在末尾：正常切下一首（用户切歌会重置计数器）。
+        // 必须 await：让 _handlingCompletion 锁覆盖整个异步切歌过程，
+        // 否则位置兜底 / completed 双触发会在锁释放后再次进入、连跳两首。
+        await next();
       }
     } finally {
       _handlingCompletion = false;
