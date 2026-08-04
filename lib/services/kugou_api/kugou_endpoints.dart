@@ -161,6 +161,8 @@ class KugouEndpoints {
   static const String userFollowMessage = '/user/follow/message';
   static const String userCloud = '/user/cloud';
   static const String userCloudUrl = '/user/cloud/url';
+  static const String userCloudUpload = '/user/cloud/upload';
+  static const String userCloudDel = '/user/cloud/del';
   static const String userVideoCollect = '/user/video/collect';
   static const String userVideoLove = '/user/video/love';
   static const String userListen = '/user/listen';

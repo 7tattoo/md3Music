@@ -11,6 +11,18 @@ import '../../data/models/mv_models.dart';
 import 'kugou_endpoints.dart';
 import 'kugou_models.dart';
 
+/// 一次广告领取（/youth/vip → /youth/v1/ad/play_report）的判定结果。
+enum AdClaimOutcome {
+  /// 领取成功（status == 1），可继续下一轮
+  success,
+
+  /// 今日次数已用光（error_code == 30002），正常停止
+  quotaDone,
+
+  /// 领取失败（其他错误码或响应为空），停止并上报
+  failure,
+}
+
 class KugouApiClient {
   static final KugouApiClient _instance = KugouApiClient._internal();
 
@@ -231,11 +243,15 @@ class KugouApiClient {
         headers['cookie'] = cookieParts.join(';');
         headers['Authorization'] = cookieParts.join(';');
       }
-      final response = await http.post(
-        Uri.parse(url),
-        headers: headers,
-        body: body,
-      );
+      final response = await http
+          .post(
+            Uri.parse(url),
+            headers: headers,
+            body: body,
+          )
+          // 上传大文件（云盘上传）耗时可长达数分钟，加超时兜底，
+          // 避免服务器异常时前端永久挂起（批量上传卡在某一首）。
+          .timeout(const Duration(minutes: 5));
       // 酷狗指纹接口在"未匹配"时返回 502 + JSON body（含 error_code），
       // 需要解析 body 以区分"未识别"和"真正的服务错误"
       try {
@@ -2273,13 +2289,85 @@ class KugouApiClient {
 
   /// 获取用户上传到酷狗云盘的音乐列表。
   /// 返回原始 JSON，由调用方解析（云盘列表字段与标准歌单不同）。
+  /// [noCache] 为 true 时绕过服务端 apicache（上传成功后刷新列表用）。
   Future<Map<String, dynamic>?> getUserCloud({
     int page = 1,
     int pagesize = 30,
+    bool noCache = false,
   }) async {
     return await _get(
       KugouEndpoints.userCloud,
       queryParameters: {'page': page, 'pagesize': pagesize},
+      noCache: noCache,
+    );
+  }
+
+  /// 上传本地音乐文件到酷狗云盘。
+  ///
+  /// [body] 为文件完整二进制（octet-stream）；本地服务器端负责：
+  /// 计算文件 MD5（作为 filename/hash）、分片上传（4MB/片）、
+  /// 秒传判断与「添加到云盘」的 AES/RSA 加密签名。
+  ///
+  /// [filename] 可选，缺省时由服务端按文件内容自动计算 MD5；
+  /// [extendname] 文件扩展名（如 mp3/flac，不带点）；
+  /// [name] 上传后显示的歌名（缺省时服务端按 `作者 - MD5.ext` 生成）；
+  /// [authorName] 歌手名；[bitrate] 码率等级（缺省 4）；
+  /// [timelen] 时长（毫秒，可选）；[audioId]/[albumAudioId] 可选 ID 透传。
+  Future<Map<String, dynamic>?> uploadCloudSong(
+    Uint8List body, {
+    String? filename,
+    String extendname = 'mp3',
+    String? name,
+    String? authorName,
+    int bitrate = 4,
+    int? timelen,
+    int? audioId,
+    int? albumAudioId,
+  }) async {
+    final params = <String, dynamic>{
+      'extendname': extendname,
+      'bitrate': bitrate,
+    };
+    if (filename != null && filename.isNotEmpty) {
+      params['filename'] = filename.toLowerCase();
+    }
+    if (name != null && name.isNotEmpty) params['name'] = name;
+    if (authorName != null && authorName.isNotEmpty) {
+      params['author_name'] = authorName;
+    }
+    if (timelen != null) params['timelen'] = timelen;
+    if (audioId != null) params['audio_id'] = audioId;
+    if (albumAudioId != null) params['album_audio_id'] = albumAudioId;
+    return await _postBinary(
+      KugouEndpoints.userCloudUpload,
+      body: body,
+      queryParameters: params,
+    );
+  }
+
+  /// 删除云盘音乐（支持单首与批量）。
+  /// [hashes] 歌曲 hash；[fileids] 云盘文件 ID（列表接口返回的 kv_id）；
+  /// [albumAudioIds] 专辑音频 ID，与 [fileids] 一一对应。
+  /// 三者至少传一个；服务端支持逗号分隔多值（数组会 join 成逗号串）。
+  Future<Map<String, dynamic>?> deleteCloudSongs({
+    List<String>? hashes,
+    List<String>? fileids,
+    List<String>? albumAudioIds,
+  }) async {
+    final params = <String, dynamic>{};
+    if (hashes != null && hashes.isNotEmpty) {
+      params['hashes'] = hashes.join(',');
+    }
+    if (fileids != null && fileids.isNotEmpty) {
+      params['fileids'] = fileids.join(',');
+    }
+    if (albumAudioIds != null && albumAudioIds.isNotEmpty) {
+      params['album_audio_ids'] = albumAudioIds.join(',');
+    }
+    return await _get(
+      KugouEndpoints.userCloudDel,
+      queryParameters: params,
+      noCache: true,
     );
   }
 
@@ -2742,6 +2830,27 @@ class KugouApiClient {
 
   Future<Map<String, dynamic>?> getYouthVip() async {
     return await _get(KugouEndpoints.youthVip);
+  }
+
+  /// 解析一次广告领取响应的结果（纯函数，便于单测）。
+  /// 与 kgcheckin main.js 判定一致：status==1 成功；error_code==30002 次数用光；其余失败。
+  static AdClaimOutcome parseAdClaimOutcome(Map<String, dynamic>? resp) {
+    if (resp == null) return AdClaimOutcome.failure;
+    if (resp['status'] == 1) return AdClaimOutcome.success;
+    if (resp['error_code'] == 30002) return AdClaimOutcome.quotaDone;
+    return AdClaimOutcome.failure;
+  }
+
+  /// 听歌上报领取 VIP（/youth/listen/song → /youth/v2/report/listen_song）。
+  /// error_code 130012 = 今日已领取。
+  Future<Map<String, dynamic>?> listenSong() {
+    return _post(KugouEndpoints.youthListenSong);
+  }
+
+  /// 广告播放上报领取 VIP（/youth/vip → /youth/v1/ad/play_report）。
+  /// error_code 30002 = 今日次数已用光。
+  Future<Map<String, dynamic>?> claimAdVip() {
+    return _post(KugouEndpoints.youthVip);
   }
 
   Future<Map<String, dynamic>?> getYouthUnionVip() async {

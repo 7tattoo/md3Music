@@ -2428,6 +2428,7 @@ class _FullPlayerState extends State<FullPlayer>
                                       style: TextStyle(
                                         fontSize: display.commentFontSize,
                                         height: 1.3,
+                                        color: colorScheme.onSurface,
                                       ),
                                     ),
                                   ],
@@ -2481,6 +2482,7 @@ class _FullPlayerState extends State<FullPlayer>
                                           fontSize:
                                               display.commentReplyFontSize,
                                           height: 1.3,
+                                          color: colorScheme.onSurfaceVariant,
                                         ),
                                       ),
                                     ],
