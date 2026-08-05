@@ -91,7 +91,7 @@ class KugouApiClient {
       await _initCompleter?.future;
     }
 
-    // 登录等全部请求统一走本地 API 服务器（Rust），不再依赖第三方云端
+    // 登录等全部请求统一走本地 API 服务器（Rust）
     options.baseUrl = KugouEndpoints.baseUrl;
 
     // 关键修复：每次请求前验证用户身份
