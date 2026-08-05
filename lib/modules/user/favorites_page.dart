@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/repositories/collected_playlist_store.dart';
 import '../../data/repositories/favorite_lists_cache.dart';
+import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/playlist_collection_notifier.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
@@ -586,65 +587,85 @@ class _FavoritesPageState extends State<FavoritesPage>
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final baseTheme = Theme.of(context);
+    final cs = IosColors.scheme(context);
+    final scaffold = Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '我的收藏',
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        actions: [
+          if (_isManaging)
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _deleteSelectedPlaylists,
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _showCreatePlaylistDialog,
+            ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.queue_music), text: '歌单'),
+            Tab(icon: Icon(Icons.album), text: '专辑'),
+            Tab(icon: Icon(Icons.person), text: '歌手'),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          // 监听 dio 拦截器维护的全局网络状态：任意 dio 请求失败 → 显示 banner
+          ValueListenableBuilder<bool>(
+            valueListenable: KugouApiClient.networkReachable,
+            builder: (context, reachable, _) {
+              if (reachable) return const SizedBox.shrink();
+              return OfflineBanner(
+                lastSyncTime: _lastSyncTime,
+                onRetry: _retryFromBanner,
+              );
+            },
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Container(
+                decoration: IosColors.cardDecoration(context),
+                clipBehavior: Clip.antiAlias,
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildPlaylistsTab(),
+                    _buildAlbumsTab(),
+                    _buildArtistsTab(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
     // 批量管理模式下拦截系统返回：退出管理模式而非退出 App
-    return PopScope(
-      canPop: !_isManaging,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        _exitManageMode();
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            '我的收藏',
-            style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          actions: [
-            if (_isManaging)
-              IconButton(
-                icon: const Icon(Icons.delete),
-                onPressed: _deleteSelectedPlaylists,
-              )
-            else
-              IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: _showCreatePlaylistDialog,
-              ),
-          ],
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(icon: Icon(Icons.queue_music), text: '歌单'),
-              Tab(icon: Icon(Icons.album), text: '专辑'),
-              Tab(icon: Icon(Icons.person), text: '歌手'),
-            ],
-          ),
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: cs,
+        scaffoldBackgroundColor: IosColors.bg(context),
+        appBarTheme: baseTheme.appBarTheme.copyWith(
+          backgroundColor: IosColors.bg(context),
+          surfaceTintColor: Colors.transparent,
         ),
-        body: Column(
-          children: [
-            // 监听 dio 拦截器维护的全局网络状态：任意 dio 请求失败 → 显示 banner
-            ValueListenableBuilder<bool>(
-              valueListenable: KugouApiClient.networkReachable,
-              builder: (context, reachable, _) {
-                if (reachable) return const SizedBox.shrink();
-                return OfflineBanner(
-                  lastSyncTime: _lastSyncTime,
-                  onRetry: _retryFromBanner,
-                );
-              },
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildPlaylistsTab(),
-                  _buildAlbumsTab(),
-                  _buildArtistsTab(),
-                ],
-              ),
-            ),
-          ],
-        ),
+      ),
+      child: PopScope(
+        canPop: !_isManaging,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          _exitManageMode();
+        },
+        child: scaffold,
       ),
     );
   }

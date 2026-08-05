@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/theme/ios_grouped_theme.dart';
 import '../../data/models/album.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
@@ -180,9 +181,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final baseTheme = Theme.of(context);
+    final colorScheme = IosColors.scheme(context);
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: ScrollAwareAppBar(
         title: 'MD3Music',
         scrollController: _scrollController,
@@ -242,6 +244,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 ],
               ),
       ),
+    );
+
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: colorScheme,
+        scaffoldBackgroundColor: IosColors.bg(context),
+        appBarTheme: baseTheme.appBarTheme.copyWith(
+          backgroundColor: IosColors.bg(context),
+          surfaceTintColor: Colors.transparent,
+        ),
+      ),
+      child: scaffold,
     );
   }
 
