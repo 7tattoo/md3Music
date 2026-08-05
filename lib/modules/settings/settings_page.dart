@@ -221,84 +221,192 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final baseTheme = Theme.of(context);
+    final isDark = baseTheme.brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
-      body: ListView(
-        children: [
-          _buildSectionHeader('外观'),
-          _buildAppearanceSection(colorScheme),
-          const Divider(),
-          _buildSectionHeader('播放页样式'),
-          _buildPlayerStyleSection(colorScheme),
-          const Divider(),
-          _buildSectionHeader('歌词'),
-          _buildLyricSection(colorScheme),
-          const Divider(),
-          _buildSectionHeader('播放'),
-          _buildPlaybackSection(colorScheme),
-          const Divider(),
-          _buildSectionHeader('主页管理'),
-          _buildTabManagementSection(colorScheme),
-          const Divider(),
-          _buildSectionHeader('在线音乐'),
-          _buildOnlineMusicSection(colorScheme),
-          const Divider(),
-          _buildSectionHeader('缓存与数据'),
-          _buildCacheSection(colorScheme),
-          const Divider(),
-          _buildSectionHeader('关于'),
-          _buildAboutSection(colorScheme),
-          const SizedBox(height: 32),
-        ],
+    // iOS 语义色（中性色固定，tint 用主题品牌色，浅深色自动适配）
+    final bg = isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
+    final card = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final label = isDark ? Colors.white : const Color(0xFF1C1C1E);
+    final secondary =
+        isDark ? const Color(0xFFAEAEB2) : const Color(0xFF8E8E93);
+    final separator =
+        isDark ? const Color(0xFF38383A) : const Color(0xFFE5E5E5);
+    final sliderTrack =
+        isDark ? const Color(0xFF38383A) : const Color(0xFFE5E5E5);
+
+    final colorScheme = baseTheme.colorScheme.copyWith(
+      surface: card,
+      onSurface: label,
+      onSurfaceVariant: secondary,
+      surfaceContainerLowest: bg,
+    );
+
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: colorScheme,
+        scaffoldBackgroundColor: bg,
+        dividerColor: separator,
+        appBarTheme: baseTheme.appBarTheme.copyWith(
+          backgroundColor: bg,
+          surfaceTintColor: Colors.transparent,
+        ),
+        listTileTheme: ListTileThemeData(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          titleTextStyle: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w500,
+            color: label,
+          ),
+          subtitleTextStyle: TextStyle(fontSize: 13, color: secondary),
+        ),
+        sliderTheme: baseTheme.sliderTheme.copyWith(
+          activeTrackColor: baseTheme.colorScheme.primary,
+          inactiveTrackColor: sliderTrack,
+          thumbColor: baseTheme.colorScheme.primary,
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(title: const Text('设置')),
+        body: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            _buildSectionLabel('外观', colorScheme),
+            _buildSettingsCard(
+              _buildAppearanceSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('播放页样式', colorScheme),
+            _buildSettingsCard(
+              _buildPlayerStyleSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('歌词', colorScheme),
+            _buildSettingsCard(
+              _buildLyricSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('播放', colorScheme),
+            _buildSettingsCard(
+              _buildPlaybackSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('主页管理', colorScheme),
+            _buildSettingsCard(
+              _buildTabManagementSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('在线音乐', colorScheme),
+            _buildSettingsCard(
+              _buildOnlineMusicSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('缓存与数据', colorScheme),
+            _buildSettingsCard(
+              _buildCacheSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('关于', colorScheme),
+            _buildSettingsCard(
+              _buildAboutSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  /// iOS 风格分区小标题：小号灰色字，左缩进与卡片内文字对齐。
+  Widget _buildSectionLabel(String title, ColorScheme colorScheme) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
+      padding: const EdgeInsets.fromLTRB(32, 20, 16, 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
+    );
+  }
+
+  /// iOS 风格分组卡片：圆角 + 卡片底色 + 行间缩进分隔线。
+  Widget _buildSettingsCard(
+    List<Widget> rows,
+    ColorScheme colorScheme,
+    Color separator,
+  ) {
+    final children = <Widget>[];
+    for (var i = 0; i < rows.length; i++) {
+      if (i > 0) {
+        children.add(Divider(
+          height: 0.5,
+          thickness: 0.5,
+          indent: 16,
+          color: separator,
+        ));
+      }
+      children.add(rows[i]);
+    }
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
     );
   }
 
   /// 歌词设置 section：MD3 与 Apple Music 两种风格播放页的歌词
   /// （字号/行间距/字体）均已移入播放页右上角菜单的"歌词显示设置"入口，
   /// 设置页不再保留独立入口。
-  Widget _buildLyricSection(ColorScheme colorScheme) {
-    return Column(
-      children: [
-        // Lyricon 词幕推送主开关
-        SwitchListTile(
-          title: const Text('Lyricon 词幕推送'),
-          subtitle: const Text('向 Lyricon 提供方实时推送歌词'),
-          value: _lyriconEnabled,
-          onChanged: (value) {
-            setState(() {
-              _lyriconEnabled = value;
-            });
-            LyriconProviderService.instance.setEnabled(value);
-            _settingsRepository.setLyriconEnabled(value);
-          },
-        ),
-        // 主开关下方显示当前连接状态
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _getLyriconStateText(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+  List<Widget> _buildLyricSection(ColorScheme colorScheme) {
+    return [
+        // Lyricon 词幕推送主开关（开关 + 连接状态合并为一行组，避免插入分隔线）
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              title: const Text('Lyricon 词幕推送'),
+              subtitle: const Text('向 Lyricon 提供方实时推送歌词'),
+              value: _lyriconEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _lyriconEnabled = value;
+                });
+                LyriconProviderService.instance.setEnabled(value);
+                _settingsRepository.setLyriconEnabled(value);
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _getLyriconStateText(),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
         // 次级开关：翻译歌词（主开关关闭时禁用）
         SwitchListTile(
@@ -378,8 +486,7 @@ class _SettingsPageState extends State<SettingsPage> {
             MediaNotificationService.setBluetoothLyricEnabled(value);
           },
         ),
-      ],
-    );
+    ];
   }
 
   /// 歌词字体来源中文标签（用于"歌词字体"ListTile 的 subtitle）。
@@ -503,55 +610,51 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildAppearanceSection(ColorScheme colorScheme) {
+  List<Widget> _buildAppearanceSection(ColorScheme colorScheme) {
     final themeProvider = context.read<ThemeProvider>();
     // 仅 ThemeMode.light 时禁用 OLED 开关；dark 与 system 均可勾选。
     // system 模式下勾选后，等系统切到深色时 darkTheme 自动应用纯黑（MaterialApp 机制）。
     final canToggleOled = _themeMode != ThemeMode.light;
-    return Column(
-      children: [
+    return [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  '主题模式',
-                  style: Theme.of(context).textTheme.bodyLarge,
+              Text('主题模式', style: Theme.of(context).textTheme.bodyLarge),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ThemeMode.light,
+                      label: Text('浅色'),
+                      icon: Icon(Icons.light_mode),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.dark,
+                      label: Text('深色'),
+                      icon: Icon(Icons.dark_mode),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.system,
+                      label: Text('跟随系统'),
+                      icon: Icon(Icons.brightness_auto),
+                    ),
+                  ],
+                  selected: {_themeMode},
+                  onSelectionChanged: (modes) {
+                    final mode = modes.first;
+                    setState(() {
+                      _themeMode = mode;
+                    });
+                    context.read<ThemeProvider>().setThemeMode(mode);
+                    _settingsRepository.setThemeMode(mode);
+                  },
                 ),
               ),
             ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SegmentedButton<ThemeMode>(
-            segments: const [
-              ButtonSegment(
-                value: ThemeMode.light,
-                label: Text('浅色'),
-                icon: Icon(Icons.light_mode),
-              ),
-              ButtonSegment(
-                value: ThemeMode.dark,
-                label: Text('深色'),
-                icon: Icon(Icons.dark_mode),
-              ),
-              ButtonSegment(
-                value: ThemeMode.system,
-                label: Text('跟随系统'),
-                icon: Icon(Icons.brightness_auto),
-              ),
-            ],
-            selected: {_themeMode},
-            onSelectionChanged: (modes) {
-              final mode = modes.first;
-              setState(() {
-                _themeMode = mode;
-              });
-              context.read<ThemeProvider>().setThemeMode(mode);
-              _settingsRepository.setThemeMode(mode);
-            },
           ),
         ),
         // app全局字体入口：点击弹出三选一面板（系统 / 内置 SimHei / 自定义 TTF）
@@ -604,69 +707,71 @@ class _SettingsPageState extends State<SettingsPage> {
               ? (v) => themeProvider.setUseOledBlack(v)
               : null,
         ),
-        const Divider(),
-        // UI 缩放滑块
+        // UI 缩放滑块（滑块 + 说明合并为一行组，避免卡片插入分隔线）
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.format_size, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 8,
+              Row(
+                children: [
+                  Icon(Icons.format_size, color: colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 4,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 8,
+                        ),
+                      ),
+                      child: Slider(
+                        value: _uiScale,
+                        min: 0.5,
+                        max: 2.0,
+                        divisions: 15,
+                        label: '${_uiScale.toStringAsFixed(1)}x',
+                        onChanged: (v) {
+                          setState(() => _uiScale = v);
+                          HapticFeedback.lightImpact();
+                        },
+                        onChangeEnd: (v) {
+                          context.read<ThemeProvider>().setUiScale(v);
+                        },
+                      ),
                     ),
                   ),
-                  child: Slider(
-                    value: _uiScale,
-                    min: 0.5,
-                    max: 2.0,
-                    divisions: 15,
-                    label: '${_uiScale.toStringAsFixed(1)}x',
-                    onChanged: (v) {
-                      setState(() => _uiScale = v);
-                      HapticFeedback.lightImpact();
-                    },
-                    onChangeEnd: (v) {
-                      context.read<ThemeProvider>().setUiScale(v);
-                    },
+                  SizedBox(
+                    width: 40,
+                    child: Text(
+                      '${_uiScale.toStringAsFixed(1)}x',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-              SizedBox(
-                width: 40,
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
                 child: Text(
-                  '${_uiScale.toStringAsFixed(1)}x',
-                  textAlign: TextAlign.center,
+                  '调整全局界面大小（歌词界面不受影响）',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            '调整全局界面大小（歌词界面不受影响）',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
-    );
+    ];
   }
 
   /// 播放页样式 section：播放器风格卡片选择 + 视觉特效开关。
-  Widget _buildPlayerStyleSection(ColorScheme colorScheme) {
-    return Column(
-      children: [
+  List<Widget> _buildPlayerStyleSection(ColorScheme colorScheme) {
+    return [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: _buildStyleCards(colorScheme),
@@ -767,8 +872,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 }
               : null,
         ),
-      ],
-    );
+    ];
   }
 
   /// 弹出 8 色预设种子色选择面板。
@@ -921,9 +1025,8 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildPlaybackSection(ColorScheme colorScheme) {
-    return Column(
-      children: [
+  List<Widget> _buildPlaybackSection(ColorScheme colorScheme) {
+    return [
         ListTile(
           title: const Text('默认音质'),
           subtitle: Text(_getQualityLabel(_defaultQuality)),
@@ -987,14 +1090,12 @@ class _SettingsPageState extends State<SettingsPage> {
             WakelockService.instance.setSettingEnabled(value);
           },
         ),
-      ],
-    );
+    ];
   }
 
   /// 主页管理 section：Tab 显示/隐藏开关 + 拖拽排序
-  Widget _buildTabManagementSection(ColorScheme colorScheme) {
-    return Column(
-      children: [
+  List<Widget> _buildTabManagementSection(ColorScheme colorScheme) {
+    return [
         ListTile(
           leading: const Icon(Icons.tab),
           title: const Text('主页 Tab 管理'),
@@ -1002,8 +1103,7 @@ class _SettingsPageState extends State<SettingsPage> {
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: () => _showTabManagementSheet(),
         ),
-      ],
-    );
+    ];
   }
 
   /// 弹出 Tab 管理面板：支持拖拽排序 + 显示/隐藏开关。
@@ -1016,48 +1116,53 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildOnlineMusicSection(ColorScheme colorScheme) {
-    return Column(
-      children: [
-        ListTile(
-          leading: Icon(Icons.dns, color: colorScheme.primary),
-          title: const Text('本地数据接口'),
-          subtitle: Text('端口：${KugouApiServer.currentPort}'),
-          trailing: _isRestarting
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
-                )
-              : Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '运行中',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onPrimaryContainer,
+  List<Widget> _buildOnlineMusicSection(ColorScheme colorScheme) {
+    return [
+        // 本地数据接口（单元格 + 说明合并为一行组，避免插入分隔线）
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              leading: Icon(Icons.dns, color: colorScheme.primary),
+              title: const Text('本地数据接口'),
+              subtitle: Text('端口：${KugouApiServer.currentPort}'),
+              trailing: _isRestarting
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colorScheme.primary,
+                      ),
+                    )
+                  : Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '运行中',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-          onTap: _isRestarting ? null : _confirmRestartServer,
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            '本地 Rust 服务器运行中，推荐/排行/搜索/播放/登录等数据接口均通过本地处理（点击上方可重启）',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+              onTap: _isRestarting ? null : _confirmRestartServer,
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
+              child: Text(
+                '本地 Rust 服务器运行中，推荐/排行/搜索/播放/登录等数据接口均通过本地处理（点击上方可重启）',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
-    );
+    ];
   }
 
   /// 询问是否重启本地 API 服务器，确认后重启并更新端口展示。
@@ -1109,9 +1214,8 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Widget _buildCacheSection(ColorScheme colorScheme) {
-    return Column(
-      children: [
+  List<Widget> _buildCacheSection(ColorScheme colorScheme) {
+    return [
         ListTile(
           title: const Text('清除缓存'),
           leading: Icon(Icons.delete_outline, color: colorScheme.error),
@@ -1123,8 +1227,7 @@ class _SettingsPageState extends State<SettingsPage> {
           leading: Icon(Icons.bug_report, color: colorScheme.tertiary),
           onTap: () => _showDataMigrationDialog(),
         ),
-      ],
-    );
+    ];
   }
 
   Future<void> _showDataMigrationDialog() async {
@@ -1188,9 +1291,8 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Widget _buildAboutSection(ColorScheme colorScheme) {
-    return Column(
-      children: [
+  List<Widget> _buildAboutSection(ColorScheme colorScheme) {
+    return [
         ListTile(
           title: const Text('新手教程'),
           subtitle: const Text('重新查看功能引导'),
@@ -1272,8 +1374,7 @@ class _SettingsPageState extends State<SettingsPage> {
             );
           },
         ),
-      ],
-    );
+    ];
   }
 
   Future<void> _openReleasesUrl() async {
