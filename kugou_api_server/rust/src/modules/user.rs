@@ -225,28 +225,6 @@ pub fn handle_cloud_upload(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, Modul
         .unwrap_or_default()
         .to_string();
 
-    // 初始化被拒（HTTP 非 200 / status==0 / 带错误码）：酷狗拒绝了该文件，
-    // 透传上游真实 msg 并打 rejected 标记，供前端显示友好提示。
-    // 注意：秒传成功时 status==1 且无错误码，不会误判。
-    let init_status = init_json.get("status").and_then(|s| s.as_i64());
-    let init_rejected = init_res.status != 200
-        || init_status == Some(0)
-        || init_json.get("error_code").is_some()
-        || init_json.get("err_code").is_some();
-    if init_rejected {
-        let msg = init_json
-            .get("msg")
-            .or_else(|| init_json.get("error_msg"))
-            .and_then(|m| m.as_str())
-            .unwrap_or("歌曲上传被酷狗服务器拒绝");
-        return Err(ModuleResponse {
-            status: 502,
-            body: BodyValue::Json(json!({ "status": 0, "msg": msg, "rejected": true })),
-            cookie: Vec::new(),
-            headers: HashMap::new(),
-        });
-    }
-
     // 秒传分支：upload_id 为空且返回 x-bss-hash 说明文件已在服务器，跳过步骤3/4
     if !upload_id.is_empty() {
         // ========== 步骤3 上传分片（默认 4MB 一片） ==========
