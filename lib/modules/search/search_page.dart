@@ -157,58 +157,19 @@ class _SearchPageState extends State<SearchPage>
                   SliverAppBar(
                     floating: true,
                     pinned: true,
-                    title: SizedBox(
-                      height: 40,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: '搜索歌曲、歌手、专辑',
-                          hintStyle: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            size: 20,
-                            color: colorScheme.onSurfaceVariant,
+                    // 一级 Tab：居中标题「搜索」；推入页：搜索框直接作标题
+                    title: widget.showMiniPlayer
+                        ? _buildSearchField(colorScheme)
+                        : const Text('搜索'),
+                    bottom: widget.showMiniPlayer
+                        ? null
+                        : PreferredSize(
+                            preferredSize: const Size.fromHeight(52),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                              child: _buildSearchField(colorScheme),
+                            ),
                           ),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(
-                                    Icons.clear,
-                                    size: 18,
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() {
-                                      _query = '';
-                                      _hasSearched = false;
-                                    });
-                                  },
-                                )
-                              : null,
-                          filled: true,
-                          fillColor: colorScheme.surfaceContainerHighest,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 0,
-                          ),
-                          isDense: true,
-                        ),
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: _performSearch,
-                        onChanged: (value) {
-                          setState(() {});
-                          if (value.trim().isNotEmpty) {
-                            context.read<KugouProvider>().getSearchSuggest(
-                              value.trim(),
-                            );
-                          }
-                        },
-                      ),
-                    ),
                   ),
                   if (_hasSearched)
                     SliverPersistentHeader(
@@ -257,6 +218,59 @@ class _SearchPageState extends State<SearchPage>
         ),
       ),
       child: scaffold,
+    );
+  }
+
+  /// 顶部搜索框（一级 Tab 与推入页共用）。
+  Widget _buildSearchField(ColorScheme colorScheme) {
+    return SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: '搜索歌曲、歌手、专辑',
+          hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+          prefixIcon: Icon(
+            Icons.search,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: Icon(
+                    Icons.clear,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _query = '';
+                      _hasSearched = false;
+                    });
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: colorScheme.surfaceContainerHighest,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          isDense: true,
+        ),
+        textInputAction: TextInputAction.search,
+        onSubmitted: _performSearch,
+        onChanged: (value) {
+          setState(() {});
+          if (value.trim().isNotEmpty) {
+            context.read<KugouProvider>().getSearchSuggest(value.trim());
+          }
+        },
+      ),
     );
   }
 

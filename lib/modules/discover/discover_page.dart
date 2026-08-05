@@ -188,13 +188,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
       appBar: ScrollAwareAppBar(
         title: 'MD3Music',
         scrollController: _scrollController,
+        leading: IconButton(
+          icon: const Icon(Icons.search),
+          onPressed: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
-          ),
           IconButton(
             icon: const Icon(Icons.mic_outlined),
             onPressed: () => Navigator.of(context).push(
@@ -473,13 +473,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         return SliverToBoxAdapter(
           child: FadeInUp(
             delayMs: 200,
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              decoration: IosColors.cardDecoration(context),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Row(
@@ -550,9 +546,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 ),
               ],
-              ),
-              ),
             ),
+          ),
         );
       },
     );
@@ -573,13 +568,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         return SliverToBoxAdapter(
           child: FadeInUp(
             delayMs: 250,
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              decoration: IosColors.cardDecoration(context),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Text(
@@ -627,9 +618,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 ),
               ],
-              ),
-              ),
             ),
+          ),
         );
       },
     );
@@ -972,13 +962,9 @@ class _CollapsibleSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      decoration: IosColors.cardDecoration(context),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: Row(
@@ -1028,7 +1014,6 @@ class _CollapsibleSection extends StatelessWidget {
           secondChild: const SizedBox(width: double.infinity),
         ),
       ],
-      ),
     );
   }
 }
