@@ -135,7 +135,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
                   _buildVipCard(cs, tt, kugou),
                   _buildSectionLabel('常用功能', cs),
                   _buildActionGrid(cs),
-                  const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
                   _buildVipCalendar(cs, tt, kugou, context),
                   const SliverToBoxAdapter(child: SizedBox(height: 80)),
                 ],
@@ -151,7 +151,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
   Widget _buildSectionLabel(String title, ColorScheme cs) {
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 20, 16, 6),
+        padding: const EdgeInsets.fromLTRB(32, 12, 16, 6),
         child: Align(
           alignment: Alignment.centerLeft,
           child: Text(
@@ -293,7 +293,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
       child: FadeInUp(
         delayMs: 50,
         child: Container(
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
@@ -486,7 +486,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
                     receivedDays,
                     now,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   _buildStatFooter(cs, tt, receivedDays.length),
                 ],
               ),
