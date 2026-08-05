@@ -51,18 +51,41 @@ for arg in "$@"; do
 done
 
 # ---------- 1. 定位 NDK ----------
+# 在某个 Android SDK 根目录下取最高版本 NDK（无则输出空）
+ndk_from_sdk() {
+  local d="$1/ndk"
+  [ -d "$d" ] && ls -1d "$d"/* 2>/dev/null | sort -V | tail -1
+}
 if [ -n "${ANDROID_NDK_HOME:-}" ] && [ -d "$ANDROID_NDK_HOME" ]; then
   NDK="$ANDROID_NDK_HOME"
 elif [ -n "${ANDROID_NDK:-}" ] && [ -d "$ANDROID_NDK" ]; then
   NDK="$ANDROID_NDK"
+elif [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
+  NDK="$(ndk_from_sdk "$ANDROID_HOME")"
+elif [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT" ]; then
+  NDK="$(ndk_from_sdk "$ANDROID_SDK_ROOT")"
 elif [ -d "$HOME/Android/Sdk/ndk" ]; then
-  NDK="$(ls -1d "$HOME/Android/Sdk/ndk"/* 2>/dev/null | sort -V | tail -1)"
+  NDK="$(ndk_from_sdk "$HOME/Android/Sdk")"
+elif [ -n "${LOCALAPPDATA:-}" ] && [ -d "$LOCALAPPDATA/Android/Sdk/ndk" ]; then
+  # Windows：Android Studio 默认 SDK 位置
+  NDK="$(ndk_from_sdk "$LOCALAPPDATA/Android/Sdk")"
 else
   echo "错误：找不到 Android NDK。请设置 ANDROID_NDK_HOME，或安装 NDK 到 ~/Android/Sdk/ndk/" >&2
   exit 1
 fi
+if [ -z "${NDK:-}" ] || [ ! -d "$NDK" ]; then
+  echo "错误：NDK 目录不存在：${NDK:-<空>}" >&2
+  exit 1
+fi
 BIN="$NDK/toolchains/llvm/prebuilt"
-if [ -d "$BIN/linux-x86_64" ]; then
+CLANG_SUFFIX=""
+AR_SUFFIX=""
+if [ -d "$BIN/windows-x86_64" ]; then
+  BIN="$BIN/windows-x86_64/bin"
+  # Windows：cargo 是原生进程，clang 需用 .cmd 包装脚本，ar 用 .exe
+  CLANG_SUFFIX=".cmd"
+  AR_SUFFIX=".exe"
+elif [ -d "$BIN/linux-x86_64" ]; then
   BIN="$BIN/linux-x86_64/bin"
 elif [ -d "$BIN/darwin-x86_64" ]; then
   BIN="$BIN/darwin-x86_64/bin"
@@ -100,9 +123,9 @@ build() {
   local release_flag=""
   [ "$BUILD_TYPE" = "release" ] && release_flag="--release"
   echo "==> 构建 $target ($BUILD_TYPE)"
-  env "$ccvar"="$BIN/$clang" \
-      "$arvar"="$BIN/llvm-ar" \
-      "$linker"="$BIN/$clang" \
+  env "$ccvar"="$BIN/$clang$CLANG_SUFFIX" \
+      "$arvar"="$BIN/llvm-ar$AR_SUFFIX" \
+      "$linker"="$BIN/$clang$CLANG_SUFFIX" \
       cargo build --target "$target" $release_flag
 }
 

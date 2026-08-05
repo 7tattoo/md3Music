@@ -458,10 +458,18 @@ class _CloudMusicPageState extends State<CloudMusicPage> {
       }
       final msg = (result?['msg'] ?? result?['error_msg'] ?? '未知错误')
           .toString();
+      // 服务端在酷狗拒绝上传/添加该歌曲时打上 rejected 标记；
+      // 优先按标记显示友好文案，否则按关键字兜底，匹配不到时保留原始消息。
+      final rejected = result?['rejected'] == true || result?['rejected'] == 1;
+      final friendly =
+          rejected ? '酷狗不允许上传该歌曲' : _friendlyUploadError(msg);
       if (showResult) {
-        msgr.showSnackBar(_snack('上传失败：$msg'));
+        msgr.showSnackBar(_snack('上传失败：$friendly'));
+        if (msg != friendly) {
+          debugPrint('[CloudMusic] 上传失败原始消息: $msg (rejected=$rejected)');
+        }
       }
-      return (ok: false, reason: msg);
+      return (ok: false, reason: friendly);
     } catch (e) {
       msgr.clearSnackBars();
       if (showResult) {
@@ -528,6 +536,26 @@ class _CloudMusicPageState extends State<CloudMusicPage> {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
     }
     return '${(bytes / 1024).toStringAsFixed(0)}KB';
+  }
+
+  /// 把服务端原始报错翻译成友好文案。
+  ///
+  /// 酷狗对版权受限/不支持上传的歌曲会拒绝，原始 msg 可能是错误码或模糊描述。
+  /// 匹配到「被拒绝」类关键字时换成用户能看懂的话；匹配不到时保留原始消息，
+  /// 避免掩盖真正的失败原因（如断网、空间不足等）。
+  static String _friendlyUploadError(String raw) {
+    const rejected = [
+      '不允许', '不支持', '版权', '违规', '受限', '禁止',
+      '无权', '拒绝', '审核', 'forbid', 'denied',
+      'reject', 'not allow', 'not support',
+    ];
+    final r = raw.trim();
+    if (r.isEmpty) return raw;
+    final lower = r.toLowerCase();
+    for (final k in rejected) {
+      if (lower.contains(k)) return '酷狗不允许上传该歌曲';
+    }
+    return raw;
   }
 
   /// 安全地从响应字段提取歌曲列表。
