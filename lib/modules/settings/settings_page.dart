@@ -29,6 +29,7 @@ import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
 import '../../widgets/apple_lyrics/preview/lyrics_preview_page.dart';
 import '../../widgets/seed_color_picker.dart';
 import 'equalizer_settings_page.dart';
+import 'license_view_page.dart';
 
 /// CI compile-time version injection via --dart-define=APP_VERSION=X
 /// Fallback display when runtime PackageInfo read fails.
@@ -1247,6 +1248,16 @@ class _SettingsPageState extends State<SettingsPage> {
               applicationVersion: _appVersion.isEmpty
                   ? kBuildAppVersion
                   : _appVersion,
+            );
+          },
+        ),
+        ListTile(
+          title: const Text('本应用许可证'),
+          subtitle: const Text('GNU AGPL-3.0'),
+          leading: const Icon(Icons.balance_outlined),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LicenseViewPage()),
             );
           },
         ),
