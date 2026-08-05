@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -46,9 +47,11 @@ class _CoverFlowPageState extends State<CoverFlowPage> {
 
   @override
   Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
-    return Scaffold(
+    final scaffold = Scaffold(
+      backgroundColor: IosColors.bg(context),
       // 横屏沉浸模式：隐藏顶栏
       appBar: isLandscape ? null : AppBar(title: const Text('封面流')),
       body: Consumer<KugouProvider>(
@@ -75,6 +78,18 @@ class _CoverFlowPageState extends State<CoverFlowPage> {
           );
         },
       ),
+    );
+
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: IosColors.scheme(context),
+        scaffoldBackgroundColor: IosColors.bg(context),
+        appBarTheme: baseTheme.appBarTheme.copyWith(
+          backgroundColor: IosColors.bg(context),
+          surfaceTintColor: Colors.transparent,
+        ),
+      ),
+      child: scaffold,
     );
   }
 

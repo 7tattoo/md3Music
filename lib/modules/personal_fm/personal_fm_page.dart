@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -290,7 +291,8 @@ class _PersonalFmPageState extends State<PersonalFmPage>
   Widget build(BuildContext context) {
     final kugou = Provider.of<KugouProvider>(context);
     final player = Provider.of<PlayerProvider>(context);
-    final cs = Theme.of(context).colorScheme;
+    final baseTheme = Theme.of(context);
+    final cs = IosColors.scheme(context);
     final textTheme = Theme.of(context).textTheme;
 
     final isLoggedIn = kugou.isLoggedIn;
@@ -304,7 +306,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
       sideTracks = songs.sublist(1).take(_visibleSideCount).toList();
     }
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: ScrollAwareAppBar(
         title: '私人 FM',
         scrollController: _scrollController,
@@ -355,6 +357,18 @@ class _PersonalFmPageState extends State<PersonalFmPage>
           ],
         ),
       ),
+    );
+
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: cs,
+        scaffoldBackgroundColor: IosColors.bg(context),
+        appBarTheme: baseTheme.appBarTheme.copyWith(
+          backgroundColor: IosColors.bg(context),
+          surfaceTintColor: Colors.transparent,
+        ),
+      ),
+      child: scaffold,
     );
   }
 
