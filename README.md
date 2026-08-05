@@ -1,7 +1,7 @@
 # MD3Music - Material Design 3 音乐播放器
 
 <div align="center">
-  
+
 基于酷狗音乐 API 的 Flutter 音乐播放器，采用 Material Design 3 设计规范，自带嵌入式 Rust API 服务器。
 支持手机/平板自适应，提供 Apple Music 风格播放页与逐字歌词。
 本项目仅供学习使用，请勿用于商业用途，详情请参阅 [免责声明](DISCLAIMER.md)。
@@ -126,71 +126,54 @@
 ### 手机 · Material Design 3
 
 <p align="center">
-  <img src="img/phone/md3/0f720b0e915226a9d5a8ea184e81a06d.jpg" width="220" alt="手机 MD3 界面 1" />
-  <img src="img/phone/md3/58eddb6fd3ca614e60be7cb2fd4399d1.jpg" width="220" alt="手机 MD3 界面 2" />
-  <img src="img/phone/md3/ade7e5ef5165adcf0fef302e2500c6db.jpg" width="220" alt="手机 MD3 界面 3" />
+  <img src="img/phone/md3/Screenshot_2026-08-05-11-56-02-028_com.md3music.md3music.jpg" width="220" alt="手机 MD3 界面 1" />
+  <img src="img/phone/md3/Screenshot_2026-08-05-11-56-16-017_com.md3music.md3music.jpg" width="220" alt="手机 MD3 界面 2" />
+  <img src="img/phone/md3/Screenshot_2026-08-05-11-57-14-315_com.md3music.md3music.jpg" width="220" alt="手机 MD3 界面 3" />
 </p>
 
 ### 手机 · Apple Music 风格
 
 <p align="center">
-  <img src="img/phone/applemusic/Screenshot_2026-07-27-16-26-21-709_com.md3music.md3music_1785140818888edit.jpg" width="220" alt="手机 Apple Music 风格 1" />
-  <img src="img/phone/applemusic/Screenshot_2026-07-27-16-26-24-328_com.md3music.md3music_1785140811076edit.jpg" width="220" alt="手机 Apple Music 风格 2" />
-  <img src="img/phone/applemusic/Screenshot_2026-07-27-16-26-28-137_com.md3music.md3music_1785140802166edit.jpg" width="220" alt="手机 Apple Music 风格 3" />
+  <img src="img/phone/applemusic/Screenshot_2026-08-05-11-59-23-080_com.md3music.md3music.jpg" width="220" alt="手机 Apple Music 风格 1" />
+  <img src="img/phone/applemusic/Screenshot_2026-08-05-11-59-44-053_com.md3music.md3music.jpg" width="220" alt="手机 Apple Music 风格 2" />
+  <img src="img/phone/applemusic/Screenshot_2026-08-05-12-02-41-551_com.md3music.md3music-edit.jpg" width="220" alt="手机 Apple Music 风格 3" />
 </p>
 
 ### 手机 · 更多界面
 
 <p align="center">
-  <img src="img/phone/other/Screenshot_2026-07-27-12-11-55-256_com.md3music.md3music-edit.jpg" width="200" alt="手机更多界面 1" />
-  <img src="img/phone/other/Screenshot_2026-07-27-12-12-09-452_com.md3music.md3music_1785125790967edit.jpg" width="200" alt="手机更多界面 2" />
-  <img src="img/phone/other/Screenshot_2026-07-27-12-12-11-629_com.md3music.md3music_1785125804040edit.jpg" width="200" alt="手机更多界面 3" />
+  <img src="img/phone/other/Screenshot_2026-08-05-11-56-45-374_com.md3music.md3music.jpg" width="500" alt="手机更多界面 1" />
+  <img src="img/phone/other/Screenshot_2026-08-05-12-03-39-192_com.md3music.md3music.jpg" width="500" alt="手机更多界面 2" />
 </p>
-<p align="center">
-  <img src="img/phone/other/Screenshot_2026-07-27-12-12-17-432_com.md3music.md3music_1785125828120edit.jpg" width="200" alt="手机更多界面 4" />
-  <img src="img/phone/other/Screenshot_2026-07-27-12-12-29-360_com.md3music.md3music_1785125861447edit.jpg" width="200" alt="手机更多界面 5" />
-  <img src="img/phone/other/Screenshot_2026-07-27-12-12-33-145_com.md3music.md3music_1785125869619edit.jpg" width="200" alt="手机更多界面 6" />
-</p>
-<p align="center">
-  <img src="img/phone/other/Screenshot_2026-07-27-12-12-38-109_com.md3music.md3music_1785125883439edit.jpg" width="200" alt="手机更多界面 7" />
-  <img src="img/phone/other/Screenshot_2026-07-27-12-12-44-567_com.md3music.md3music_1785125899909edit.jpg" width="200" alt="手机更多界面 8" />
-  <img src="img/phone/other/Screenshot_2026-07-27-12-12-59-497_com.md3music.md3music_1785125915013edit.jpg" width="200" alt="手机更多界面 9" />
-</p>
-<p align="center">
-  <img src="img/phone/other/Screenshot_2026-07-27-12-14-20-356_com.md3music.md3music_1785125983291edit.jpg" width="200" alt="手机更多界面 10" />
-  <img src="img/phone/other/Screenshot_2026-07-27-12-14-31-085_com.md3music.md3music_1785125990804edit.jpg" width="200" alt="手机更多界面 11" />
-  <img src="img/phone/other/Screenshot_2026-07-27-12-14-40-376_com.md3music.md3music_1785126001241edit.jpg" width="200" alt="手机更多界面 12" />
-</p>
+
 
 ### 平板 · Apple Music 风格
 
 <p align="center">
-  <img src="img/pad/applemusic/5d27879361a4584d3a8118ae60d75d2a.jpg" width="420" alt="平板 Apple Music 风格 1" />
-  <img src="img/pad/applemusic/00ce9bab6dfddd67b6d83918f57cfaae.jpg" width="420" alt="平板 Apple Music 风格 2" />
+  <img src="img/pad/applemusic/Screenshot_20260805_121938_com.md3music.md3music.jpg" width="420" alt="平板 Apple Music 风格 1" />
+  <img src="img/pad/applemusic/Screenshot_20260805_121945_com.md3music.md3music.jpg" width="420" alt="平板 Apple Music 风格 2" />
 </p>
 
 
 ### 平板 · Material Design 3
 
 <p align="center">
-  <img src="img/pad/md3/919678959eeded94228d8cbc003409df.jpg" width="420" alt="平板 MD3 界面 1" />
-  <img src="img/pad/md3/a57b3aa463c33dad0c450cb6d39e8030.jpg" width="420" alt="平板 MD3 界面 2" />
+  <img src="img/pad/md3/Screenshot_20260805_121929_com.md3music.md3music.jpg" width="420" alt="平板 MD3 界面 1" />
+  <img src="img/pad/md3/Screenshot_20260805_122006_com.md3music.md3music.jpg" width="420" alt="平板 MD3 界面 2" />
 </p>
 
 ### 平板 · 更多界面
 
 <p align="center">
-  <img src="img/pad/other/mmexport1785140345418_1785140430976edit.jpg" width="560" alt="平板更多界面 1" />
+  <img src="img/pad/other/Screenshot_20260805_121010_com.md3music.md3music.jpg" width="560" alt="平板更多界面 1" />
 </p>
 <p align="center">
-  <img src="img/pad/other/mmexport1785140349229_1785140392889edit.jpg" width="560" alt="平板更多界面 2" />
+  <img src="img/pad/other/Screenshot_20260805_121025_com.md3music.md3music.jpg" width="560" alt="平板更多界面 2" />
 </p>
 <p align="center">
-  <img src="img/pad/other/mmexport1785140353053_1785140379593edit.jpg" width="560" alt="平板更多界面 3" />
+  <img src="img/pad/other/Screenshot_20260805_121030_com.md3music.md3music.jpg" width="560" alt="平板更多界面 3" />
 </p>
-<p align="center">
-  <img src="img/pad/other/mmexport1785140356378_1785140371441edit.jpg" width="560" alt="平板更多界面 4" />
-</p>
+
 
 ---
 
@@ -435,6 +418,6 @@ cargo test          # 本地测试（不依赖外网）
 
 <div align="center">
 
-**Made with ❤️ by zzyoxml and Little-White3110**
+**Made with ❤️ by zzyoxml and Little-White3110 and Lyon**
 
 </div>

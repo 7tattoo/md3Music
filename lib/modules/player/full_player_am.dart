@@ -2612,17 +2612,6 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                     _showAddToPlaylistDialog(rootContext, song);
                   },
                 ),
-                ListTile(
-                  leading: const Icon(Icons.share),
-                  title: const Text('分享'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    // TODO: 实现分享功能
-                    ScaffoldMessenger.of(
-                      rootContext,
-                    ).showSnackBar(const SnackBar(content: Text('分享功能开发中')));
-                  },
-                ),
               ],
             ),
           ),
