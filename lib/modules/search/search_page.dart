@@ -439,8 +439,15 @@ class _SearchPageState extends State<SearchPage>
       child: Column(
         children: [
           Expanded(
-            child: ListView.builder(
+            child: ListView.separated(
               itemCount: results.length,
+              separatorBuilder: (_, __) => Divider(
+                height: 0.5,
+                thickness: 0.5,
+                indent: 16,
+                endIndent: 16,
+                color: IosColors.separator(context),
+              ),
               itemBuilder: (context, index) {
                 return SongListItem(
                   song: results[index],
@@ -590,9 +597,16 @@ class _SearchPageState extends State<SearchPage>
       child: Column(
         children: [
           Expanded(
-            child: ListView.builder(
+            child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemCount: results.length,
+              separatorBuilder: (_, __) => Divider(
+                height: 0.5,
+                thickness: 0.5,
+                indent: 16,
+                endIndent: 16,
+                color: IosColors.separator(context),
+              ),
               itemBuilder: (context, index) {
                 final artist = results[index];
                 return ListTile(
@@ -809,9 +823,16 @@ class _SearchPageState extends State<SearchPage>
     if (results.isEmpty) {
       return _buildNoResult();
     }
-    return ListView.builder(
+    return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       itemCount: results.length,
+      separatorBuilder: (_, __) => Divider(
+        height: 0.5,
+        thickness: 0.5,
+        indent: 16,
+        endIndent: 16,
+        color: IosColors.separator(context),
+      ),
       itemBuilder: (context, index) {
         return SongListItem(
           song: results[index],

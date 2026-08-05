@@ -940,9 +940,16 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     return MD3ERefreshIndicator(
       onRefresh: () => _loadAlbums(),
-      child: ListView.builder(
+      child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _albums.length,
+        separatorBuilder: (_, __) => Divider(
+          height: 0.5,
+          thickness: 0.5,
+          indent: 16,
+          endIndent: 16,
+          color: IosColors.separator(context),
+        ),
         itemBuilder: (context, index) {
           final album = _albums[index];
           return FadeInUp(delayMs: index * 30, child: _buildAlbumTile(album));
@@ -1083,9 +1090,16 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     return MD3ERefreshIndicator(
       onRefresh: () => _loadArtists(),
-      child: ListView.builder(
+      child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _artists.length,
+        separatorBuilder: (_, __) => Divider(
+          height: 0.5,
+          thickness: 0.5,
+          indent: 16,
+          endIndent: 16,
+          color: IosColors.separator(context),
+        ),
         itemBuilder: (context, index) {
           final artist = _artists[index];
           return FadeInUp(delayMs: index * 30, child: _buildArtistTile(artist));
@@ -1287,9 +1301,19 @@ class _GroupSectionState extends State<_GroupSection>
             sizeFactor: _sizeAnimation,
             axisAlignment: -1.0,
             child: Column(
-              children: widget.playlists.map((playlist) {
-                return widget.onBuildTile(playlist);
-              }).toList(),
+              children: [
+                for (var i = 0; i < widget.playlists.length; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 0.5,
+                      thickness: 0.5,
+                      indent: 16,
+                      endIndent: 16,
+                      color: IosColors.separator(context),
+                    ),
+                  widget.onBuildTile(widget.playlists[i]),
+                ],
+              ],
             ),
           ),
         ),
