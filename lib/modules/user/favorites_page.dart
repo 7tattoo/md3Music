@@ -607,14 +607,6 @@ class _FavoritesPageState extends State<FavoritesPage>
               onPressed: _showCreatePlaylistDialog,
             ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.queue_music), text: '歌单'),
-            Tab(icon: Icon(Icons.album), text: '专辑'),
-            Tab(icon: Icon(Icons.person), text: '歌手'),
-          ],
-        ),
       ),
       body: Column(
         children: [
@@ -628,6 +620,21 @@ class _FavoritesPageState extends State<FavoritesPage>
                 onRetry: _retryFromBanner,
               );
             },
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Container(
+              decoration: IosColors.cardDecoration(context),
+              clipBehavior: Clip.antiAlias,
+              child: TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(icon: Icon(Icons.queue_music), text: '歌单'),
+                  Tab(icon: Icon(Icons.album), text: '专辑'),
+                  Tab(icon: Icon(Icons.person), text: '歌手'),
+                ],
+              ),
+            ),
           ),
           Expanded(
             child: Padding(

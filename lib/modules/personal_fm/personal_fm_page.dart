@@ -324,17 +324,26 @@ class _PersonalFmPageState extends State<PersonalFmPage>
           children: [
             const SizedBox(height: 8),
             FadeInUp(
-              child: Text(
-                '实时推荐会根据你的反馈持续更新',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.58),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: IosColors.cardDecoration(context),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '实时推荐会根据你的反馈持续更新',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.58),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (isLoggedIn) _buildToolbar(cs, textTheme),
+                  ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            if (isLoggedIn)
-              FadeInUp(delayMs: 30, child: _buildToolbar(cs, textTheme)),
-            const SizedBox(height: 18),
             FadeInUp(
               delayMs: 60,
               child: isLoggedIn
@@ -352,7 +361,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
                     )
                   : _buildEmptyState(cs, textTheme),
             ),
-            if (isLoggedIn && currentTrack != null) const SizedBox(height: 28),
+            if (isLoggedIn && currentTrack != null) const SizedBox(height: 16),
             if (isLoggedIn)
               FadeInUp(
                 delayMs: 90,
@@ -421,57 +430,37 @@ class _PersonalFmPageState extends State<PersonalFmPage>
       builder: (context, constraints) {
         final isSmallScreen = constraints.maxWidth < 375;
 
-        return Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: isSmallScreen ? 12 : 16,
-            vertical: isSmallScreen ? 10 : 14,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: cs.onSurfaceVariant.withValues(alpha: 0.06),
-            ),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                cs.onSurfaceVariant.withValues(alpha: 0.025),
-                Colors.transparent,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '推荐方式',
+                  style: textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.08,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.54),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    '${_getModeLabel(_selectedMode)} · ${_songPoolOptions.firstWhere((o) => o['value'] == _selectedSongPoolId)['label']}',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.64),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
               ],
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '推荐方式',
-                    style: textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.08,
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.54),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '${_getModeLabel(_selectedMode)} · ${_songPoolOptions.firstWhere((o) => o['value'] == _selectedSongPoolId)['label']}',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.64),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: isSmallScreen ? 8 : 10),
-              _buildStrategySwitch(cs, isSmallScreen),
-            ],
-          ),
+            SizedBox(height: isSmallScreen ? 8 : 10),
+            _buildStrategySwitch(cs, isSmallScreen),
+          ],
         );
       },
     );
@@ -572,9 +561,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
             ? 8.0
             : (isMediumScreen ? 10.0 : 14.0);
 
-        final maxSideVinyls = isLandscape
-            ? 2
-            : (isSmallScreen ? 2 : (isMediumScreen ? 3 : 4));
+        const maxSideVinyls = 2;
         final displaySideTracks = sideTracks.take(maxSideVinyls).toList();
 
         return SizedBox(

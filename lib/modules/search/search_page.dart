@@ -148,65 +148,52 @@ class _SearchPageState extends State<SearchPage>
 
     final scaffold = Scaffold(
       backgroundColor: IosColors.bg(context),
-      body: Column(
-        children: [
-          Expanded(
-            child: NestedScrollView(
-              headerSliverBuilder: (context, innerBoxIsScrolled) {
-                return [
-                  SliverAppBar(
-                    floating: true,
-                    pinned: true,
-                    // 一级 Tab：居中标题「搜索」；推入页：搜索框直接作标题
-                    title: widget.showMiniPlayer
-                        ? _buildSearchField(colorScheme)
-                        : const Text('搜索'),
-                    bottom: widget.showMiniPlayer
-                        ? null
-                        : PreferredSize(
-                            preferredSize: const Size.fromHeight(52),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                              child: _buildSearchField(colorScheme),
-                            ),
-                          ),
-                  ),
-                  if (_hasSearched)
-                    SliverPersistentHeader(
-                      pinned: true,
-                      delegate: _TabBarDelegate(
-                        TabBar(
-                          controller: _tabController,
-                          tabs: const [
-                            Tab(text: '歌曲'),
-                            Tab(text: '专辑'),
-                            Tab(text: '歌手'),
-                            Tab(text: '歌单'),
-                            Tab(text: '云盘'),
-                          ],
-                        ),
-                      ),
-                    ),
-                ];
-              },
-              body: _hasSearched
-                  ? Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: Container(
-                        decoration: IosColors.cardDecoration(context),
-                        clipBehavior: Clip.antiAlias,
-                        child: _buildSearchResults(),
-                      ),
-                    )
-                  : _searchController.text.trim().isNotEmpty
-                  ? _buildSuggestions()
-                  : _buildEmptyState(),
+      appBar: widget.showMiniPlayer
+          ? null
+          : AppBar(
+              title: const Text('搜索'),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(52),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: _buildSearchField(colorScheme),
+                ),
+              ),
             ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (widget.showMiniPlayer)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: _buildSearchField(colorScheme),
+              ),
+          Expanded(
+            child: _hasSearched
+                ? Column(
+                    children: [
+                      TabBar(
+                        controller: _tabController,
+                        tabs: const [
+                          Tab(text: '歌曲'),
+                          Tab(text: '专辑'),
+                          Tab(text: '歌手'),
+                          Tab(text: '歌单'),
+                          Tab(text: '云盘'),
+                        ],
+                      ),
+                      Expanded(child: _buildSearchResults()),
+                    ],
+                  )
+                : _searchController.text.trim().isNotEmpty
+                ? _buildSuggestions()
+                : _buildEmptyState(),
           ),
           if (widget.showMiniPlayer) const MiniPlayer(),
         ],
       ),
-    );
+    ),
+  );
 
     return Theme(
       data: baseTheme.copyWith(
@@ -1085,35 +1072,6 @@ class _SearchAlbumCard extends StatelessWidget {
       width: double.infinity,
       color: colorScheme.surfaceContainerHighest,
       child: Icon(icon, size: 40, color: colorScheme.onSurfaceVariant),
-    );
-  }
-}
-
-class _TabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
-
-  _TabBarDelegate(this.tabBar);
-
-  @override
-  double get minExtent => tabBar.preferredSize.height;
-
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  bool shouldRebuild(covariant _TabBarDelegate oldDelegate) {
-    return tabBar != oldDelegate.tabBar;
-  }
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      child: tabBar,
     );
   }
 }
