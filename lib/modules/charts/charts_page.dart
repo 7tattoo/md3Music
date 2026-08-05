@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -44,8 +45,9 @@ class _ChartsPageState extends State<ChartsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Scaffold(
+    final baseTheme = Theme.of(context);
+    final cs = IosColors.scheme(context);
+    final scaffold = Scaffold(
       appBar: ScrollAwareAppBar(
         title: '排行榜',
         scrollController: _scrollController,
@@ -65,6 +67,18 @@ class _ChartsPageState extends State<ChartsPage> {
           : _isListMode
           ? _buildRankList(context, cs)
           : _buildRankGrid(context, cs),
+    );
+
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: cs,
+        scaffoldBackgroundColor: IosColors.bg(context),
+        appBarTheme: baseTheme.appBarTheme.copyWith(
+          backgroundColor: IosColors.bg(context),
+          surfaceTintColor: Colors.transparent,
+        ),
+      ),
+      child: scaffold,
     );
   }
 
@@ -114,7 +128,7 @@ class _ChartsPageState extends State<ChartsPage> {
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    color: cs.surfaceContainerLow,
+                    color: cs.surface,
                   ),
                   child: Material(
                     color: Colors.transparent,
@@ -299,7 +313,7 @@ class _RankGridCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: Material(
-        color: colorScheme.surfaceContainerLow,
+        color: colorScheme.surface,
         child: InkWell(
           onTap: onTap,
           child: Column(

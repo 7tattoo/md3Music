@@ -103,7 +103,7 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
         style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
       ),
       actions: widget.actions,
-      centerTitle: false,
+      centerTitle: true,
     );
   }
 }

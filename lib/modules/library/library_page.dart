@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/local_favorites_provider.dart';
 import '../../widgets/md3e_loading_indicator.dart';
@@ -60,12 +61,13 @@ class _LibraryPageState extends State<LibraryPage>
   @override
   Widget build(BuildContext context) {
     final libraryProvider = context.watch<LibraryProvider>();
-    final colorScheme = Theme.of(context).colorScheme;
+    final baseTheme = Theme.of(context);
+    final colorScheme = IosColors.scheme(context);
     final textTheme = Theme.of(context).textTheme;
     final hasMusic = libraryProvider.hasMusic;
     final isScanning = libraryProvider.isScanning;
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         centerTitle: true,
         title: Text(
@@ -150,17 +152,36 @@ class _LibraryPageState extends State<LibraryPage>
           ? _buildScanningState(colorScheme)
           : !hasMusic
           ? _buildEmptyState(colorScheme)
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                SongsPage(songs: libraryProvider.songs),
-                AlbumsPage(albums: libraryProvider.albums),
-                ArtistsPage(artists: libraryProvider.artists),
-                FoldersPage(folders: libraryProvider.folders),
-                const _LocalFavoritesTab(),
-              ],
+          : Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Container(
+                decoration: IosColors.cardDecoration(context),
+                clipBehavior: Clip.antiAlias,
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    SongsPage(songs: libraryProvider.songs),
+                    AlbumsPage(albums: libraryProvider.albums),
+                    ArtistsPage(artists: libraryProvider.artists),
+                    FoldersPage(folders: libraryProvider.folders),
+                    const _LocalFavoritesTab(),
+                  ],
+                ),
+              ),
             ),
       floatingActionButton: _buildScanFAB(context, colorScheme),
+    );
+
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: colorScheme,
+        scaffoldBackgroundColor: IosColors.bg(context),
+        appBarTheme: baseTheme.appBarTheme.copyWith(
+          backgroundColor: IosColors.bg(context),
+          surfaceTintColor: Colors.transparent,
+        ),
+      ),
+      child: scaffold,
     );
   }
 
