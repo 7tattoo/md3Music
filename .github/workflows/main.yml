@@ -303,6 +303,60 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # ============================================================
+      # 7.5 组装最终 Release 正文
+      #    优先取 CHANGELOG.md 中当前版本（## vX.Y.Z）的节，并补上
+      #    标题/构建时间/下载区/页脚；找不到对应条目或无 CHANGELOG.md
+      #    时回退到上面自动生成的提交列表，避免 Release 正文为空。
+      #    （用户手动维护的正文不再被 CI 覆盖）
+      # ============================================================
+      - name: Compose final release body
+        id: body-prep
+        run: |
+          set -eo pipefail
+          VERSION="${{ steps.version.outputs.tag }}"   # e.g. v5.0.0
+          AUTO="changelog.md"                          # 自动生成的完整正文（含页脚）
+          OUT="release_body.md"
+          rm -f "$OUT"
+
+          FOUND=0
+          if [ -f CHANGELOG.md ]; then
+            # 提取 "## vX.Y.Z" 到下一个二级标题之间（三级 ### 不属于标题分隔）
+            awk -v t="## ${VERSION}" \
+              '$0==t{f=1;next} f && /^## [^#]/{exit} f{print}' \
+              CHANGELOG.md > /tmp/section.md
+            if [ -s /tmp/section.md ]; then
+              FOUND=1
+              echo "使用 CHANGELOG.md 中的 '## ${VERSION}' 节"
+            fi
+          fi
+
+          if [ "$FOUND" = "1" ]; then
+            {
+              echo "## MD3Music v${{ steps.version.outputs.version }}"
+              echo ""
+              echo "_Built: $(date -u '+%Y-%m-%d %H:%M UTC')_"
+              echo ""
+              echo "### ⬇️ 下载"
+              echo ""
+              echo "- **app-arm64-v8a-release.apk** — 推荐：大多数现代 Android 设备"
+              echo "- **app-armeabi-v7a-release.apk** — 较旧的 32 位设备"
+              echo "- **app-x86_64-release.apk** — Android 模拟器"
+              echo ""
+              cat /tmp/section.md
+              echo ""
+              echo "---"
+              echo "🤖 本版本由 GitHub Actions 自动构建。"
+            } > "$OUT"
+          else
+            echo "WARN: CHANGELOG.md 中无 '## ${VERSION}'，回退到自动生成的提交列表"
+            cp "$AUTO" "$OUT"
+          fi
+
+          echo "release body bytes: $(wc -c < "$OUT")"
+          echo "=== body 前 12 行 ==="
+          head -12 "$OUT"
+
+      # ============================================================
       # 8. 创建/更新 GitHub Release（仅在 tag 真实存在时执行）
       #    append=true 保留历史资产，不会删除旧版本
       # ============================================================
@@ -312,10 +366,10 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: MD3Music v${{ steps.version.outputs.version }}
-          body: ${{ steps.changelog.outputs.body }}
+          body_path: release_body.md
           draft: false
           prerelease: false
-          append_body: false  # 默认行为：用自动生成的 changelog 替换 release 描述
+          append_body: false  # 默认行为：用组装好的正文替换 release 描述
           files: |
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
