@@ -338,12 +338,17 @@ class _PersonalFmPageState extends State<PersonalFmPage>
             FadeInUp(
               delayMs: 60,
               child: isLoggedIn
-                  ? _buildRadioHero(
-                      cs,
-                      textTheme,
-                      currentTrack,
-                      isPlaying,
-                      sideTracks,
+                  ? Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: IosColors.cardDecoration(context),
+                      clipBehavior: Clip.antiAlias,
+                      child: _buildRadioHero(
+                        cs,
+                        textTheme,
+                        currentTrack,
+                        isPlaying,
+                        sideTracks,
+                      ),
                     )
                   : _buildEmptyState(cs, textTheme),
             ),
@@ -351,7 +356,12 @@ class _PersonalFmPageState extends State<PersonalFmPage>
             if (isLoggedIn)
               FadeInUp(
                 delayMs: 90,
-                child: _buildNowPanel(cs, textTheme, currentTrack, isPlaying),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: IosColors.cardDecoration(context),
+                  clipBehavior: Clip.antiAlias,
+                  child: _buildNowPanel(cs, textTheme, currentTrack, isPlaying),
+                ),
               ),
             const SizedBox(height: 30),
           ],

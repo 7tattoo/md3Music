@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 
+import '../../core/theme/ios_grouped_theme.dart';
 import '../../data/models/song.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
@@ -383,22 +384,32 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final baseTheme = Theme.of(context);
+    final colorScheme = IosColors.scheme(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         title: const Text('听歌识曲'),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - 32,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 24,
+                ),
+                decoration: IosColors.cardDecoration(context),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   const SizedBox(height: 32),
                   _buildPulseCircle(colorScheme),
@@ -409,10 +420,23 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
                   if (_error != null) _buildError(colorScheme, textTheme),
                 ],
               ),
+              ),
             ),
           );
         },
       ),
+    );
+
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: colorScheme,
+        scaffoldBackgroundColor: IosColors.bg(context),
+        appBarTheme: baseTheme.appBarTheme.copyWith(
+          backgroundColor: IosColors.bg(context),
+          surfaceTintColor: Colors.transparent,
+        ),
+      ),
+      child: scaffold,
     );
   }
 

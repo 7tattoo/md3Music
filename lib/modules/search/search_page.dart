@@ -229,7 +229,14 @@ class _SearchPageState extends State<SearchPage>
                 ];
               },
               body: _hasSearched
-                  ? _buildSearchResults()
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Container(
+                        decoration: IosColors.cardDecoration(context),
+                        clipBehavior: Clip.antiAlias,
+                        child: _buildSearchResults(),
+                      ),
+                    )
                   : _searchController.text.trim().isNotEmpty
                   ? _buildSuggestions()
                   : _buildEmptyState(),

@@ -473,9 +473,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
         return SliverToBoxAdapter(
           child: FadeInUp(
             delayMs: 200,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              decoration: IosColors.cardDecoration(context),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Row(
@@ -546,8 +550,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 ),
               ],
+              ),
+              ),
             ),
-          ),
         );
       },
     );
@@ -568,9 +573,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
         return SliverToBoxAdapter(
           child: FadeInUp(
             delayMs: 250,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              decoration: IosColors.cardDecoration(context),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Text(
@@ -618,8 +627,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 ),
               ],
+              ),
+              ),
             ),
-          ),
         );
       },
     );
@@ -962,9 +972,13 @@ class _CollapsibleSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      decoration: IosColors.cardDecoration(context),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: Row(
@@ -1014,6 +1028,7 @@ class _CollapsibleSection extends StatelessWidget {
           secondChild: const SizedBox(width: double.infinity),
         ),
       ],
+      ),
     );
   }
 }
