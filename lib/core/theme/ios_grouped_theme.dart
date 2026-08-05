@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// 语义色与「设置」/「我的」页一致：中性色固定、tint 用主题品牌色、浅深色自适应。
 abstract final class IosColors {
   // ---- 中性色（浅 / 深） ----
-  static const Color _lightBg = Color(0xFFF2F2F7);
+  static const Color _lightBg = Colors.white;
   static const Color _darkBg = Color(0xFF000000);
   static const Color _lightCard = Colors.white;
   static const Color _darkCard = Color(0xFF1C1C1E);

@@ -49,7 +49,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
     final isDark = baseTheme.brightness == Brightness.dark;
 
     // iOS 语义色（与设置页一致：中性色固定，tint 用主题品牌色）
-    final bg = isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
+    final bg = isDark ? const Color(0xFF000000) : Colors.white;
     final card = isDark ? const Color(0xFF1C1C1E) : Colors.white;
     final label = isDark ? Colors.white : const Color(0xFF1C1C1E);
     final secondary =
