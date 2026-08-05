@@ -66,19 +66,12 @@ class _CoverFlowPageState extends State<CoverFlowPage> {
           return Column(
             children: [
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Container(
-                    decoration: IosColors.cardDecoration(context),
-                    clipBehavior: Clip.antiAlias,
-                    child: _CoverFlowView(
-                      songs: songs,
-                      initialIndex: _currentIndex,
-                      onPageChanged: (index) =>
-                          setState(() => _currentIndex = index),
-                      onRefresh: _refresh,
-                    ),
-                  ),
+                child: _CoverFlowView(
+                  songs: songs,
+                  initialIndex: _currentIndex,
+                  onPageChanged: (index) =>
+                      setState(() => _currentIndex = index),
+                  onRefresh: _refresh,
                 ),
               ),
             ],
