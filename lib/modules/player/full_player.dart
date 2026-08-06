@@ -786,14 +786,7 @@ class _FullPlayerState extends State<FullPlayer>
                   behavior: HitTestBehavior.translucent,
                   child: _isLoadingLyrics
                       ? const Center(child: MD3ELoadingIndicator())
-                      : LyricsView(
-                          lyrics: _lyrics,
-                          position: playerProvider.position,
-                          doubleTapToJump: lyricDoubleTap,
-                          onSeek: (duration) {
-                            playerProvider.seek(duration);
-                          },
-                        ),
+                      : _buildPositionedLyrics(playerProvider, lyricDoubleTap),
                 ),
                 CommentsView(
                   songHash: currentSong.id,
@@ -1007,14 +1000,7 @@ class _FullPlayerState extends State<FullPlayer>
                               ),
                             _isLoadingLyrics
                                 ? const Center(child: MD3ELoadingIndicator())
-                                : LyricsView(
-                                    lyrics: _lyrics,
-                                    position: playerProvider.position,
-                                    doubleTapToJump: lyricDoubleTap,
-                                    onSeek: (duration) {
-                                      playerProvider.seek(duration);
-                                    },
-                                  ),
+                                : _buildPositionedLyrics(playerProvider, lyricDoubleTap),
                             CommentsView(
                               songHash: currentSong.id,
                               albumAudioId: currentSong.albumAudioId,
@@ -1230,14 +1216,7 @@ class _FullPlayerState extends State<FullPlayer>
                               ),
                             _isLoadingLyrics
                                 ? const Center(child: MD3ELoadingIndicator())
-                                : LyricsView(
-                                    lyrics: _lyrics,
-                                    position: playerProvider.position,
-                                    doubleTapToJump: lyricDoubleTap,
-                                    onSeek: (duration) {
-                                      playerProvider.seek(duration);
-                                    },
-                                  ),
+                                : _buildPositionedLyrics(playerProvider, lyricDoubleTap),
                             CommentsView(
                               songHash: currentSong.id,
                               albumAudioId: currentSong.albumAudioId,
@@ -1562,13 +1541,25 @@ class _FullPlayerState extends State<FullPlayer>
     );
   }
 
+  /// 歌词视图只随播放进度重建（避免整页每 200ms 重建）。
+  Widget _buildPositionedLyrics(PlayerProvider p, bool doubleTap) {
+    return ValueListenableBuilder<Duration>(
+      valueListenable: p.positionNotifier,
+      builder: (context, pos, _) => LyricsView(
+        lyrics: _lyrics,
+        position: pos,
+        doubleTapToJump: doubleTap,
+        onSeek: (duration) => p.seek(duration),
+      ),
+    );
+  }
+
   Widget _buildControls(
     PlayerProvider playerProvider,
     ColorScheme colorScheme, {
     bool isExpanded = false,
   }) {
     final duration = playerProvider.duration ?? Duration.zero;
-    final position = playerProvider.position;
     final horizontalPadding = isExpanded ? 16.0 : 24.0;
     final verticalSpacing = isExpanded ? 4.0 : 8.0;
 
@@ -1577,7 +1568,11 @@ class _FullPlayerState extends State<FullPlayer>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildProgressBar(playerProvider, position, duration, colorScheme),
+          ValueListenableBuilder<Duration>(
+            valueListenable: playerProvider.positionNotifier,
+            builder: (context, pos, _) =>
+                _buildProgressBar(playerProvider, pos, duration, colorScheme),
+          ),
           SizedBox(height: verticalSpacing),
           _buildMainControls(
             playerProvider,

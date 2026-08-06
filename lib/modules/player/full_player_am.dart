@@ -943,25 +943,24 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                         ? const Center(
                             child: MD3ELoadingIndicator(color: Colors.white),
                           )
-                        // v4 优化：用 Selector 注入 position，避免父级每 200ms 重建
-                        : Selector<PlayerProvider, int>(
-                            selector: (_, p) => p.position.inMilliseconds,
-                            builder: (context, positionMs, _) =>
-                                AppleLyricsView(
-                                  lines: _parsedLyrics,
-                                  currentTimeMs: positionMs,
-                                  isPlaying: playerProvider.isPlaying,
-                                  forceDarkBackground: true,
-                                  // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
-                                  enableInterludeDots:
-                                      !_isLocalLrcLyricWithoutWordTiming(
-                                        currentSong,
-                                      ),
-                                  doubleTapToJump: lyricDoubleTap,
-                                  onSeek: (ms) => playerProvider.seek(
-                                    Duration(milliseconds: ms),
+                        // 优化：用 positionNotifier 只重建歌词视图，避免整页/全局随进度重建
+                        : ValueListenableBuilder<Duration>(
+                            valueListenable: playerProvider.positionNotifier,
+                            builder: (context, pos, _) => AppleLyricsView(
+                              lines: _parsedLyrics,
+                              currentTimeMs: pos.inMilliseconds,
+                              isPlaying: playerProvider.isPlaying,
+                              forceDarkBackground: true,
+                              // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
+                              enableInterludeDots:
+                                  !_isLocalLrcLyricWithoutWordTiming(
+                                    currentSong,
                                   ),
-                                ),
+                              doubleTapToJump: lyricDoubleTap,
+                              onSeek: (ms) => playerProvider.seek(
+                                Duration(milliseconds: ms),
+                              ),
+                            ),
                           ),
                   ),
                 ),
@@ -1184,14 +1183,14 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                     ),
                                   )
                                 : RepaintBoundary(
-                                    // v4 优化：用 Selector 注入 position，避免父级每 200ms 重建
-                                    child: Selector<PlayerProvider, int>(
-                                      selector: (_, p) =>
-                                          p.position.inMilliseconds,
-                                      builder: (context, positionMs, _) =>
+                                    // 优化：用 positionNotifier 只重建歌词视图
+                                    child: ValueListenableBuilder<Duration>(
+                                      valueListenable:
+                                          playerProvider.positionNotifier,
+                                      builder: (context, pos, _) =>
                                           AppleLyricsView(
                                             lines: _parsedLyrics,
-                                            currentTimeMs: positionMs,
+                                            currentTimeMs: pos.inMilliseconds,
                                             isPlaying: playerProvider.isPlaying,
                                             forceDarkBackground: true,
                                             // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
@@ -1437,14 +1436,14 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                     ),
                                   )
                                 : RepaintBoundary(
-                                    // v4 优化：用 Selector 注入 position，避免父级每 200ms 重建
-                                    child: Selector<PlayerProvider, int>(
-                                      selector: (_, p) =>
-                                          p.position.inMilliseconds,
-                                      builder: (context, positionMs, _) =>
+                                    // 优化：用 positionNotifier 只重建歌词视图
+                                    child: ValueListenableBuilder<Duration>(
+                                      valueListenable:
+                                          playerProvider.positionNotifier,
+                                      builder: (context, pos, _) =>
                                           AppleLyricsView(
                                             lines: _parsedLyrics,
-                                            currentTimeMs: positionMs,
+                                            currentTimeMs: pos.inMilliseconds,
                                             isPlaying: playerProvider.isPlaying,
                                             forceDarkBackground: true,
                                             // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
@@ -1785,14 +1784,16 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // v4 优化：进度条用 Selector 注入 position + duration，
-          // 避免父级每 200ms position 更新触发 _buildControls 整体重建。
-          Selector<PlayerProvider, ({Duration position, Duration? duration})>(
-            selector: (_, p) => (position: p.position, duration: p.duration),
-            builder: (context, state, _) => _buildProgressBar(
+          // 优化：进度条同时监听 positionNotifier 与 provider 状态，
+          // 只重建进度条本身，避免父级每 200ms position 更新触发整段重建。
+          ListenableBuilder(
+            listenable: Listenable.merge(
+              [playerProvider, playerProvider.positionNotifier],
+            ),
+            builder: (context, _) => _buildProgressBar(
               playerProvider,
-              state.position,
-              state.duration ?? Duration.zero,
+              playerProvider.position,
+              playerProvider.duration ?? Duration.zero,
               colorScheme,
             ),
           ),

@@ -56,6 +56,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Song? _currentSong;
   bool _isPlaying = false;
   Duration _position = Duration.zero;
+  /// 播放进度（仅驱动进度条，不触发全量 rebuild；见 positionStream tick）
+  final ValueNotifier<Duration> positionNotifier = ValueNotifier(Duration.zero);
   Duration? _duration;
   List<Song> _playlist = [];
   List<Song> _originalPlaylist = [];
@@ -262,6 +264,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final ok = await _resolveAndPlayCurrentSong(seekTo: state.position, play: false);
       if (ok) {
         _position = state.position;
+        positionNotifier.value = state.position;
       }
       notifyListeners();
     } catch (e) {}
@@ -295,6 +298,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       _positionSubscription = _audioService.positionStream.listen((position) {
         _position = position;
+        positionNotifier.value = position;
 
         // [修复] completed 事件不可靠时的切歌兜底：播放中位置已到达时长末尾，
         // ExoPlayer 却未发 completed（0.9.x / 0.10.x 均观察到），视为播完触发切歌。
@@ -311,7 +315,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
         _updateNotificationPosition();
-        notifyListeners();
         // 防抖保存位置（3 秒）
         _scheduleSave();
         // 直接转发给 Lyricon，无节流。

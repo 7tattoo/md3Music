@@ -124,6 +124,10 @@ class _AppleLyricsViewState extends State<AppleLyricsView>
   /// v3 优化：Ticker 当前运行状态，用于幂等保护 start/stop 调用。
   bool _isTickerRunning = false;
 
+  /// Fix2：是否处于"空闲"态（当前行稳定 + 全部动画收敛）。
+  /// 空闲时每帧只做一次行号比较即可早退，跳过逐帧渲染器/弹簧循环。
+  bool _lyricsIdle = false;
+
   /// v3 优化：上次重绘时的关键动画值，用于判断本帧是否需要重绘。
   /// 检测阈值 0.5px / 0.001 远低于人眼感知，无视觉差异。
   double _lastRepaintPosY = 0;
@@ -430,6 +434,9 @@ class _AppleLyricsViewState extends State<AppleLyricsView>
   /// v3 优化：幂等启动 Ticker。
   /// 在恢复播放、用户交互、lines 变化等场景调用。
   void _startTickerIfNeeded() {
+    // Fix2：用户交互（点击/拖拽）或状态变化重启 Ticker 时，退出空闲态，
+    // 避免拖拽时被空闲短路跳过滚动跟随。
+    _lyricsIdle = false;
     if (_isTickerRunning) return;
     _isTickerRunning = true;
     _lastElapsed = Duration.zero;
@@ -634,6 +641,13 @@ class _AppleLyricsViewState extends State<AppleLyricsView>
         ? AppleLyricsView.findCurrentLineIndex(widget.lines, widget.currentTimeMs)
         : -1;
 
+    // Fix2：空闲短路——播放中、当前行未变且上一帧已判定全收敛时，
+    // 每帧只需行号比较即可早退，跳过逐帧滚动/渲染器/弹簧循环。
+    // 行变化或新动画启动会退出空闲态，下一帧恢复完整 tick。
+    if (widget.isPlaying && _lyricsIdle && _currentLineIndex == _previousLineIndex) {
+      return;
+    }
+
     // 2. 推进滚动控制器（需要 lineHeight 与 intervalMs 计算目标 posY）
     if (_currentLineIndex >= 0) {
       final fontSize = LyricLayout.fontSize(context);
@@ -786,6 +800,16 @@ class _AppleLyricsViewState extends State<AppleLyricsView>
     if ((_blurFade - blurFadeTarget).abs() < 0.01) {
       _blurFade = blurFadeTarget;
     }
+
+    // Fix2：缓存"空闲"判定——播放中且当前行稳定、全部动画收敛时，
+    // 下帧起在 _onTick 开头早退，跳过逐帧循环。
+    _lyricsIdle = _currentLineIndex >= 0 &&
+        _scrollController.isConverged &&
+        _scaleController.isConverged &&
+        _interludeExpandProgress == 0 &&
+        !_interludeDots.shouldRender &&
+        _arePerLineSpringsConverged() &&
+        _areRenderersConverged();
 
     // 11. v3 优化：检测是否暂停且所有动画都已收敛到稳态。
     // 收敛条件：

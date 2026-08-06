@@ -115,11 +115,6 @@ class _MiniPlayerState extends State<MiniPlayer>
     if (currentSong == null) return const SizedBox.shrink();
 
     final colorScheme = Theme.of(context).colorScheme;
-    final duration = playerProvider.duration ?? Duration.zero;
-    final position = playerProvider.position;
-    final progress = duration.inMilliseconds > 0
-        ? position.inMilliseconds / duration.inMilliseconds
-        : 0.0;
 
     return ValueListenableBuilder<double>(
       valueListenable: playerExpansion,
@@ -140,7 +135,7 @@ class _MiniPlayerState extends State<MiniPlayer>
         onHorizontalDragEnd: _onHorizontalDragEnd,
         behavior: HitTestBehavior.opaque,
         child: _buildContent(
-            context, playerProvider, currentSong, colorScheme, progress),
+            context, playerProvider, currentSong, colorScheme),
       ),
     );
   }
@@ -150,7 +145,6 @@ class _MiniPlayerState extends State<MiniPlayer>
     PlayerProvider playerProvider,
     dynamic currentSong,
     ColorScheme colorScheme,
-    double progress,
   ) {
     return Container(
       // Container 在外提供整体背景色：
@@ -167,11 +161,19 @@ class _MiniPlayerState extends State<MiniPlayer>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            LinearProgressIndicator(
-              value: progress.clamp(0.0, 1.0),
-              minHeight: 2,
-              backgroundColor: colorScheme.surfaceContainerHighest,
-              color: colorScheme.primary,
+            ValueListenableBuilder<Duration>(
+              valueListenable: playerProvider.positionNotifier,
+              builder: (context, pos, _) {
+                final d = playerProvider.duration ?? Duration.zero;
+                return LinearProgressIndicator(
+                  value: d.inMilliseconds > 0
+                      ? pos.inMilliseconds / d.inMilliseconds
+                      : 0.0,
+                  minHeight: 2,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  color: colorScheme.primary,
+                );
+              },
             ),
             Padding(
               padding:
