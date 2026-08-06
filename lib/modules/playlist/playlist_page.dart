@@ -50,6 +50,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
   bool _isLoading = true;
   List<Song> _songs = [];
   String? _error;
+  // 分页加载：首屏只拉一页，滚动到底部再拉下一页，避免一次性加载过多导致滑动卡顿
+  int _currentPage = 1;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  String? _activeListid; // 非空=用 listid 接口，null=用 global_collection_id
+  String? _activeGid; // global_collection_id 数据源（_activeListid 为 null 时使用）
+  static const int _pageSize = 30;
   // 普通歌单（发现/热门/排行榜）的红心收藏状态
   bool _isCollected = false;
   String? _collectedListId;
@@ -143,6 +150,16 @@ class _PlaylistPageState extends State<PlaylistPage> {
   void _onScroll() {
     if (!mounted) return;
     final offset = _scrollController.offset;
+    // 分页：接近底部时加载下一页
+    if (_hasMore &&
+        !_isLoadingMore &&
+        !_isSearching &&
+        _scrollController.hasClients) {
+      final pos = _scrollController.position;
+      if (pos.maxScrollExtent - pos.pixels <= 300) {
+        _loadMoreSongs();
+      }
+    }
     if ((offset - _lastReportedOffset).abs() > 1.0) {
       _lastReportedOffset = offset;
       _scrollOffset = offset;
@@ -692,28 +709,18 @@ class _PlaylistPageState extends State<PlaylistPage> {
       // 类似，仅设 _error 后吞掉。所以必须主动追踪"有没有成功调用过"。
       bool apiSucceeded = false;
       if (isLoggedIn && fetchListid != null && fetchListid.isNotEmpty) {
-        // 已登录 + 有 listid：用 /playlist/track/all/new 拉（仅支持用户创建/收藏的歌单）
-        const int pageSize = 200;
-        const int maxSongs = 9999;
-        // 向上取整，保证能拉到 maxSongs 首（200*50=10000 ≥ 9999）
-        const int maxPages = (maxSongs + pageSize - 1) ~/ pageSize;
-        for (int page = 1; page <= maxPages; page++) {
-          final r = await api.getPlaylistSongsByListid(
-            listid: fetchListid,
-            page: page,
-            pagesize: pageSize,
-            noCache: true,
-          );
-          if (!mounted) return;
-          if (r == null) break;
+        // 已登录 + 有 listid：分页拉第一页（滚动到底部再拉下一页）
+        _activeListid = fetchListid;
+        final first = await api.getPlaylistSongsByListid(
+          listid: fetchListid,
+          page: 1,
+          pagesize: _pageSize,
+          noCache: true,
+        );
+        if (!mounted) return;
+        if (first != null) {
           apiSucceeded = true;
-          final batch = r.songs.map((s) => s.toSong()).toList();
-          all.addAll(batch);
-          if (all.length >= maxSongs) {
-            all = all.sublist(0, maxSongs);
-            break;
-          }
-          if (batch.length < pageSize) break;
+          all = first.songs.map((s) => s.toSong()).toList();
         }
         // listid 接口拉不到歌曲时，回退到用原始歌单的 global_collection_id 拉取
         // （收藏的歌单 listid 有时失效，用原始歌单的 listCreateGid 才能正确拉取
@@ -723,45 +730,51 @@ class _PlaylistPageState extends State<PlaylistPage> {
                 ? null
                 : widget.playlist.id);
         if (all.isEmpty && fallbackGid != null && fallbackGid.isNotEmpty) {
-          await context.read<KugouProvider>().getPlaylistTrackAll(
+          final r = await api.getPlaylistTrackAll(
             id: fallbackGid,
-            forceRefresh: true,
+            page: 1,
+            pagesize: _pageSize,
           );
           if (!mounted) return;
-          all = context
-              .read<KugouProvider>()
-              .currentPlaylistSongs
-              .map((e) => e.toSong())
-              .toList();
-          if (all.isNotEmpty) apiSucceeded = true;
+          if (r != null) {
+            apiSucceeded = true;
+            all = r.map((e) => e.toSong()).toList();
+            _activeListid = null; // 回退到 global_collection_id 分页
+            _activeGid = fallbackGid;
+          }
         }
       } else if (widget.playlist.id.isNotEmpty) {
-        // 未登录 或 无 listid：用 global_collection_id 调 /playlist/track/all 拉
-        await context.read<KugouProvider>().getPlaylistTrackAll(
+        // 未登录 或 无 listid：用 global_collection_id 分页拉第一页
+        _activeListid = null;
+        final r = await api.getPlaylistTrackAll(
           id: widget.playlist.id,
-          forceRefresh: true,
+          page: 1,
+          pagesize: _pageSize,
         );
         if (!mounted) return;
-        all = context
-            .read<KugouProvider>()
-            .currentPlaylistSongs
-            .map((e) => e.toSong())
-            .toList();
-        if (all.isNotEmpty) apiSucceeded = true;
+        if (r != null) {
+          apiSucceeded = true;
+          all = r.map((e) => e.toSong()).toList();
+          _activeGid = widget.playlist.id;
+        }
       } else {
-        // 普通歌单（未登录）：走 KugouProvider 的分页聚合（/playlist/track/all，30 一次翻页拉全）
-        await context.read<KugouProvider>().getPlaylistTrackAll(
+        // 普通歌单（未登录）：global_collection_id 分页拉第一页
+        _activeListid = null;
+        final r = await api.getPlaylistTrackAll(
           id: widget.playlist.id,
-          forceRefresh: true,
+          page: 1,
+          pagesize: _pageSize,
         );
         if (!mounted) return;
-        all = context
-            .read<KugouProvider>()
-            .currentPlaylistSongs
-            .map((e) => e.toSong())
-            .toList();
-        if (all.isNotEmpty) apiSucceeded = true;
+        if (r != null) {
+          apiSucceeded = true;
+          all = r.map((e) => e.toSong()).toList();
+          _activeGid = widget.playlist.id;
+        }
       }
+
+      _currentPage = 1;
+      _hasMore = all.length >= _pageSize;
 
       setState(() {
         // 网络拿到数据时正常覆盖；网络空但本地已有 cache 时保留 cache，
@@ -818,6 +831,47 @@ class _PlaylistPageState extends State<PlaylistPage> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  /// 分页加载下一页：滚动到底部时调用，追加到 _songs。
+  Future<void> _loadMoreSongs() async {
+    if (_isLoadingMore || !_hasMore || _isLoading || _isSearching) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final api = KugouApiClient();
+      List<Song> batch = [];
+      if (_activeListid != null && _activeListid!.isNotEmpty) {
+        final r = await api.getPlaylistSongsByListid(
+          listid: _activeListid!,
+          page: _currentPage + 1,
+          pagesize: _pageSize,
+          noCache: true,
+        );
+        if (!mounted) return;
+        if (r != null) batch = r.songs.map((s) => s.toSong()).toList();
+      } else if (_activeGid != null && _activeGid!.isNotEmpty) {
+        final r = await api.getPlaylistTrackAll(
+          id: _activeGid!,
+          page: _currentPage + 1,
+          pagesize: _pageSize,
+        );
+        if (!mounted) return;
+        if (r != null) batch = r.map((e) => e.toSong()).toList();
+      }
+      if (!mounted) return;
+      setState(() {
+        final filtered =
+            batch.where((s) => s.title.isNotEmpty && s.title != '-').toList();
+        final existing = _songs.map((s) => s.id).toSet();
+        _songs.addAll(filtered.where((s) => !existing.contains(s.id)));
+        _currentPage += 1;
+        _hasMore = batch.length >= _pageSize;
+        _invalidateDisplaySongs();
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -1279,6 +1333,22 @@ class _PlaylistPageState extends State<PlaylistPage> {
                           );
                         }, childCount: _displaySongs.length),
                       ),
+                      // 分页加载中提示（底部）
+                      if (_hasMore && !_isMultiSelectMode && !_isSearching)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       // 搜索无结果提示
                       if (!_isMultiSelectMode &&
                           _isSearching && _displaySongs.isEmpty && _songs.isNotEmpty)
