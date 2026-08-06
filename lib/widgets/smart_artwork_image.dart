@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import 'local_artwork_image.dart';
@@ -87,14 +88,16 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
       child = _placeholder(colorScheme);
     } else if (uri.startsWith('http://') ||
         uri.startsWith('https://')) {
-      // http(s):// 在线封面用 Image.network
+      // http(s):// 在线封面用 CachedNetworkImage（内存 + 磁盘缓存）
       final isFill = widget.size == double.infinity;
-      child = Image.network(
-        uri,
+      child = CachedNetworkImage(
+        imageUrl: uri,
         width: isFill ? double.infinity : widget.size,
         height: isFill ? double.infinity : widget.size,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) {
+        memCacheWidth: isFill ? 400 : (widget.size * 2).toInt(),
+        memCacheHeight: isFill ? 400 : (widget.size * 2).toInt(),
+        errorWidget: (_, __, ___) {
           if (widget.fallbackFilePath != null) {
             return LocalArtworkImage(
               filePath: widget.fallbackFilePath!,
@@ -104,19 +107,16 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
           }
           return _placeholder(colorScheme);
         },
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            width: isFill ? double.infinity : widget.size,
-            height: isFill ? double.infinity : widget.size,
-            color: colorScheme.surfaceContainerHighest,
-            child: Icon(
-              Icons.hourglass_empty,
-              size: isFill ? 40 : widget.size * 0.4,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          );
-        },
+        placeholder: (_, __) => Container(
+          width: isFill ? double.infinity : widget.size,
+          height: isFill ? double.infinity : widget.size,
+          color: colorScheme.surfaceContainerHighest,
+          child: Icon(
+            Icons.hourglass_empty,
+            size: isFill ? 40 : widget.size * 0.4,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
       );
     } else if (uri.startsWith('file://')) {
       // file:// URI

@@ -174,6 +174,8 @@ class _SearchPageState extends State<SearchPage>
                     children: [
                       TabBar(
                         controller: _tabController,
+                        indicatorColor: Colors.transparent,
+                        dividerColor: Colors.transparent,
                         tabs: const [
                           Tab(text: '歌曲'),
                           Tab(text: '专辑'),
