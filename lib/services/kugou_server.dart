@@ -90,12 +90,12 @@ class KugouApiServer {
     for (int i = 0; i < 30; i++) {
       try {
         final socket = await Socket.connect('127.0.0.1', port,
-            timeout: const Duration(seconds: 1));
+            timeout: const Duration(milliseconds: 500));
         await socket.close();
         print('Local API server is ready on port $port');
         return;
       } catch (_) {
-        await Future.delayed(const Duration(seconds: 1));
+        await Future.delayed(const Duration(milliseconds: 150));
       }
     }
     print('Local API server did not become ready within 30 seconds');

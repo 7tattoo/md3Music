@@ -141,7 +141,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
       });
     }
     try {
-      await Future.wait([
+      // 渐进加载：最多等 1.5s 就结束 loading，先渲染已到达的数据，
+      // 其余请求在后台完成（各 section 用 Selector 随数据到达自动填充）。
+      await Future.wait<dynamic>([
         kugou.getPlaylist(forceRefresh: hasExistingData),
         kugou.getRankList(forceRefresh: hasExistingData),
         kugou.getRecommendDaily(forceRefresh: hasExistingData),
@@ -151,7 +153,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
         kugou.getThemePlaylist(forceRefresh: hasExistingData),
         kugou.getIpHome(forceRefresh: hasExistingData),
         kugou.getPersonalFm(forceRefresh: hasExistingData),
-      ]);
+      ]).timeout(
+        const Duration(milliseconds: 1500),
+        onTimeout: () => <dynamic>[],
+      );
 
       // 只有确实加载到数据时才标记为已加载
       final hasAnyData =
