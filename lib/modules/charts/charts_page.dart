@@ -124,6 +124,7 @@ class _ChartsPageState extends State<ChartsPage> {
               final rank = ranks.ranks[i];
               return FadeInUp(
                 delayMs: i * 30,
+                animate: false,
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
@@ -271,6 +272,7 @@ class _ChartsPageState extends State<ChartsPage> {
               final rank = ranks.ranks[i];
               return FadeInUp(
                 delayMs: i * 30,
+                animate: false,
                 child: _RankGridCard(
                   name: rank.name,
                   coverUrl: rank.coverUrl,
@@ -389,15 +391,96 @@ class _RankSongPage extends StatefulWidget {
 }
 
 class _RankSongPageState extends State<_RankSongPage> {
+  final List<KugouSongDetail> _songs = [];
+  final ScrollController _scrollController = ScrollController();
+  int _currentPage = 1;
+  bool _hasMore = true;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  String? _error;
+  static const int _pageSize = 30;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await context.read<KugouProvider>().getRankSongs(rankId: widget.rankId);
-      if (mounted) setState(() => _isLoading = false);
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadFirstPage());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_isLoadingMore || !_hasMore) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final current = _scrollController.position.pixels;
+    if (maxScroll - current <= 200) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadFirstPage() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
     });
+    try {
+      final apiClient = context.read<KugouProvider>().apiClient;
+      final songs = await apiClient.getRankAudio(
+        rankId: widget.rankId,
+        page: 1,
+        pagesize: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _songs.clear();
+        if (songs != null) {
+          _songs.addAll(songs);
+          _hasMore = songs.length >= _pageSize;
+        } else {
+          _error = '获取排行榜歌曲失败';
+          _hasMore = false;
+        }
+        _currentPage = 1;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final apiClient = context.read<KugouProvider>().apiClient;
+      final songs = await apiClient.getRankAudio(
+        rankId: widget.rankId,
+        page: _currentPage + 1,
+        pagesize: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (songs != null && songs.isNotEmpty) {
+          _songs.addAll(songs);
+          _currentPage++;
+          _hasMore = songs.length >= _pageSize;
+        } else {
+          _hasMore = false;
+        }
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingMore = false);
+    }
   }
 
   @override
@@ -413,62 +496,82 @@ class _RankSongPageState extends State<_RankSongPage> {
       ),
       body: _isLoading
           ? const Center(child: MD3ELoadingIndicator())
-          : Selector<KugouProvider, List<KugouSongDetail>>(
-              selector: (_, kugou) => kugou.rankSongs,
-              builder: (context, songs, _) {
-                if (songs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.music_off,
-                          size: 48,
-                          color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          '暂无数据',
-                          style: tt.titleMedium?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.tonal(
-                          onPressed: () async {
-                            setState(() => _isLoading = true);
-                            await context.read<KugouProvider>().getRankSongs(
-                              rankId: widget.rankId,
-                              forceRefresh: true,
-                            );
-                            if (mounted) setState(() => _isLoading = false);
-                          },
-                          child: const Text('重试'),
-                        ),
-                      ],
+          : _error != null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.music_off,
+                    size: 48,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style: tt.titleMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
                     ),
-                  );
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: songs.length,
-                  itemBuilder: (context, i) {
-                    final song = songs[i].toSong();
-                    return FadeInUp(
-                      delayMs: i * 30,
-                      child: SongListItem(
-                        song: song,
-                        onTap: () =>
-                            context.read<PlayerProvider>().playOnlinePlaylist(
-                              songs.map((e) => e.toSong()).toList(),
-                              i,
-                            ),
-                        onMoreTap: () {},
-                      ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.tonal(
+                    onPressed: _loadFirstPage,
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
+            )
+          : _songs.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.music_off,
+                    size: 48,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '暂无数据',
+                    style: tt.titleMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.tonal(
+                    onPressed: _loadFirstPage,
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
+            )
+          : MD3ERefreshIndicator(
+              onRefresh: _loadFirstPage,
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(16),
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: _songs.length + (_hasMore ? 1 : 0),
+                itemBuilder: (context, i) {
+                  if (i == _songs.length) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: MD3ELoadingIndicator(size: 20)),
                     );
-                  },
-                );
-              },
+                  }
+                  final song = _songs[i].toSong();
+                  return SongListItem(
+                    song: song,
+                    onTap: () =>
+                        context.read<PlayerProvider>().playOnlinePlaylist(
+                      _songs.map((e) => e.toSong()).toList(),
+                      i,
+                    ),
+                    onMoreTap: () {},
+                  );
+                },
+              ),
             ),
     );
   }

@@ -792,6 +792,7 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     return FadeInUp(
       delayMs: index * 30,
+      animate: false,
       child: InkWell(
         onTap: _isManaging
             ? () {
@@ -959,7 +960,11 @@ class _FavoritesPageState extends State<FavoritesPage>
         ),
         itemBuilder: (context, index) {
           final album = _albums[index];
-          return FadeInUp(delayMs: index * 30, child: _buildAlbumTile(album));
+          return FadeInUp(
+            delayMs: index * 30,
+            animate: false,
+            child: _buildAlbumTile(album),
+          );
         },
       ),
     );
@@ -1109,7 +1114,11 @@ class _FavoritesPageState extends State<FavoritesPage>
         ),
         itemBuilder: (context, index) {
           final artist = _artists[index];
-          return FadeInUp(delayMs: index * 30, child: _buildArtistTile(artist));
+          return FadeInUp(
+            delayMs: index * 30,
+            animate: false,
+            child: _buildArtistTile(artist),
+          );
         },
       ),
     );
