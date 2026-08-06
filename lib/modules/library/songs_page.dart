@@ -154,8 +154,10 @@ class _SongsPageState extends State<SongsPage> {
   @override
   Widget build(BuildContext context) {
     final songs = _sortedSongs;
-    final player = context.watch<PlayerProvider>();
-    final currentId = player.currentSong?.id;
+    // 只订阅当前歌曲 ID，避免播放进度高频通知导致整个列表反复重建
+    final currentId = context.select<PlayerProvider, String?>(
+      (p) => p.currentSong?.id,
+    );
     final currentIndex = (currentId == null || songs.isEmpty)
         ? -1
         : songs.indexWhere((s) => s.id == currentId);

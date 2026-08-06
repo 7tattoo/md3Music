@@ -80,15 +80,27 @@ class SongListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final playerProvider = context.watch<PlayerProvider>();
-    final favoritesProvider = context.watch<FavoritesProvider>();
-    final localFavoritesProvider = context.watch<LocalFavoritesProvider>();
-    final isCurrentSong = playerProvider.currentSong?.id == song.id;
+    // 关键：用 context.select 只订阅本条目关心的字段，避免在播放进度等
+    // 高频 notifyListeners（PlayerProvider 每次 position 更新都会通知）下
+    // 整行重建——大量可见行同时重建会导致滚动空白、停一下才显示。
+    final isCurrentSong = context.select<PlayerProvider, bool>(
+      (p) => p.currentSong?.id == song.id,
+    );
+    final isPlaying =
+        context.select<PlayerProvider, bool>((p) => p.isPlaying);
     final isFavorited = forceFavorited
         ? true
-        : (song.isOnline
-            ? favoritesProvider.isFavorite(song.id)
-            : localFavoritesProvider.isFavorite(song.id));
+        : song.isOnline
+            ? context.select<FavoritesProvider, bool>(
+                (f) => f.isFavorite(song.id),
+              )
+            : context.select<LocalFavoritesProvider, bool>(
+                (f) => f.isFavorite(song.id),
+              );
+    // 操作回调用 read，不建立订阅（避免跟随进度刷新）
+    final playerProvider = context.read<PlayerProvider>();
+    final favoritesProvider = context.read<FavoritesProvider>();
+    final localFavoritesProvider = context.read<LocalFavoritesProvider>();
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -162,7 +174,7 @@ class SongListItem extends StatelessWidget {
                       child: PlayingSpectrumIndicator(
                         color: colorScheme.primary,
                         size: 14,
-                        isPlaying: playerProvider.isPlaying,
+                        isPlaying: isPlaying,
                       ),
                     ),
                   if (showDuration)
