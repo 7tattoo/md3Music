@@ -570,16 +570,42 @@ class _FavoritesPageState extends State<FavoritesPage>
     if (confirm != true) return;
 
     final api = KugouApiClient();
+    var okCount = 0;
+    var failCount = 0;
     for (final index in _selectedIndices) {
+      if (index < 0 || index >= _playlists.length) {
+        failCount++;
+        continue;
+      }
       final playlist = _playlists[index];
       final listId = playlist.listId;
-      if (listId.isNotEmpty) {
-        await api.deletePlaylist(listId);
+      if (listId.isEmpty) {
+        failCount++;
+        continue;
+      }
+      // type 语义（与 JS playlist_del.js 及歌单详情页/专辑页一致）：
+      //   type=1 删除自己创建的歌单，type=0 取消收藏别人的歌单。
+      // 检查删除结果：status==1 或 error_code==0 视为成功，失败不再静默。
+      final type = _isCreated(playlist) ? 1 : 0;
+      final r = await api.deletePlaylist(listId, type: type);
+      if (r?['status'] == 1 || r?['error_code'] == 0) {
+        okCount++;
+      } else {
+        failCount++;
       }
     }
 
     _exitManageMode();
     _loadPlaylists(forceNoCache: true);
+
+    if (failCount > 0 && mounted) {
+      final msg = okCount > 0
+          ? '成功删除 $okCount 个，$failCount 个失败'
+          : '删除失败，请稍后重试';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+      );
+    }
   }
 
   // ==================== UI构建 ====================

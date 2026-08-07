@@ -68,6 +68,7 @@ fn aes_roundtrip(
     url: &str,
     data_obj: &Value,
     params: Value,
+    headers: &[(&str, &str)],
     clear_default_params: bool,
     not_signature: bool,
 ) -> Result<ModuleResponse, ModuleResponse> {
@@ -106,6 +107,9 @@ fn aes_roundtrip(
         .encrypt_type("android")
         .cookie(q_cookie(q))
         .response_type("arraybuffer");
+    for (k, v) in headers {
+        opts = opts.header(k, v);
+    }
     if clear_default_params {
         opts = opts.clear_default_params(true);
     }
@@ -186,7 +190,13 @@ pub fn handle_del(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, ModuleResponse
         "last_area": "gztx",
         "last_time": now_secs(),
     });
-    aes_roundtrip(q, ctx, None, "/v2/delete_list", &dm, params, false, false)
+    // delete_list 必须带 x-router 指向 cloudlist 服务，否则网关无法路由该接口
+    // （返回 {status:0, msg:<完整URL>}，表现为 502）。与 JS playlist_del.js 的
+    // `headers: { 'x-router': 'cloudlist.service.kugou.com' }` 对齐。
+    aes_roundtrip(
+        q, ctx, None, "/v2/delete_list", &dm, params,
+        &[("x-router", "cloudlist.service.kugou.com")], false, false,
+    )
 }
 
 /// playlist_detail.js → /playlist/detail（获取歌单详情）。
