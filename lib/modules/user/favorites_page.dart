@@ -68,8 +68,10 @@ class _FavoritesPageState extends State<FavoritesPage>
   Map<String, int> _playlistAccessOrder = {};
   static const _accessOrderKey = 'playlist_access_order';
 
-  // 管理模式（批量选择）
+  // 管理模式（批量选择）：_managingTab 记录当前批量管理的是哪个 tab
+  // （0=歌单, 1=专辑），_selectedIndices 始终索引到该 tab 的列表。
   bool _isManaging = false;
+  int _managingTab = 0;
   final Set<int> _selectedIndices = {};
 
   /// 顶栏渐变 ScrollController：与 ScrollAwareAppBar 共享
@@ -79,6 +81,8 @@ class _FavoritesPageState extends State<FavoritesPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    // 切换 tab 时退出批量管理，避免 _selectedIndices 在歌单/专辑间错位
+    _tabController.addListener(_onTabChanged);
     // 立即探测一次网络 + 每 30 秒兜底探测（dio 拦截器会同步更新
     // KugouApiClient.networkReachable，banner 自动跟随）。
     unawaited(_probeNetwork());
@@ -114,9 +118,17 @@ class _FavoritesPageState extends State<FavoritesPage>
     context.read<PlaylistCollectionNotifier>().removeListener(
       _onCollectionChanged,
     );
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// tab 切换完成后自动退出批量管理模式。
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging && _isManaging) {
+      _exitManageMode();
+    }
   }
 
   /// 从本地缓存读取上次同步的歌单/专辑/歌手与同步时间，立即渲染。
@@ -529,9 +541,10 @@ class _FavoritesPageState extends State<FavoritesPage>
     }
   }
 
-  void _enterManageMode() {
+  void _enterManageMode(int tab) {
     setState(() {
       _isManaging = true;
+      _managingTab = tab;
       _selectedIndices.clear();
     });
   }
@@ -539,6 +552,7 @@ class _FavoritesPageState extends State<FavoritesPage>
   void _exitManageMode() {
     setState(() {
       _isManaging = false;
+      _managingTab = 0;
       _selectedIndices.clear();
     });
   }
@@ -608,6 +622,68 @@ class _FavoritesPageState extends State<FavoritesPage>
     }
   }
 
+  Future<void> _deleteSelectedAlbums() async {
+    if (_selectedIndices.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认删除'),
+        content: Text('确定要删除选中的 ${_selectedIndices.length} 个专辑吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final api = KugouApiClient();
+    var okCount = 0;
+    var failCount = 0;
+    for (final index in _selectedIndices) {
+      if (index < 0 || index >= _albums.length) {
+        failCount++;
+        continue;
+      }
+      final album = _albums[index];
+      final listId = album.listId;
+      if (listId.isEmpty) {
+        failCount++;
+        continue;
+      }
+      // 专辑都是「收藏别人的」，取消收藏固定用 type=0（与专辑详情页一致）。
+      final r = await api.deletePlaylist(listId, type: 0);
+      if (r?['status'] == 1 || r?['error_code'] == 0) {
+        okCount++;
+      } else {
+        failCount++;
+      }
+    }
+
+    _exitManageMode();
+    _loadAlbums(noCache: true);
+
+    if (failCount > 0 && mounted) {
+      final msg = okCount > 0
+          ? '成功删除 $okCount 个，$failCount 个失败'
+          : '删除失败，请稍后重试';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
+
   // ==================== UI构建 ====================
 
   @override
@@ -625,7 +701,9 @@ class _FavoritesPageState extends State<FavoritesPage>
           if (_isManaging)
             IconButton(
               icon: const Icon(Icons.delete),
-              onPressed: _deleteSelectedPlaylists,
+              onPressed: _managingTab == 1
+                  ? _deleteSelectedAlbums
+                  : _deleteSelectedPlaylists,
             )
           else
             IconButton(
@@ -848,7 +926,7 @@ class _FavoritesPageState extends State<FavoritesPage>
         onLongPress: _isManaging
             ? null
             : () {
-                _enterManageMode();
+                _enterManageMode(0);
                 setState(() => _selectedIndices.add(index));
               },
         child: Container(
@@ -989,42 +1067,70 @@ class _FavoritesPageState extends State<FavoritesPage>
           return FadeInUp(
             delayMs: index * 30,
             animate: false,
-            child: _buildAlbumTile(album),
+            child: _buildAlbumTile(album, index),
           );
         },
       ),
     );
   }
 
-  Widget _buildAlbumTile(KugouPlaylistBrief album) {
+  Widget _buildAlbumTile(KugouPlaylistBrief album, int index) {
     final colorScheme = Theme.of(context).colorScheme;
     // 优先使用搜索到的原始数字 album ID
     final originalId = _albumOriginalIds[album.id] ?? album.numericId;
-    debugPrint(
-      '[AlbumTile] ${album.name}: originalId=$originalId (from map: ${_albumOriginalIds[album.id]}, numericId: ${album.numericId})',
-    );
+    final isSelected = _selectedIndices.contains(index);
 
     return InkWell(
-      onTap: () {
-        debugPrint(
-          '[AlbumTile] tapping ${album.name} -> albumGlobalCollectionId=$originalId',
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PlaylistPage(
-              playlist: album.toPlaylist(),
-              isInMyFavorites: true,
-              isAlbum: true,
-              albumGlobalCollectionId: originalId,
-            ),
-          ),
-        );
-      },
+      onTap: _isManaging
+          ? () {
+              setState(() {
+                if (isSelected) {
+                  _selectedIndices.remove(index);
+                } else {
+                  _selectedIndices.add(index);
+                }
+              });
+            }
+          : () {
+              debugPrint(
+                '[AlbumTile] tapping ${album.name} -> albumGlobalCollectionId=$originalId',
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PlaylistPage(
+                    playlist: album.toPlaylist(),
+                    isInMyFavorites: true,
+                    isAlbum: true,
+                    albumGlobalCollectionId: originalId,
+                  ),
+                ),
+              );
+            },
+      onLongPress: _isManaging
+          ? null
+          : () {
+              _enterManageMode(1);
+              setState(() => _selectedIndices.add(index));
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        color: isSelected
+            ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+            : null,
         child: Row(
           children: [
+            if (_isManaging)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  isSelected ? Icons.check_circle : Icons.circle_outlined,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                  size: 22,
+                ),
+              ),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: SizedBox(
@@ -1084,11 +1190,12 @@ class _FavoritesPageState extends State<FavoritesPage>
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: colorScheme.onSurfaceVariant,
-              size: 20,
-            ),
+            if (!_isManaging)
+              Icon(
+                Icons.chevron_right,
+                color: colorScheme.onSurfaceVariant,
+                size: 20,
+              ),
           ],
         ),
       ),
