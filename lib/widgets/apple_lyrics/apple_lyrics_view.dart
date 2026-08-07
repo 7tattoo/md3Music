@@ -451,10 +451,18 @@ class _AppleLyricsViewState extends State<AppleLyricsView>
     _ticker.stop();
   }
 
-  /// v3 优化：检测所有 perLine 偏移弹簧是否已收敛。
+  /// v3 优化：检测视口附近 perLine 偏移弹簧是否已收敛。
+  /// 只检查当前行 ±overscan 范围内的弹簧（与 renderer tick 范围一致）。
+  /// 远处弹簧因级联延迟未到而从未被 tick、isSettled 永远为 false，
+  /// 若遍历全部会导致收敛永远不成立、Ticker 永不停止（CPU 高功耗）。
   bool _arePerLineSpringsConverged() {
-    for (final spring in _perLineSprings.values) {
-      if (!spring.isSettled) return false;
+    const int overscan = 15;
+    final int start = math.max(0, _currentLineIndex - overscan);
+    final int end =
+        math.min(widget.lines.length, _currentLineIndex + overscan + 1);
+    for (int i = start; i < end; i++) {
+      final spring = _perLineSprings[i];
+      if (spring != null && !spring.isSettled) return false;
     }
     return true;
   }
