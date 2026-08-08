@@ -294,7 +294,6 @@ md3Music/
 │   └── app/src/main/
 │       ├── kotlin/.../        # KugouApiService（启动本地服务器）
 │       └── jniLibs/           # libkugou_server.so（四个架构）
-├── networkapi/                 # 云端登录 API（Node.js，仅登录接口）
 └── pubspec.yaml                # Flutter 配置
 ```
 
@@ -317,7 +316,6 @@ md3Music/
 | **桌面歌词** | Lyricon Provider |
 | **音频均衡器** | just_audio 平台均衡器 |
 | **音乐源** | 酷狗音乐 API |
-| **云端登录** | networkapi (Node.js，仅登录接口) |
 
 ---
 

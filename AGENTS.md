@@ -230,7 +230,7 @@ env CC_aarch64_linux_android=$BIN/aarch64-linux-android21-clang \
 | 加密 | rsa / aes / md-5 / sha1 / sha2 / base64（CBC + PKCS7 手动实现） | 与 JS CryptoJS 行为对齐 |
 | 原生桥接 | JNI + dart:ffi | NDK 28 |
 | 构建工具 | Gradle (Kotlin DSL) | Java 17 |
-| 公网服务器 | 已退役（原 networkapi 为 Node.js + Express，登录已改由 Rust 本地直连） | — |
+| 公网服务器 | 已退役（原为 Node.js + Express，登录已改由 Rust 本地直连） | — |
 
 ---
 
