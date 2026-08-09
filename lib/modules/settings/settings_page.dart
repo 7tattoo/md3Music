@@ -35,7 +35,7 @@ import 'license_view_page.dart';
 /// Fallback display when runtime PackageInfo read fails.
 const String kBuildAppVersion = String.fromEnvironment(
   'APP_VERSION',
-  defaultValue: '5.0.7',
+  defaultValue: '5.0.8',
 );
 
 class SettingsPage extends StatefulWidget {
