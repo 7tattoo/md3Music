@@ -1422,7 +1422,8 @@ class _SettingsPageState extends State<SettingsPage> {
       case 'standard':
       case '128':
         return '标准 128k';
-      case 'hq':
+      case '320':
+      case 'hq': // 兼容早期版本遗留的 'hq' 存储值
         return '高品质 320k';
       case 'sq':
       case 'flac':
@@ -1438,7 +1439,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showQualityDialog() {
     final qualities = [
       ('128', '标准 128k'),
-      ('hq', '高品质 320k'),
+      ('320', '高品质 320k'),
       ('flac', '无损 FLAC'),
       ('high', 'Hi-Res 无损'),
     ];
