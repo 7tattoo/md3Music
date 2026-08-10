@@ -732,6 +732,8 @@ class _FavoritesPageState extends State<FavoritesPage>
               clipBehavior: Clip.antiAlias,
               child: TabBar(
                 controller: _tabController,
+                // 隐藏 TabBar 底部默认的分隔细线（Material 3 自带 1px divider）
+                dividerColor: Colors.transparent,
                 tabs: const [
                   Tab(icon: Icon(Icons.queue_music), text: '歌单'),
                   Tab(icon: Icon(Icons.album), text: '专辑'),
