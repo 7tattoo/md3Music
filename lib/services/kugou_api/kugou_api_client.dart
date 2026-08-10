@@ -2260,8 +2260,8 @@ class KugouApiClient {
     );
   }
 
-  Future<Map<String, dynamic>?> getUserFollow() async {
-    return await _get(KugouEndpoints.userFollow);
+  Future<Map<String, dynamic>?> getUserFollow({bool noCache = false}) async {
+    return await _get(KugouEndpoints.userFollow, noCache: noCache);
   }
 
   Future<Map<String, dynamic>?> getUserFollowMessage(

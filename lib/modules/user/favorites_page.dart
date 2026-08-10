@@ -168,6 +168,8 @@ class _FavoritesPageState extends State<FavoritesPage>
     if (!mounted) return;
     _loadPlaylists(forceNoCache: true);
     _loadAlbums(noCache: true);
+    // 歌单/专辑/歌手收藏变更都走这个 notifier，歌手列表也要一并刷新
+    _loadArtists(noCache: true);
   }
 
   /// 加载歌单访问排序记录
@@ -206,7 +208,13 @@ class _FavoritesPageState extends State<FavoritesPage>
   }
 
   Future<void> _loadAllData() async {
-    await Future.wait([_loadPlaylists(), _loadAlbums(), _loadArtists()]);
+    // 全部走 noCache：绕过本地代理 2 分钟 apicache，收藏/取消收藏后
+    // 进入页面即可看到最新数据（否则需手动下拉或重启 App 才生效）
+    await Future.wait([
+      _loadPlaylists(forceNoCache: true),
+      _loadAlbums(noCache: true),
+      _loadArtists(noCache: true),
+    ]);
   }
 
   String? get _currentUserId => KugouApiClient().userid;
@@ -451,13 +459,13 @@ class _FavoritesPageState extends State<FavoritesPage>
     }
   }
 
-  Future<void> _loadArtists() async {
+  Future<void> _loadArtists({bool noCache = false}) async {
     if (!mounted) return;
     setState(() => _isLoadingArtists = true);
 
     try {
       final api = KugouApiClient();
-      final result = await api.getUserFollow();
+      final result = await api.getUserFollow(noCache: noCache);
       if (!mounted) return;
 
       if (result == null) {
@@ -790,7 +798,7 @@ class _FavoritesPageState extends State<FavoritesPage>
     await Future.wait([
       _loadPlaylists(forceNoCache: true),
       _loadAlbums(noCache: true),
-      _loadArtists(),
+      _loadArtists(noCache: true),
     ]);
   }
 
@@ -1053,7 +1061,7 @@ class _FavoritesPageState extends State<FavoritesPage>
     }
 
     return MD3ERefreshIndicator(
-      onRefresh: () => _loadAlbums(),
+      onRefresh: () => _loadAlbums(noCache: true),
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _albums.length,
@@ -1236,7 +1244,7 @@ class _FavoritesPageState extends State<FavoritesPage>
     }
 
     return MD3ERefreshIndicator(
-      onRefresh: () => _loadArtists(),
+      onRefresh: () => _loadArtists(noCache: true),
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _artists.length,

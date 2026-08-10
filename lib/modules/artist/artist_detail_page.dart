@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models/song.dart';
 import '../../providers/player_provider.dart';
+import '../../providers/playlist_collection_notifier.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/md3e_loading_indicator.dart';
@@ -400,6 +401,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
             duration: const Duration(seconds: 1),
           ),
         );
+        // 通知「我的收藏」歌手 tab 立即刷新（与歌单/专辑收藏变更同一机制）
+        context.read<PlaylistCollectionNotifier>().notifyChanged();
       }
     } catch (e) {
       if (!mounted) return;
