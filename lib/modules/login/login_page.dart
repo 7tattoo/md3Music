@@ -544,7 +544,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '可能的解决办法：',
+                '解决办法：',
                 style: textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -552,7 +552,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                '1. 等待几个小时有时候能恢复\n2. 重登有概率能恢复，但不建议频繁操作',
+                '1.签到时过滑块验证\n2. 等待几个小时有时候能恢复\n3. 重登有概率能恢复，但不建议频繁登录操作',
                 style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
