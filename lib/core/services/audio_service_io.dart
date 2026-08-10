@@ -4,11 +4,16 @@ import 'package:audio_session/audio_session.dart';
 /// 音频焦点 / 音频会话管理。
 ///
 /// 关键设计：
-/// - [_pausedByInterruption]：标记“暂停是由音频焦点丢失引起的”。
+/// - [_pausedByInterruption]：标记"暂停是由音频焦点永久丢失 / 设备中断引起的"。
 ///   仅在这种情况下才在重新获得焦点时自动恢复播放，
 ///   避免覆盖用户主动的暂停。
-/// - 区分临时中断（pause / unknown → 之后会自动恢复）和永久丢失
-///   （如电话来电、强制中断），后者由 audio_session 标记 `dispose` 状态。
+/// - 焦点处理策略：
+///   - 临时焦点丢失（[AudioInterruptionType.pause]，通知/导航/微信语音等
+///     其他软件短促发声）：**保持播放不被打断**（用户诉求"与其他软件同时发声"）
+///   - 永久焦点丢失（[AudioInterruptionType.unknown]，电话来电 / 其他媒体应用
+///     抢占）：暂停播放，焦点恢复后自动续播
+///   - 可降音量丢失（[AudioInterruptionType.duck]）：保持原音量继续播放
+///     （修复荣耀平板音量忽高忽低，不做 duck/unduck 音量调整）
 class AudioService {
   static final AudioService _instance = AudioService._internal();
 
@@ -84,7 +89,13 @@ class AudioService {
               // _player.setVolume(0.5);  // 注释掉：会导致音量波动
               break;
             case AudioInterruptionType.pause:
+              // 临时焦点丢失（通知、导航语音、微信语音、其他软件短促发声等）：
+              // 保持播放，不被打断（用户诉求"与其他软件同时发声"）。
+              // 不暂停、不降音量，避免音量波动与播放中断。
+              break;
             case AudioInterruptionType.unknown:
+              // 永久焦点丢失（电话来电、其他媒体应用抢占焦点）：
+              // 暂停播放，避免与其他持续发声的应用重叠。
               if (_player.playing) {
                 _pausedByInterruption = true;
                 pause();
