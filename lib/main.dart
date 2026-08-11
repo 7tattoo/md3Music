@@ -124,6 +124,16 @@ Future<void> main() async {
       showUserAgreement: needsUserAgreement,
     ),
   );
+
+  // runApp 后引擎已附着，把持久化的 DAC 音量上限倍率下发到原生
+  // （开启独占前生效；非 Android / channel 未就绪时静默失败）
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    try {
+      final s = SettingsRepository();
+      await UsbAudioService.instance
+          .setVolumeCap(await s.getDacVolumeCapMultiplier());
+    } catch (_) {}
+  });
 }
 
 /// 根据 shortcut 类型路由到对应页面。

@@ -37,7 +37,15 @@ class UsbAudioPlugin(private val context: Context) {
         /** 默认采样率/声道（尚未捕获到播放格式时创建流的兜底）。 */
         private const val DEFAULT_SAMPLE_RATE = 44100
         private const val DEFAULT_CHANNELS = 2
+        /** DAC 音量上限基准（1X）：开启独占时输出限幅到默认硬件的 ~10%，避免震耳欲聋。 */
+        private const val DAC_VOLUME_CAP_BASE = 0.1f
+        /** 音量上限倍率滑条范围（0.5X~2X），乘 DAC_VOLUME_CAP_BASE 得到实际上限。 */
+        private const val DAC_VOLUME_CAP_MIN = 0.5f
+        private const val DAC_VOLUME_CAP_MAX = 2.0f
     }
+
+    /** 当前 DAC 音量上限倍率（由设置页滑条下发，1.0X = DAC_VOLUME_CAP_BASE）。 */
+    @Volatile private var dacVolumeCapMultiplier: Float = 1.0f
 
     private val usbManager: UsbManager =
         context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -90,12 +98,14 @@ class UsbAudioPlugin(private val context: Context) {
 
     /**
      * 计算并应用 DAC 音量（硬件音量优先，无硬件音量/设置失败时回退软件缩放）：
-     *   DAC 音量% = 系统媒体音量% × 播放器音量(0..1)
+     *   DAC 音量% = 系统媒体音量% × 播放器音量(0..1) × (DAC_VOLUME_CAP_BASE × 滑条倍率)
+     * 其中基准×倍率把输出限幅到默认硬件的 5%~20%（1X=10%），避免独占满音量震耳欲聋。
      */
     private fun applyDacVolume() {
         val playerVol = UsbAudioSinkController.getLastPlayerVolume().coerceIn(0f, 1f)
         val sysPct = systemVolumePercent()
-        val dacPct = (sysPct * playerVol).toInt().coerceIn(0, 100)
+        val cap = (DAC_VOLUME_CAP_BASE * dacVolumeCapMultiplier).coerceIn(0f, 1f)
+        val dacPct = (sysPct * playerVol * cap).toInt().coerceIn(0, 100)
         if (dacPct != lastAppliedDacPct) {
             lastAppliedDacPct = dacPct
             Log.i(TAG, "applyDacVolume: sys=$sysPct% player=$playerVol → dac=$dacPct%")
@@ -228,6 +238,14 @@ class UsbAudioPlugin(private val context: Context) {
             "getStatus" -> result.success(getStatus())
             "getFormatInfo" -> result.success(UsbAudioSinkController.getFormatInfo())
             "isEnabled" -> result.success(UsbAudioSinkController.isEnabled())
+            "setVolumeCap" -> {
+                // 设置页滑条下发音量上限倍率（0.5X~2X），立即应用到 DAC 音量
+                val multiplier = (call.argument<Number>("multiplier")?.toFloat() ?: 1.0f)
+                    .coerceIn(DAC_VOLUME_CAP_MIN, DAC_VOLUME_CAP_MAX)
+                dacVolumeCapMultiplier = multiplier
+                if (UsbAudioSinkController.isEnabled()) applyDacVolume()
+                result.success(true)
+            }
             "enableExclusive" -> requestEnableInternal(result)
             "disableExclusive" -> {
                 // RESET 会阻塞约 3s（等待设备重新枚举），必须在后台线程执行避免 ANR；
@@ -271,10 +289,12 @@ class UsbAudioPlugin(private val context: Context) {
         base["deviceName"] = cached?.deviceName ?: device?.productName
         base["hasPermission"] = device != null && usbAudioDevice.hasPermission(device)
         base["hasHardwareVolume"] = usbAudioDevice.hasHardwareVolume && hardwareVolumeUsable
+        base["dacVolumeCapMultiplier"] = dacVolumeCapMultiplier
         base["dacVolumePercent"] = if (UsbAudioSinkController.isEnabled()) {
             if (hardwareVolumeUsable) {
-                // 硬件音量：由 AudioManager STREAM_MUSIC × 播放器音量决定，这里只回读映射值
-                systemVolumePercent() * UsbAudioSinkController.getLastPlayerVolume()
+                // 硬件音量：由 AudioManager STREAM_MUSIC × 播放器音量 × 音量上限决定，这里只回读映射值
+                systemVolumePercent() * UsbAudioSinkController.getLastPlayerVolume() *
+                    (DAC_VOLUME_CAP_BASE * dacVolumeCapMultiplier)
             } else {
                 UsbAudioStream.streamVolume * 100f
             }
