@@ -12,6 +12,7 @@ import 'core/services/equalizer_service.dart';
 import 'core/services/local_http_server.dart';
 import 'core/services/lyricon_provider_service.dart';
 import 'core/services/media_notification_service.dart';
+import 'core/services/usb_audio_service.dart';
 import 'core/services/wakelock_service.dart';
 import 'data/repositories/settings_repository.dart';
 import 'modules/onboarding/user_agreement_page.dart';
@@ -110,6 +111,12 @@ Future<void> main() async {
 
   // 初始化均衡器服务（恢复偏好设置，监听播放状态自动绑定）
   await EqualizerService.instance.init();
+
+  // 启动 USB 独占输出服务的状态轮询（每秒一次；非 Android 平台自动跳过，
+  // 原生 channel 未就绪时内部 try-catch 兜底，不影响启动流程）
+  try {
+    UsbAudioService.instance.init();
+  } catch (_) {}
 
   runApp(
     MyApp(

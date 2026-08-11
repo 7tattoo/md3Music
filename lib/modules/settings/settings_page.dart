@@ -21,6 +21,7 @@ import '../../data/repositories/settings_repository.dart';
 import '../onboarding/onboarding_page.dart';
 import '../onboarding/user_agreement_page.dart';
 import '../../providers/kugou_provider.dart';
+import '../../providers/player_provider.dart';
 import '../../providers/tab_config_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/kugou_server.dart';
@@ -28,6 +29,7 @@ import '../../widgets/apple_lyrics/layout/lyric_preferences.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
 import '../../widgets/apple_lyrics/preview/lyrics_preview_page.dart';
 import '../../widgets/seed_color_picker.dart';
+import '../../widgets/usb_exclusive_section.dart';
 import 'equalizer_settings_page.dart';
 import 'license_view_page.dart';
 
@@ -299,6 +301,17 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSectionLabel('播放', colorScheme),
             _buildSettingsCard(
               _buildPlaybackSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('USB 独占', colorScheme),
+            _buildSettingsCard(
+              [
+                UsbExclusiveSection(
+                  // 拔线时自动暂停播放（与歌曲信息页行为一致）
+                  onAutoPause: () => context.read<PlayerProvider>().pause(),
+                ),
+              ],
               colorScheme,
               separator,
             ),

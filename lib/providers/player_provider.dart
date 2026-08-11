@@ -93,6 +93,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Song? get currentSong => _currentSong;
   bool get isPlaying => _isPlaying;
+
+  /// audio_service 实例（歌曲信息页读取源格式用）。
+  dynamic get audioService => _audioService;
+
   Duration get position => _position;
   Duration? get duration => _duration;
   List<Song> get playlist => _playlist;
