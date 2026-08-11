@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../core/services/usb_audio_service.dart';
+import '../providers/player_provider.dart';
 
 /// USB 独占输出设置板块（设置页 / 歌曲信息页共用，保证信息与开关一致）。
 ///
@@ -50,12 +52,25 @@ class _UsbExclusiveSectionState extends State<UsbExclusiveSection> {
   }
 
   Future<void> _toggle(bool value) async {
+    // 捕获 provider 再 await，避免跨异步使用 BuildContext
+    final player = context.read<PlayerProvider>();
     setState(() => _loading = true);
     try {
       if (value) {
-        await UsbAudioService.instance.enableExclusive();
+        // 先切到 DAC 音量记忆（默认 10%），再开独占，
+        // 避免开启瞬间以普通音量(100%)满功率爆音
+        await player.enterDacExclusive();
+        try {
+          await UsbAudioService.instance.enableExclusive();
+        } catch (e) {
+          // 开启失败：还原普通音量，避免停留在 DAC 音量
+          await player.exitDacExclusive();
+          rethrow;
+        }
       } else {
         await UsbAudioService.instance.disableExclusive();
+        // 独占关闭后还原普通音量记忆（默认 100%）
+        await player.exitDacExclusive();
       }
       // 立即拉一次最新状态刷新 UI
       final s = await UsbAudioService.instance.getStatus();

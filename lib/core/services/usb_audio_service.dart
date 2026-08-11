@@ -164,16 +164,6 @@ class UsbAudioService {
     }
   }
 
-  /// 设置 DAC 音量上限倍率（设置页滑条 0.5X~2X；1X = 硬件 ~10%）。
-  /// 独占开启时立即生效；未开启时保存到原生，下次开启独占时应用。
-  Future<void> setVolumeCap(double multiplier) async {
-    try {
-      await _channel.invokeMethod('setVolumeCap', {'multiplier': multiplier});
-    } catch (e) {
-      _debug('setVolumeCap failed: $e');
-    }
-  }
-
   // ── 工具 ──────────────────────────────────────────────────────
 
   void _debug(String msg) {

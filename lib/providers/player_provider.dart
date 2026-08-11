@@ -12,6 +12,7 @@ import '../core/services/desktop_lyric_service.dart';
 import '../core/services/home_widget_service.dart';
 import '../core/services/lyricon_provider_service.dart';
 import '../core/services/media_notification_service.dart';
+import '../core/services/usb_audio_service.dart';
 import '../core/services/wakelock_service.dart';
 import '../core/services/media_store_service.dart';
 import '../data/models/song.dart';
@@ -66,7 +67,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _currentIndex = -1;
   AppLoopMode _loopMode = AppLoopMode.off;
   bool _shuffleEnabled = false;
-  double _volume = 1.0;
+  // 普通播放音量记忆（默认 100%）
+  double _normalVolume = 1.0;
+  // DAC 独占音量记忆（默认 10%，防独占首开震耳）
+  double _dacVolume = 0.1;
+  // 当前是否处于 USB 独占模式（决定音量滑条调节哪份记忆）
+  bool _dacActive = false;
   double _speed = 1.0;
   bool _isResolvingUrl = false;
   String? _resolveError;
@@ -103,7 +109,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   int get currentIndex => _currentIndex;
   AppLoopMode get loopMode => _loopMode;
   bool get shuffleEnabled => _shuffleEnabled;
-  double get volume => _volume;
+  double get volume => _dacActive ? _dacVolume : _normalVolume;
   double get speed => _speed;
   bool get isResolvingUrl => _isResolvingUrl;
   String? get resolveError => _resolveError;
@@ -179,7 +185,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _initAudioService();
     // 监听自身变化检测切歌 → 推送 Lyricon（仅 enabled 时实际推送）
     addListener(_handleLyriconSongChange);
+    // 监听 USB 独占状态：独占关闭/拔线时自动还原普通音量（默认 100%）
+    _usbStatusSubscription = UsbAudioService.instance.statusStream.listen(_onUsbStatusChanged);
   }
+
+  /// USB 独占状态轮询订阅（dispose 时取消）。
+  StreamSubscription<Map<String, dynamic>>? _usbStatusSubscription;
 
   Future<void> _initAudioService() async {
     try {
@@ -200,6 +211,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _audioService = audioServiceModule;
       _audioInitialized = true;
       await _audioService.init();
+      // 应用当前音量（首次运行=初始 10%；_restoreState 恢复记忆值时会覆盖）
+      await setVolume(volume);
       _initStreams();
       await _loadDefaultQuality();
       // 恢复上次播放状态
@@ -266,6 +279,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         await _audioService.setShuffleModeEnabled(false);
       }
 
+      // 恢复音量记忆（普通播放与 USB 独占 DAC 各一份，重启后保持）
+      _normalVolume = state.volume;
+      _dacVolume = state.dacVolume;
+      await setVolume(volume);
+
       // 构建播放源并 seek 到保存的位置（不自动播放，等用户手动触发）
       final ok = await _resolveAndPlayCurrentSong(seekTo: state.position, play: false);
       if (ok) {
@@ -294,6 +312,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         position: _position,
         loopMode: _loopMode.name,
         shuffleEnabled: _shuffleEnabled,
+        volume: _normalVolume,
+        dacVolume: _dacVolume,
       );
     } catch (_) {}
   }
@@ -992,7 +1012,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       await _audioService?.pause();
       // 恢复音量设置（下次播放时使用）
-      _audioService!.player.setVolume(_volume);
+      _audioService!.player.setVolume(volume);
     } else {
       await _audioService?.pause();
     }
@@ -1008,7 +1028,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> resume() async {
     final fadeEnabled = await SettingsRepository().getPauseFadeEnabled();
     if (fadeEnabled && _audioService != null) {
-      final targetVolume = _volume;
+      final targetVolume = volume;
       final token = ++_fadeToken;
       // 先设置低音量再播放，避免突然出声
       _audioService!.player.setVolume(0.01);
@@ -1626,9 +1646,42 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> setVolume(double volume) async {
-    _volume = volume.clamp(0.0, 1.0);
-    await _audioService?.player?.setVolume(_volume);
+    final v = volume.clamp(0.0, 1.0);
+    // 按当前模式写入对应音量记忆（普通 vs DAC 独占）
+    if (_dacActive) {
+      _dacVolume = v;
+    } else {
+      _normalVolume = v;
+    }
+    await _audioService?.player?.setVolume(v);
     notifyListeners();
+    // 音量记忆：防抖持久化，重启后保持
+    _scheduleSave();
+  }
+
+  /// 进入 USB 独占：切换到 DAC 音量记忆（默认 10%），此后滑条调节的是 DAC 音量。
+  Future<void> enterDacExclusive() async {
+    if (_dacActive) return;
+    _dacActive = true;
+    await setVolume(_dacVolume);
+  }
+
+  /// 退出 USB 独占：还原普通音量记忆（默认 100%）。
+  Future<void> exitDacExclusive() async {
+    if (!_dacActive) return;
+    _dacActive = false;
+    await setVolume(_normalVolume);
+  }
+
+  /// USB 独占状态变化回调（每秒轮询）：独占关闭/拔线/重新插入时自动切换音量记忆。
+  void _onUsbStatusChanged(Map<String, dynamic> status) {
+    final nowDac = status['enabled'] == true;
+    if (nowDac == _dacActive) return;
+    if (nowDac) {
+      enterDacExclusive();
+    } else {
+      exitDacExclusive();
+    }
   }
 
   Future<void> setSpeed(double speed) async {
@@ -2049,6 +2102,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _playerStateSubscription?.cancel();
     _sequenceStateSubscription?.cancel();
     _speedSubscription?.cancel();
+    _usbStatusSubscription?.cancel();
     _sleepTimerTicker?.cancel();
     _sleepTimerTicker = null;
     super.dispose();
