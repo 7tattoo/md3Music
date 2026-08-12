@@ -402,6 +402,7 @@ cargo test          # 本地测试（不依赖外网）
 - [tiny_http](https://github.com/tiny-http/tiny-http) - Rust HTTP 服务器
 - [ureq](https://github.com/algesten/ureq) - Rust HTTP 客户端
 - [JAudioTagger](https://www.jthink.net/jaudiotagger/) - 音频元数据读写
+- [decent-player](https://github.com/Ma145/decent-player) - USB 独占音频输出（DAC 独占驱动 C++/Kotlin 移植自其 `decent-usb-audio-driver`）
 
 ---
 
