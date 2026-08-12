@@ -41,6 +41,10 @@ class LyricsViewState extends State<LyricsView> {
   List<double> _lineHeights = [];
   List<double> _lineTopOffsets = [];
 
+  // 上次测量的环境文本样式（含 letterSpacing/fontFamilyFallback 等，
+  // 变化时重测，避免实际渲染比测量高导致裁切）
+  TextStyle? _lastBaseStyle;
+
   // ListView 顶部 padding
   static const double _topPadding = 100.0;
 
@@ -306,27 +310,40 @@ class LyricsViewState extends State<LyricsView> {
     }
   }
 
-  /// 计算每行容器高度与累计偏移（缓存，仅在歌词/偏好/宽度变化时重测）。
+  /// 计算每行容器高度与累计偏移（缓存，仅在歌词/偏好/宽度/环境样式变化时重测）。
   ///
   /// 行高 = 实际文本块高（按当前字号 TextPainter 完整测量，英文原词+翻译
   /// 超长行可换 2 行及以上，不截断）
-  ///        + 行间距留白 `fontSize * (lineSpacing - 1.2)`。
-  /// 单行时与原来的 `fontSize * lineSpacing` 一致。
-  void _ensureLayout(double width, double fontSize, String? fontFamily) {
-    if (!_layoutDirty && _lastLayoutWidth == width) return;
+  ///        + 行间距留白 `fontSize * (lineSpacing - 1.2)` + 安全余量。
+  ///
+  /// 关键：测量样式以 [baseStyle]（实际渲染所用的 DefaultTextStyle）为底，
+  /// 保留 letterSpacing / fontFamilyFallback 等，避免实际换行比测量多、
+  /// 实际行高比测量高导致裁切。
+  void _ensureLayout(
+    double width,
+    double fontSize,
+    String? fontFamily,
+    TextStyle baseStyle,
+  ) {
+    if (!_layoutDirty &&
+        _lastLayoutWidth == width &&
+        _lastBaseStyle == baseStyle) {
+      return;
+    }
     _layoutDirty = false;
     _lastLayoutWidth = width;
+    _lastBaseStyle = baseStyle;
 
     final n = _parsedLyrics.length;
     final spacingExtra = fontSize * (_prefs.lineSpacing - 1.2);
     _lineHeights = List<double>.generate(n, (i) {
       final text = _parsedLyrics[i].text;
       // 空行显示 '...' 占位，按单行处理
-      if (text.isEmpty) return fontSize * _prefs.lineSpacing;
+      if (text.isEmpty) return fontSize * _prefs.lineSpacing + 4;
       final painter = TextPainter(
         text: TextSpan(
           text: text,
-          style: TextStyle(
+          style: baseStyle.copyWith(
             fontSize: fontSize,
             height: 1.2,
             fontWeight: FontWeight.w600,
@@ -339,7 +356,8 @@ class LyricsViewState extends State<LyricsView> {
         0,
         (sum, m) => sum + m.height,
       );
-      return blockHeight + spacingExtra;
+      // +4 安全余量：吸收字体度量/换行四舍五入的细微偏差，保证不裁切
+      return blockHeight + spacingExtra + 4;
     });
 
     _lineTopOffsets = List<double>.filled(n, 0);
@@ -391,7 +409,13 @@ class LyricsViewState extends State<LyricsView> {
       content = LayoutBuilder(
         builder: (context, constraints) {
           final availableWidth = constraints.maxWidth - 48; // 水平 padding 24*2
-          _ensureLayout(availableWidth, fontSize, fontFamily);
+          // 用实际渲染的环境样式测量，避免 letterSpacing 等导致换行比测量多而裁切
+          _ensureLayout(
+            availableWidth,
+            fontSize,
+            fontFamily,
+            DefaultTextStyle.of(context).style,
+          );
           return Listener(
             onPointerDown: _onPointerDown,
             onPointerUp: _onPointerUp,
