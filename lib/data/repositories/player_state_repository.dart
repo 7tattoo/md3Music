@@ -14,6 +14,9 @@ class PlayerStateRepository {
   static const _keyPosition = 'player_position';
   static const _keyLoopMode = 'player_loop_mode';
   static const _keyShuffleEnabled = 'player_shuffle_enabled';
+  // 音量记忆：保存/恢复 app 音量（普通播放与 USB 独占 DAC 各一份）
+  static const _keyVolume = 'player_volume';
+  static const _keyDacVolume = 'player_dac_volume';
 
   /// 保存当前播放状态。
   Future<void> saveState({
@@ -23,6 +26,8 @@ class PlayerStateRepository {
     required Duration position,
     required String loopMode,
     required bool shuffleEnabled,
+    required double volume,
+    required double dacVolume,
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -38,6 +43,8 @@ class PlayerStateRepository {
     await prefs.setInt(_keyPosition, position.inMilliseconds);
     await prefs.setString(_keyLoopMode, loopMode);
     await prefs.setBool(_keyShuffleEnabled, shuffleEnabled);
+    await prefs.setDouble(_keyVolume, volume);
+    await prefs.setDouble(_keyDacVolume, dacVolume);
   }
 
   /// 恢复上次的播放状态。
@@ -71,6 +78,8 @@ class PlayerStateRepository {
     final positionMs = prefs.getInt(_keyPosition) ?? 0;
     final loopMode = prefs.getString(_keyLoopMode) ?? 'off';
     final shuffleEnabled = prefs.getBool(_keyShuffleEnabled) ?? false;
+    final volume = prefs.getDouble(_keyVolume) ?? 1.0;
+    final dacVolume = prefs.getDouble(_keyDacVolume) ?? 0.1;
 
     return PlayerState(
       currentSong: currentSong,
@@ -79,6 +88,8 @@ class PlayerStateRepository {
       position: Duration(milliseconds: positionMs),
       loopMode: loopMode,
       shuffleEnabled: shuffleEnabled,
+      volume: volume,
+      dacVolume: dacVolume,
     );
   }
 
@@ -91,6 +102,8 @@ class PlayerStateRepository {
     await prefs.remove(_keyPosition);
     await prefs.remove(_keyLoopMode);
     await prefs.remove(_keyShuffleEnabled);
+    await prefs.remove(_keyVolume);
+    await prefs.remove(_keyDacVolume);
   }
 }
 
@@ -101,6 +114,8 @@ class PlayerState {
   final Duration position;
   final String loopMode;
   final bool shuffleEnabled;
+  final double volume;
+  final double dacVolume;
 
   const PlayerState({
     required this.currentSong,
@@ -109,5 +124,7 @@ class PlayerState {
     required this.position,
     required this.loopMode,
     required this.shuffleEnabled,
+    required this.volume,
+    required this.dacVolume,
   });
 }

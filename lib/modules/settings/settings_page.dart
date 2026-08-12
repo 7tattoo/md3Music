@@ -15,7 +15,6 @@ import '../../core/services/equalizer_service.dart';
 import '../../core/services/lyricon_provider_service.dart';
 import '../../core/services/media_notification_service.dart';
 import '../../core/services/spectrum_service.dart';
-import '../../core/services/usb_audio_service.dart';
 import '../../core/services/wakelock_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/motion_constants.dart';
@@ -80,8 +79,6 @@ class _SettingsPageState extends State<SettingsPage> {
   // 蓝牙歌词开关：通过 MediaSession 元数据替换在车机等设备显示歌词
   bool _bluetoothLyricEnabled = false;
   double _uiScale = 1.0;
-  // USB 独占 DAC 音量上限倍率（0.5X~2X，1X = 硬件 ~10%）
-  double _dacVolumeCapMultiplier = 1.0;
   // 暂停淡入淡出开关
   bool _pauseFadeEnabled = false;
   // 播放时保持屏幕常亮开关
@@ -204,9 +201,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final spectrumStyle = await _settingsRepository.getSpectrumStyle();
     final spectrumBgOpacity = await _settingsRepository.getSpectrumBgOpacity();
     final spectrumBgHeight = await _settingsRepository.getSpectrumBgHeight();
-    // 读取 USB 独占 DAC 音量上限倍率
-    final dacVolumeCapMultiplier = await _settingsRepository
-        .getDacVolumeCapMultiplier();
 
     setState(() {
       _themeMode = themeMode;
@@ -228,15 +222,12 @@ class _SettingsPageState extends State<SettingsPage> {
       _bluetoothLyricEnabled = bluetoothLyricEnabled;
       _pauseFadeEnabled = pauseFadeEnabled;
       _keepScreenOn = keepScreenOn;
-      _dacVolumeCapMultiplier = dacVolumeCapMultiplier;
       _spectrumEnabled = spectrumEnabled;
       _spectrumBandCount = spectrumBandCount;
       _spectrumStyle = spectrumStyle;
       _spectrumBgOpacity = spectrumBgOpacity;
       _spectrumBgHeight = spectrumBgHeight;
     });
-    // 把持久化的音量上限倍率下发到原生（未开启独占时保存，开启时应用）
-    UsbAudioService.instance.setVolumeCap(dacVolumeCapMultiplier);
   }
 
   Future<void> _loadVersion() async {
@@ -340,7 +331,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   // 拔线时自动暂停播放（与歌曲信息页行为一致）
                   onAutoPause: () => context.read<PlayerProvider>().pause(),
                 ),
-                _buildDacVolumeCapSlider(colorScheme),
               ],
               colorScheme,
               separator,
@@ -419,71 +409,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(children: children),
-    );
-  }
-
-  /// USB 独占输出音量上限滑条：倍率 0.5X~2X（1X = 硬件 ~10%）。
-  /// 与「调整全局界面大小」同款交互：拖动实时预览，松手持久化并下发到原生 DAC。
-  Widget _buildDacVolumeCapSlider(ColorScheme colorScheme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.volume_down, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 8,
-                    ),
-                  ),
-                  child: Slider(
-                    value: _dacVolumeCapMultiplier,
-                    min: 0.5,
-                    max: 2.0,
-                    divisions: 15,
-                    label: '${_dacVolumeCapMultiplier.toStringAsFixed(1)}x',
-                    onChanged: (v) {
-                      setState(() => _dacVolumeCapMultiplier = v);
-                      HapticFeedback.lightImpact();
-                    },
-                    onChangeEnd: (v) async {
-                      _dacVolumeCapMultiplier = v;
-                      await _settingsRepository.setDacVolumeCapMultiplier(v);
-                      UsbAudioService.instance.setVolumeCap(v);
-                    },
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 40,
-                child: Text(
-                  '${_dacVolumeCapMultiplier.toStringAsFixed(1)}x',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Text(
-              'DAC 独占输出音量上限（1X ≈ 硬件 10%，0.5X~2X）',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

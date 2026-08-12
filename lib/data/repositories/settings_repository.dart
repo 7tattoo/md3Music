@@ -10,8 +10,6 @@ class SettingsRepository {
   static const String _keyAutoReceiveVip = 'settings_auto_receive_vip';
   static const String _keySignedDays = 'settings_signed_days';
   static const String _keyUiScale = 'settings_ui_scale';
-  // USB 独占 DAC 音量上限倍率（设置页滑条 0.5X~2X）
-  static const String _keyDacVolumeCapMultiplier = 'settings_dac_volume_cap_multiplier';
   // Pad 端网格页面列数偏好
   static const String _keyGridColumns = 'grid_columns';
 
@@ -60,16 +58,6 @@ class SettingsRepository {
   Future<void> setCacheSize(int sizeMb) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyCacheSize, sizeMb);
-  }
-
-  Future<double> getDacVolumeCapMultiplier() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble(_keyDacVolumeCapMultiplier) ?? 1.0;
-  }
-
-  Future<void> setDacVolumeCapMultiplier(double multiplier) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_keyDacVolumeCapMultiplier, multiplier);
   }
 
   Future<bool> getAutoPlay() async {
