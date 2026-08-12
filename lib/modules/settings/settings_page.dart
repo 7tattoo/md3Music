@@ -15,6 +15,8 @@ import '../../core/services/equalizer_service.dart';
 import '../../core/services/lyricon_provider_service.dart';
 import '../../core/services/media_notification_service.dart';
 import '../../core/services/wakelock_service.dart';
+import '../../core/remote/focus_highlight.dart';
+import '../../core/remote/remote_slider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/motion_constants.dart';
 import '../../data/repositories/settings_repository.dart';
@@ -22,6 +24,7 @@ import '../onboarding/onboarding_page.dart';
 import '../onboarding/user_agreement_page.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../providers/remote_control_provider.dart';
 import '../../providers/tab_config_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/kugou_server.dart';
@@ -301,6 +304,12 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSectionLabel('播放', colorScheme),
             _buildSettingsCard(
               _buildPlaybackSection(colorScheme),
+              colorScheme,
+              separator,
+            ),
+            _buildSectionLabel('遥控器', colorScheme),
+            _buildSettingsCard(
+              _buildRemoteControlSection(colorScheme),
               colorScheme,
               separator,
             ),
@@ -744,7 +753,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           enabledThumbRadius: 8,
                         ),
                       ),
-                      child: Slider(
+                      child: RemoteSlider(
                         value: _uiScale,
                         min: 0.5,
                         max: 2.0,
@@ -834,7 +843,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (_useArtistPhotoBackground && !_useAmStylePlayer)
           ListTile(
             title: const Text('写真背景透明度'),
-            subtitle: Slider(
+            subtitle: RemoteSlider(
               value: _artistPhotoOpacity,
               min: 0.0,
               max: 0.95,
@@ -1135,6 +1144,21 @@ class _SettingsPageState extends State<SettingsPage> {
             WakelockService.instance.setSettingEnabled(value);
           },
         ),
+    ];
+  }
+
+  /// 遥控器模式 section：D-pad 焦点导航 + 菜单键操作开关。
+  ///
+  /// 与其它开关不同，这里用 [RemoteControlProvider] 作唯一状态源（而非局部字段）：
+  /// 开关需全局即时生效（全局焦点高亮策略、select 键映射），非设置页局部状态。
+  List<Widget> _buildRemoteControlSection(ColorScheme colorScheme) {
+    return [
+      SwitchListTile(
+        title: const Text('遥控器模式'),
+        subtitle: const Text('启用 D-pad 焦点导航与菜单键操作（电视/遥控器）'),
+        value: context.watch<RemoteControlProvider>().enabled,
+        onChanged: (value) => context.read<RemoteControlProvider>().setEnabled(value),
+      ),
     ];
   }
 
@@ -1596,56 +1620,67 @@ class _SettingsPageState extends State<SettingsPage> {
     required Widget preview,
   }) {
     return Expanded(
-      child: GestureDetector(
+      // 遥控模式：样式卡片提供焦点入口（D-pad 可选中，OK 切换播放页风格）。
+      // 整卡缩放易溢出 Row，故 scale 保持 1.0。
+      child: RemoteFocusHighlight(
+        borderRadius: const BorderRadius.all(Radius.circular(16)),
+        scale: 1.0,
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: M3ExpressiveMotion.defaultDuration,
-          curve: M3ExpressiveMotion.expressiveEasing,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected
-                  ? colorScheme.primary
-                  : colorScheme.outlineVariant,
-              width: isSelected ? 2.5 : 1,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: M3ExpressiveMotion.defaultDuration,
+            curve: M3ExpressiveMotion.expressiveEasing,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant,
+                width: isSelected ? 2.5 : 1,
+              ),
             ),
-          ),
-          child: Column(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: SizedBox(
-                  height: 140,
-                  width: double.infinity,
-                  child: preview,
+            child: Column(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    height: 140,
+                    width: double.infinity,
+                    child: preview,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected
-                      ? colorScheme.primary
-                      : colorScheme.onSurface,
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected
+                        ? colorScheme.primary
+                        : colorScheme.onSurface,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: colorScheme.onSurfaceVariant,
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-              if (isSelected) ...[
-                const SizedBox(height: 6),
-                Icon(Icons.check_circle, size: 20, color: colorScheme.primary),
+                if (isSelected) ...[
+                  const SizedBox(height: 6),
+                  Icon(
+                    Icons.check_circle,
+                    size: 20,
+                    color: colorScheme.primary,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

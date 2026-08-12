@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/repositories/collected_playlist_store.dart';
 import '../../data/repositories/favorite_lists_cache.dart';
+import '../../core/remote/focus_highlight.dart';
+import '../../core/remote/remote_text_field.dart';
 import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/playlist_collection_notifier.dart';
@@ -517,12 +519,15 @@ class _FavoritesPageState extends State<FavoritesPage>
 
   Future<void> _showCreatePlaylistDialog() async {
     final controller = TextEditingController();
+    // 遥控模式：输入框上/下键移出到「取消/创建」按钮（见 remoteTextFieldFocusNode）
+    final focusNode = remoteTextFieldFocusNode();
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('新建歌单'),
         content: TextField(
           controller: controller,
+          focusNode: focusNode,
           autofocus: true,
           decoration: const InputDecoration(
             hintText: '输入歌单名称',
@@ -541,6 +546,8 @@ class _FavoritesPageState extends State<FavoritesPage>
         ],
       ),
     );
+    controller.dispose();
+    focusNode.dispose();
 
     if (result != null && result.isNotEmpty) {
       final api = KugouApiClient();
@@ -904,42 +911,51 @@ class _FavoritesPageState extends State<FavoritesPage>
     final colorScheme = Theme.of(context).colorScheme;
     final isSelected = _selectedIndices.contains(index);
 
+    final VoidCallback cardTap = _isManaging
+        ? () {
+            setState(() {
+              if (isSelected) {
+                _selectedIndices.remove(index);
+              } else {
+                _selectedIndices.add(index);
+              }
+            });
+          }
+        : () async {
+            await _recordPlaylistAccess(playlist);
+            if (!mounted) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PlaylistPage(
+                  playlist: playlist.toPlaylist(),
+                  isInMyFavorites: true,
+                  isUserCreated: _isCreated(playlist),
+                  isDefaultFavorite: playlist.name == '我喜欢',
+                ),
+              ),
+            );
+          };
+    // 遥控菜单键：替代长按进入管理模式并选中该行
+    final VoidCallback? cardContextMenu = _isManaging
+        ? null
+        : () {
+            _enterManageMode(0);
+            setState(() => _selectedIndices.add(index));
+          };
+
     return FadeInUp(
       delayMs: index * 30,
       animate: false,
-      child: InkWell(
-        onTap: _isManaging
-            ? () {
-                setState(() {
-                  if (isSelected) {
-                    _selectedIndices.remove(index);
-                  } else {
-                    _selectedIndices.add(index);
-                  }
-                });
-              }
-            : () async {
-                await _recordPlaylistAccess(playlist);
-                if (!mounted) return;
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PlaylistPage(
-                      playlist: playlist.toPlaylist(),
-                      isInMyFavorites: true,
-                      isUserCreated: _isCreated(playlist),
-                      isDefaultFavorite: playlist.name == '我喜欢',
-                    ),
-                  ),
-                );
-              },
-        onLongPress: _isManaging
-            ? null
-            : () {
-                _enterManageMode(0);
-                setState(() => _selectedIndices.add(index));
-              },
-        child: Container(
+      child: RemoteFocusHighlight(
+        scale: 1.0,
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        onTap: cardTap,
+        onContextMenu: cardContextMenu,
+        child: InkWell(
+          onTap: cardTap,
+          onLongPress: cardContextMenu,
+          child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           color: isSelected
               ? colorScheme.primaryContainer.withValues(alpha: 0.3)
@@ -1026,6 +1042,7 @@ class _FavoritesPageState extends State<FavoritesPage>
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -1090,40 +1107,49 @@ class _FavoritesPageState extends State<FavoritesPage>
     final originalId = _albumOriginalIds[album.id] ?? album.numericId;
     final isSelected = _selectedIndices.contains(index);
 
-    return InkWell(
-      onTap: _isManaging
-          ? () {
-              setState(() {
-                if (isSelected) {
-                  _selectedIndices.remove(index);
-                } else {
-                  _selectedIndices.add(index);
-                }
-              });
-            }
-          : () {
-              debugPrint(
-                '[AlbumTile] tapping ${album.name} -> albumGlobalCollectionId=$originalId',
-              );
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PlaylistPage(
-                    playlist: album.toPlaylist(),
-                    isInMyFavorites: true,
-                    isAlbum: true,
-                    albumGlobalCollectionId: originalId,
-                  ),
+    final VoidCallback albumTap = _isManaging
+        ? () {
+            setState(() {
+              if (isSelected) {
+                _selectedIndices.remove(index);
+              } else {
+                _selectedIndices.add(index);
+              }
+            });
+          }
+        : () {
+            debugPrint(
+              '[AlbumTile] tapping ${album.name} -> albumGlobalCollectionId=$originalId',
+            );
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PlaylistPage(
+                  playlist: album.toPlaylist(),
+                  isInMyFavorites: true,
+                  isAlbum: true,
+                  albumGlobalCollectionId: originalId,
                 ),
-              );
-            },
-      onLongPress: _isManaging
-          ? null
-          : () {
-              _enterManageMode(1);
-              setState(() => _selectedIndices.add(index));
-            },
-      child: Container(
+              ),
+            );
+          };
+    // 遥控菜单键：替代长按进入管理模式并选中该行
+    final VoidCallback? albumContextMenu = _isManaging
+        ? null
+        : () {
+            _enterManageMode(1);
+            setState(() => _selectedIndices.add(index));
+          };
+
+    return RemoteFocusHighlight(
+      scale: 1.0,
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      onTap: albumTap,
+      onContextMenu: albumContextMenu,
+      child: InkWell(
+        onTap: albumTap,
+        onLongPress: albumContextMenu,
+        child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         color: isSelected
             ? colorScheme.primaryContainer.withValues(alpha: 0.3)
@@ -1208,6 +1234,7 @@ class _FavoritesPageState extends State<FavoritesPage>
               ),
           ],
         ),
+      ),
       ),
     );
   }

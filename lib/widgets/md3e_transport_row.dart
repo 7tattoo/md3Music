@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../core/remote/focus_highlight.dart';
+import '../providers/remote_control_provider.dart';
 
 /// 上一曲/暂停/下一曲三按钮联合动画控件。
 ///
@@ -470,20 +474,22 @@ class _MD3ETransportRowState extends State<MD3ETransportRow>
         // 在容器中的位置，避免 Row 布局约束对动画造成干扰
         final totalWidth = _nextLeft + widget.sideButtonSize;
 
-        return SizedBox(
-          width: totalWidth,
-          height: widget.playButtonSize,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              _buildPrevPositioned(),
-              _buildPlayPositioned(),
-              _buildNextPositioned(),
-              // 槽位 3/4：toNext 时右侧拉入新 next，toPrev 时左侧拉入新 prev，
-              // 动画结束后由对应 settled 状态保持显示，避免位置/形态跳变
-              _buildNewPrevPositioned(),
-              _buildNewNextPositioned(),
-            ],
+        return FocusTraversalGroup(
+          child: SizedBox(
+            width: totalWidth,
+            height: widget.playButtonSize,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _buildPrevPositioned(),
+                _buildPlayPositioned(),
+                _buildNextPositioned(),
+                // 槽位 3/4：toNext 时右侧拉入新 next，toPrev 时左侧拉入新 prev，
+                // 动画结束后由对应 settled 状态保持显示，避免位置/形态跳变
+                _buildNewPrevPositioned(),
+                _buildNewNextPositioned(),
+              ],
+            ),
           ),
         );
       },
@@ -1022,7 +1028,7 @@ class _MD3ETransportRowState extends State<MD3ETransportRow>
 
     // 用 Center + SizedBox 包裹按钮，Transform.scale 默认以中心为锚点，
     // 这样 playBounce 的缩放就是"以圆心居中缩放"，不会从左上角漂移。
-    return Opacity(
+    final body = Opacity(
       opacity: opacity,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -1061,6 +1067,22 @@ class _MD3ETransportRowState extends State<MD3ETransportRow>
           ),
         ),
       ),
+    );
+
+    // 遥控模式：给按钮提供单一焦点入口 + 聚焦视觉（缩放 + 光晕）。
+    // OK/Enter 激活 = 模拟一次按下+松开，_handlePressDown/_handlePressUp 被
+    // _isAnimating 守卫，与一次点击完全等价，业务回调在动画中途正常触发。
+    // onTap 恒非 null（disabled 时内部 no-op），保证动画期间焦点不丢。
+    if (!context.read<RemoteControlProvider>().enabled) return body;
+    return RemoteFocusHighlight(
+      borderRadius: const BorderRadius.all(Radius.circular(10)),
+      scale: 1.08,
+      padding: const EdgeInsets.all(4),
+      onTap: () {
+        onTapDown?.call();
+        onTapUp?.call();
+      },
+      child: body,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/remote_text_field.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/collected_playlist_store.dart';
@@ -62,7 +63,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
   bool _isSearching = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
+  // 遥控模式：搜索框上/下键移出（见 remoteTextFieldFocusNode）
+  final FocusNode _searchFocusNode = remoteTextFieldFocusNode();
 
   // 定位正在播放歌曲
   String? _highlightSongId;
@@ -1359,6 +1361,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
                               isSelectMode: _isMultiSelectMode,
                               isSelected: isSelected,
                               onLongPress: () => _enterMultiSelectMode(song.id),
+                              // 遥控菜单键：替代长按进入多选
+                              onContextMenuOverride: () =>
+                                  _enterMultiSelectMode(song.id),
                               onSelectToggle: () => _toggleSongSelection(song.id),
                               onTap: () {
                                 context.read<PlayerProvider>().playOnlinePlaylist(

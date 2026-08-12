@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:quick_actions/quick_actions.dart';
 
 import 'core/layout/responsive_layout.dart';
+import 'core/remote/global_focus_ring.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/motion_constants.dart';
 import 'data/models/playlist.dart';
@@ -46,6 +47,7 @@ import 'providers/grid_columns_provider.dart';
 import 'providers/tab_config_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/comment_display_provider.dart';
+import 'providers/remote_control_provider.dart';
 import 'services/kugou_server.dart';
 import 'widgets/dlna_casting_overlay.dart';
 
@@ -136,6 +138,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => DlnaProvider()),
         // 评论显示设置（字号等）
         ChangeNotifierProvider(create: (_) => CommentDisplayProvider()),
+        // 遥控器模式（D-pad 焦点导航 + 菜单键操作）
+        ChangeNotifierProvider(create: (_) => RemoteControlProvider()),
       ],
       child: _AppView(
         showOnboarding: showOnboarding,
@@ -215,6 +219,15 @@ class _AppViewState extends State<_AppView> {
         fontFamily: fontFamily,
       ),
       themeMode: themeProvider.themeMode,
+      // Android TV 的 OK 键（KEYCODE_DPAD_CENTER=23）映射为 LogicalKeyboardKey.select，
+      // 显式补一条 select → ActivateIntent，确保遥控 OK 键触发按钮激活。
+      // 关键：MaterialApp.shortcuts 是【整体替换】而非【合并】默认快捷键表，
+      // 若直接传 {select: ActivateIntent} 会清空方向键/Enter/Tab/空格等全部默认映射，
+      // 导致遥控/键盘完全无响应。必须先把 WidgetsApp.defaultShortcuts 展开回来再追加。
+      shortcuts: {
+        ...WidgetsApp.defaultShortcuts,
+        LogicalKeySet(LogicalKeyboardKey.select): ActivateIntent(),
+      },
       // 根据主题设置系统导航栏颜色
       builder: (context, child) {
         final scale = context.watch<ThemeProvider>().uiScale;
@@ -223,11 +236,14 @@ class _AppViewState extends State<_AppView> {
             context,
           ).copyWith(textScaler: TextScaler.linear(scale)),
           child: _SystemUiUpdater(
-            child: Stack(
-              children: [
-                child!,
-                const DlnaCastingOverlay(),
-              ],
+            // 遥控模式：全局聚焦框（任意焦点控件统一聚焦环 + 长列表自动滚动）
+            child: GlobalFocusRing(
+              child: Stack(
+                children: [
+                  child!,
+                  const DlnaCastingOverlay(),
+                ],
+              ),
             ),
           ),
         );
@@ -874,6 +890,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
         content: const Text('确定要退出 md3Music 吗？\n将停止播放并释放本地 API 服务器 服务器。'),
         actions: [
           TextButton(
+            // 遥控模式：弹窗打开时默认焦点在"取消"，方向键右移可到"退出"
+            autofocus: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('取消'),
           ),

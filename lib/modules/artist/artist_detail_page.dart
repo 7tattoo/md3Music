@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/remote_text_field.dart';
 import '../../data/models/song.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/playlist_collection_notifier.dart';
@@ -52,7 +53,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
   bool _isSearching = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
+  // 遥控模式：搜索框上/下键移出（见 remoteTextFieldFocusNode）
+  final FocusNode _searchFocusNode = remoteTextFieldFocusNode();
 
   // 排序
   _SortBy _sortBy = _SortBy.time;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/focus_highlight.dart';
 import '../../core/services/desktop_lyric_service.dart';
 import '../../core/services/media_notification_service.dart';
 import '../../core/theme/motion_constants.dart';
@@ -182,7 +183,14 @@ class _MiniPlayerState extends State<MiniPlayer>
                 children: [
                   // —— 滑动区：封面 + 歌曲信息，跟随手指平移 + 切歌过渡 ——
                   Expanded(
-                    child: ClipRect(
+                    // 遥控模式：滑动区提供单一焦点入口（打开 FullPlayer），
+                    // 右侧 IconButton 保持原生焦点，互不干扰
+                    child: RemoteFocusHighlight(
+                      borderRadius: const BorderRadius.all(Radius.circular(8)),
+                      scale: 1.0,
+                      onTap: () =>
+                          Navigator.of(context).push(fullPlayerRoute(context)),
+                      child: ClipRect(
                       // 裁剪溢出，防止滑动时侵入右侧按钮区
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
@@ -262,6 +270,7 @@ class _MiniPlayerState extends State<MiniPlayer>
                           ),
                         ),
                       ),
+                    ),
                     ),
                   ),
                   // —— 固定区：右侧按钮不参与滑动 ——

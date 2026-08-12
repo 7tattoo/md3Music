@@ -7,6 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/layout/responsive_layout.dart';
+import '../../core/remote/focus_highlight.dart';
+import '../../core/remote/remote_slider.dart';
+import '../../core/remote/remote_text_field.dart';
 import '../../core/services/desktop_lyric_service.dart';
 import '../../core/services/equalizer_service.dart';
 import '../../core/services/media_notification_service.dart';
@@ -26,6 +29,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/local_favorites_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../providers/remote_control_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/comment_display_provider.dart';
 import '../../widgets/apple_lyrics/apple_lyrics_view.dart';
@@ -301,6 +305,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     if (_zenMode) return;
     setState(() => _zenMode = true);
     _zenController.forward();
+    // 控件随 _ZenFade 淡出，先释放焦点避免遥控焦点残留在隐藏元素
+    FocusManager.instance.primaryFocus?.unfocus();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
@@ -310,6 +316,52 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     setState(() => _zenMode = false);
     _zenController.reverse();
     applyImmersiveForOrientation();
+  }
+
+  /// 开关桌面歌词并同步通知栏状态。
+  /// 触屏长按与遥控菜单键（ActionBar 歌词段）共用。
+  Future<void> _toggleDesktopLyric() async {
+    await DesktopLyricService.instance.toggle();
+    if (!mounted) return;
+    final player = context.read<PlayerProvider>();
+    final curSong = player.currentSong;
+    // 收藏状态需实时查询，避免暂停时显示为未收藏
+    bool isFavorited = false;
+    if (curSong != null) {
+      try {
+        isFavorited = context.read<FavoritesProvider>().isFavorite(curSong.id);
+      } catch (_) {}
+    }
+    await MediaNotificationService.updateNotification(
+      // 用 displayName 剥离 .mp3 等后缀，避免标题显示文件名
+      title: curSong?.displayName ?? '',
+      artist: curSong?.artist ?? '',
+      artUrl: curSong?.artworkUri,
+      isPlaying: player.isPlaying,
+      position: player.position,
+      duration: player.duration ?? Duration.zero,
+      desktopLyricEnabled: DesktopLyricService.instance.enabled,
+      isFavorited: isFavorited,
+    );
+  }
+
+  /// 切换歌词显示模式（翻译 ↔ 罗马音）。遥控菜单键与触屏长按共用。
+  void _toggleLyricDisplayMode() {
+    // 仅当歌曲同时有翻译和罗马音时才切换模式
+    if (!_hasTranslation || !_hasRoma) return;
+    final next =
+        LyricPreferences.instance.displayMode == LyricDisplayMode.translation
+        ? LyricDisplayMode.roma
+        : LyricDisplayMode.translation;
+    LyricPreferences.instance.setDisplayMode(next);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          next == LyricDisplayMode.roma ? '已切换到罗马音' : '已切换到翻译',
+        ),
+        duration: const Duration(milliseconds: 800),
+      ),
+    );
   }
 
   /// Zen 模式下长按专辑图片 2000ms 退出，期间显示文字提示。
@@ -931,6 +983,20 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     return const Positioned.fill(child: ColoredBox(color: Color(0x59000000)));
   }
 
+  /// 遥控模式专属 TabBar：仅在遥控模式下渲染，提供 封面/歌词/评论 的
+  /// D-pad 可聚焦切换入口。AM 版 tab 顺序恒为 封面/歌词/评论（见 [_checkPadMode]）。
+  Widget _buildRemoteTabBar() {
+    return TabBar(
+      controller: _tabController,
+      dividerColor: Colors.transparent,
+      tabs: const [
+        Tab(text: '封面'),
+        Tab(text: '歌词'),
+        Tab(text: '评论'),
+      ],
+    );
+  }
+
   Widget _buildCompactLayout(
     PlayerProvider playerProvider,
     dynamic currentSong,
@@ -949,6 +1015,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             animation: _zenAnimation,
             child: _buildTopBar(playerProvider),
           ),
+          // 遥控模式专属 TabBar：仅遥控模式下显示，D-pad 左右可切 封面/歌词/评论
+          if (context.watch<RemoteControlProvider>().enabled) ...[
+            _ZenFade(
+              animation: _zenAnimation,
+              child: _buildRemoteTabBar(),
+            ),
+          ],
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -1200,6 +1273,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                     children: [
                       // 内容区（歌词 / 评论 / 封面信息）
                       // 与手机端统一：3 个 tab（封面 / 歌词 / 评论），ActionBar 按钮索引对齐
+                      // 遥控模式专属 TabBar：仅遥控模式下显示，D-pad 左右可切 tab
+                      if (context.watch<RemoteControlProvider>().enabled) ...[
+                        _ZenFade(
+                          animation: _zenAnimation,
+                          child: _buildRemoteTabBar(),
+                        ),
+                      ],
                       Expanded(
                         child: TabBarView(
                           controller: _tabController,
@@ -1451,6 +1531,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   flex: 6,
                   child: Column(
                     children: [
+                      // 遥控模式专属 TabBar：仅遥控模式下显示，D-pad 左右可切 tab
+                      if (context.watch<RemoteControlProvider>().enabled) ...[
+                        _ZenFade(
+                          animation: _zenAnimation,
+                          child: _buildRemoteTabBar(),
+                        ),
+                      ],
                       Expanded(
                         child: TabBarView(
                           controller: _tabController,
@@ -1605,13 +1692,15 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     final textTheme = Theme.of(context).textTheme;
     final song = playerProvider.currentSong;
     final isLocal = song is Song && !song.isOnline;
+    // 本地歌曲屏蔽音质选择
+    final VoidCallback? qualityTap =
+        isLocal ? null : () => _showQualityDialog(playerProvider);
     // AM 风格：深色背景蒙版（0.35 黑色）上用白色 15% 透明度作 pill 底
-    return Material(
+    final pill = Material(
       color: Colors.white.withValues(alpha: 0.15),
       shape: const StadiumBorder(),
       child: InkWell(
-        // 本地歌曲屏蔽音质选择
-        onTap: isLocal ? null : () => _showQualityDialog(playerProvider),
+        onTap: qualityTap,
         onLongPress: () => _showVolumeDialog(playerProvider),
         customBorder: const StadiumBorder(),
         child: Padding(
@@ -1633,6 +1722,14 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
           ),
         ),
       ),
+    );
+    // 遥控模式：菜单键替代长按呼出音量弹窗
+    return RemoteFocusHighlight(
+      scale: 1.0,
+      borderRadius: const BorderRadius.all(Radius.circular(20)),
+      onTap: qualityTap,
+      onContextMenu: () => _showVolumeDialog(playerProvider),
+      child: pill,
     );
   }
 
@@ -1928,7 +2025,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   duration,
                   song!,
                 )
-              : Slider(
+              : RemoteSlider(
                   value: duration.inMilliseconds > 0
                       ? (position.inMilliseconds / duration.inMilliseconds)
                             .clamp(0.0, 1.0)
@@ -1996,7 +2093,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            Slider(
+            RemoteSlider(
               value: totalMs > 0
                   ? (position.inMilliseconds / totalMs).clamp(0.0, 1.0)
                   : 0.0,
@@ -2155,16 +2252,22 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   ),
                 ),
               ),
-              // 2. 播放列表 — 弹出播放队列
+              // 2. 播放列表 — 弹出播放队列；遥控菜单键替代长按进 Zen
               Expanded(
-                child: InkWell(
+                child: RemoteFocusHighlight(
+                  scale: 1.0,
+                  borderRadius: const BorderRadius.all(Radius.circular(8)),
                   onTap: () => _showPlaylist(playerProvider),
-                  onLongPress: _enterZenMode,
-                  child: Center(
-                    child: Icon(
-                      Icons.queue_music,
-                      size: 22,
-                      color: Colors.white,
+                  onContextMenu: _enterZenMode,
+                  child: InkWell(
+                    onTap: () => _showPlaylist(playerProvider),
+                    onLongPress: _enterZenMode,
+                    child: Center(
+                      child: Icon(
+                        Icons.queue_music,
+                        size: 22,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -2181,51 +2284,33 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   ),
                 ),
               ),
-              // 4. 歌词 — 短按跳转到歌词 tab，长按开关桌面歌词
+              // 4. 歌词 — 短按跳转到歌词 tab，长按/遥控菜单键开关桌面歌词
               Expanded(
-                child: InkWell(
+                child: RemoteFocusHighlight(
+                  scale: 1.0,
+                  borderRadius: const BorderRadius.all(Radius.circular(8)),
                   onTap: () {
                     if (_tabController.index != 1) {
                       _tabController.animateTo(1);
                     }
                   },
-                  onLongPress: () async {
-                    await DesktopLyricService.instance.toggle();
-                    if (mounted) {
-                      // 同步通知栏"桌面歌词"按钮状态
-                      final player = context.read<PlayerProvider>();
-                      final curSong = player.currentSong;
-                      // 收藏状态需实时查询，避免暂停时显示为未收藏
-                      bool isFavorited = false;
-                      if (curSong != null) {
-                        try {
-                          isFavorited = context
-                              .read<FavoritesProvider>()
-                              .isFavorite(curSong.id);
-                        } catch (_) {}
+                  onContextMenu: _toggleDesktopLyric,
+                  child: InkWell(
+                    onTap: () {
+                      if (_tabController.index != 1) {
+                        _tabController.animateTo(1);
                       }
-                      await MediaNotificationService.updateNotification(
-                        // 用 displayName 剥离 .mp3 等后缀，避免标题显示文件名
-                        title: curSong?.displayName ?? '',
-                        artist: curSong?.artist ?? '',
-                        artUrl: curSong?.artworkUri,
-                        isPlaying: player.isPlaying,
-                        position: player.position,
-                        duration: player.duration ?? Duration.zero,
-                        desktopLyricEnabled:
-                            DesktopLyricService.instance.enabled,
-                        isFavorited: isFavorited,
-                      );
-                    }
-                  },
-                  child: Center(
-                    child: Icon(
-                      // 桌面歌词开启时用实心 icon + 纯白，与 mini_player 一致
-                      DesktopLyricService.instance.enabled
-                          ? Icons.lyrics
-                          : Icons.lyrics_outlined,
-                      size: 22,
-                      color: Colors.white,
+                    },
+                    onLongPress: _toggleDesktopLyric,
+                    child: Center(
+                      child: Icon(
+                        // 桌面歌词开启时用实心 icon + 纯白，与 mini_player 一致
+                        DesktopLyricService.instance.enabled
+                            ? Icons.lyrics
+                            : Icons.lyrics_outlined,
+                        size: 22,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -2274,44 +2359,37 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   ),
                 ),
               ),
-              // 7. 翻译/罗马音开关 — 短按 toggle 副行显示，长按切换模式
+              // 7. 翻译/罗马音开关 — 短按 toggle 副行显示，长按/遥控菜单键切换模式
               Expanded(
-                child: InkWell(
+                child: RemoteFocusHighlight(
+                  scale: 1.0,
+                  borderRadius: const BorderRadius.all(Radius.circular(8)),
                   onTap: () {
                     LyricPreferences.instance.setShowTranslation(
                       !LyricPreferences.instance.showTranslation,
                     );
                   },
-                  onLongPress: () {
-                    // 仅当歌曲同时有翻译和罗马音时才切换模式
-                    if (!_hasTranslation || !_hasRoma) return;
-                    final next =
+                  onContextMenu: _toggleLyricDisplayMode,
+                  child: InkWell(
+                    onTap: () {
+                      LyricPreferences.instance.setShowTranslation(
+                        !LyricPreferences.instance.showTranslation,
+                      );
+                    },
+                    onLongPress: _toggleLyricDisplayMode,
+                    child: Center(
+                      child: Icon(
+                        // 罗马音模式用 Icons.abc 区分，翻译模式用 Icons.translate
                         LyricPreferences.instance.displayMode ==
-                            LyricDisplayMode.translation
-                        ? LyricDisplayMode.roma
-                        : LyricDisplayMode.translation;
-                    LyricPreferences.instance.setDisplayMode(next);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          next == LyricDisplayMode.roma ? '已切换到罗马音' : '已切换到翻译',
-                        ),
-                        duration: const Duration(milliseconds: 800),
+                                LyricDisplayMode.roma
+                            ? Icons.abc
+                            : Icons.translate,
+                        size: 22,
+                        // 开启时纯白，关闭时 50% 白（视觉上与其它按钮激活态一致）
+                        color: LyricPreferences.instance.showTranslation
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.5),
                       ),
-                    );
-                  },
-                  child: Center(
-                    child: Icon(
-                      // 罗马音模式用 Icons.abc 区分，翻译模式用 Icons.translate
-                      LyricPreferences.instance.displayMode ==
-                              LyricDisplayMode.roma
-                          ? Icons.abc
-                          : Icons.translate,
-                      size: 22,
-                      // 开启时纯白，关闭时 50% 白（视觉上与其它按钮激活态一致）
-                      color: LyricPreferences.instance.showTranslation
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.5),
                     ),
                   ),
                 ),
@@ -2353,7 +2431,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: 8),
-                      Slider(
+                      RemoteSlider(
                         value: volume,
                         onChanged: (value) {
                           playerProvider.setVolume(value);
@@ -2416,7 +2494,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                       ),
                       const SizedBox(height: 16),
                       // 横条滑块
-                      Slider(
+                      RemoteSlider(
                         value: currentIndex.toDouble(),
                         min: 0,
                         max: (speeds.length - 1).toDouble(),
@@ -2739,7 +2817,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                         ),
                       ],
                     ),
-                    Slider(
+                    RemoteSlider(
                       value: display.commentFontSize,
                       min: 10.0,
                       max: 24.0,
@@ -2985,6 +3063,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     PlayerProvider player,
   ) {
     final controller = TextEditingController();
+    // 遥控模式：输入框上/下键移出到按钮（见 remoteTextFieldFocusNode）
+    final focusNode = remoteTextFieldFocusNode();
     showDialog(
       context: rootContext,
       builder: (dialogCtx) => Dialog(
@@ -3002,6 +3082,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                 const SizedBox(height: 16),
                 TextField(
                   controller: controller,
+                  focusNode: focusNode,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: '分钟',
@@ -3017,6 +3098,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                     TextButton(
                       onPressed: () {
                         controller.dispose();
+                        focusNode.dispose();
                         Navigator.pop(dialogCtx);
                       },
                       child: const Text('取消'),
@@ -3025,6 +3107,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                       onPressed: () {
                         final n = int.tryParse(controller.text);
                         controller.dispose();
+                        focusNode.dispose();
                         if (n == null || n < 1 || n > 240) {
                           ScaffoldMessenger.of(rootContext).showSnackBar(
                             const SnackBar(

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../core/remote/remote_slider.dart';
 import '../core/theme/app_theme.dart';
 
 /// 预设种子色 + 自定义颜色选择面板。
@@ -183,7 +184,7 @@ class _CustomColorPickerDialogState extends State<_CustomColorPickerDialog> {
             children: [
               Icon(Icons.brightness_6, size: 20, color: scheme.onSurfaceVariant),
               Expanded(
-                child: Slider(
+                child: RemoteSlider(
                   value: _hsv.value,
                   onChanged: (v) => setState(() => _hsv = _hsv.withValue(v)),
                 ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/remote/remote_text_field.dart';
 import '../../core/theme/ios_grouped_theme.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
@@ -34,6 +35,8 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  // 遥控模式：搜索框焦点节点，上/下键移出（见 remoteTextFieldFocusNode）
+  late final FocusNode _searchFocus = remoteTextFieldFocusNode();
   late TabController _tabController;
   List<String> _searchHistory = [];
   String _query = '';
@@ -65,6 +68,7 @@ class _SearchPageState extends State<SearchPage>
   void dispose() {
     _tabController.removeListener(_onTabChanged);
     _searchController.dispose();
+    _searchFocus.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -216,6 +220,7 @@ class _SearchPageState extends State<SearchPage>
       height: 40,
       child: TextField(
         controller: _searchController,
+        focusNode: _searchFocus,
         decoration: InputDecoration(
           hintText: '搜索歌曲、歌手、专辑',
           hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(

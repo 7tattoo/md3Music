@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/remote_text_field.dart';
 import '../../core/services/media_store_service.dart';
 import '../../data/models/song.dart';
 import '../../providers/library_provider.dart';
@@ -28,6 +29,8 @@ class _CloudMusicPageState extends State<CloudMusicPage> {
   bool _isLoading = true;
   String? _error;
   final TextEditingController _searchController = TextEditingController();
+  // 遥控模式：搜索框上/下键移出（见 remoteTextFieldFocusNode）
+  late final FocusNode _searchFocus = remoteTextFieldFocusNode();
   String _searchQuery = '';
   // 多选删除模式
   bool _isSelectMode = false;
@@ -42,6 +45,7 @@ class _CloudMusicPageState extends State<CloudMusicPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -275,6 +279,14 @@ class _CloudMusicPageState extends State<CloudMusicPage> {
                                            _uploadSingle(song);
                                          },
                                   onLongPress: inSelectMode
+                                      ? null
+                                      : () {
+                                          setSheetState(() {
+                                            selected.add(index);
+                                          });
+                                        },
+                                  // 遥控菜单键：替代长按选中该行进入多选
+                                  onContextMenuOverride: inSelectMode
                                       ? null
                                       : () {
                                           setSheetState(() {
@@ -897,6 +909,7 @@ class _CloudMusicPageState extends State<CloudMusicPage> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: TextField(
         controller: _searchController,
+        focusNode: _searchFocus,
         decoration: InputDecoration(
           hintText: '搜索云盘歌曲',
           hintStyle: Theme.of(context)

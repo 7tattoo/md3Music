@@ -9,6 +9,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:md3music/core/remote/remote_slider.dart';
 import 'package:md3music/widgets/apple_lyrics/apple_lyrics_view.dart';
 import 'package:md3music/widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
 import 'package:md3music/widgets/apple_lyrics/models/lyric_line.dart';
@@ -131,7 +132,7 @@ class _LyricsPreviewPageState extends State<LyricsPreviewPage>
                   children: [
                     Text('${(_currentTimeMs / 1000).toStringAsFixed(1)}s'),
                     Expanded(
-                      child: Slider(
+                      child: RemoteSlider(
                         value: _currentTimeMs.toDouble(),
                         min: 0,
                         max: _maxTimeMs.toDouble(),

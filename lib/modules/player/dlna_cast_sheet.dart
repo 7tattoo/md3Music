@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/remote_slider.dart';
 import '../../core/services/dlna_service.dart';
 import '../../providers/dlna_provider.dart';
 import '../../providers/player_provider.dart';
@@ -209,7 +210,7 @@ class _DlnaCastSheetState extends State<DlnaCastSheet> {
             else ...[
               // 进度条
               if (totalSeconds > 0) ...[
-                Slider(
+                RemoteSlider(
                   value: positionSeconds.toDouble().clamp(0, totalSeconds.toDouble()),
                   max: totalSeconds.toDouble(),
                   onChanged: (v) {

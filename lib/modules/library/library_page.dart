@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/remote_text_field.dart';
 import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/local_favorites_provider.dart';
@@ -28,7 +29,8 @@ class _LibraryPageState extends State<LibraryPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
-    _searchFocusNode = FocusNode();
+    // 遥控模式：搜索框上/下键移出（见 remoteTextFieldFocusNode）
+    _searchFocusNode = remoteTextFieldFocusNode();
     // 监听 FullPlayer 展开状态：展开时取消搜索框焦点，防止返回时自动弹输入法
     playerExpansion.addListener(_onPlayerExpansionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {

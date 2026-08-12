@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/remote/remote_slider.dart';
 import '../core/services/custom_font_loader.dart';
 import 'md3_lyric_preferences.dart';
 
@@ -46,7 +47,7 @@ class Md3LyricPreferencesPanel extends StatelessWidget {
               const SizedBox(height: 8),
               // 字号滑块
               Text('字号：${prefs.fontSize.round()} px'),
-              Slider(
+              RemoteSlider(
                 min: Md3LyricPreferences.minFontSize,
                 max: Md3LyricPreferences.maxFontSize,
                 divisions:
@@ -59,7 +60,7 @@ class Md3LyricPreferencesPanel extends StatelessWidget {
               const SizedBox(height: 8),
               // 行间距滑块
               Text('行间距：${prefs.lineSpacing.toStringAsFixed(1)} ×'),
-              Slider(
+              RemoteSlider(
                 min: Md3LyricPreferences.minLineSpacing,
                 max: Md3LyricPreferences.maxLineSpacing,
                 divisions: ((Md3LyricPreferences.maxLineSpacing -

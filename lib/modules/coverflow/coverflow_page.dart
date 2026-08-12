@@ -1,10 +1,13 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/focus_highlight.dart';
 import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../providers/remote_control_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/md3e_loading_indicator.dart';
 import '../player/full_player_route.dart';
@@ -236,6 +239,17 @@ class _CoverFlowViewState extends State<_CoverFlowView>
     _snap!.forward();
   }
 
+  /// 遥控 OK 键：播放当前居中的歌曲并进入全屏播放器
+  /// （与 _buildCoverUnit 中央卡 onTap 的播放逻辑一致）。
+  void _playCurrentCenter() {
+    final index = _page.round().clamp(0, widget.songs.length - 1).toInt();
+    context.read<PlayerProvider>().playOnlinePlaylist(
+          widget.songs.map((e) => e.toSong()).toList(),
+          index,
+        );
+    Navigator.of(context).push(fullPlayerRoute(context));
+  }
+
   // ---- 手势：竖屏垂直、横屏水平；跟手滑动 + 惯性吸附 + 越界刷新 ----
 
   void _onDragStart(DragStartDetails d) {
@@ -323,22 +337,44 @@ class _CoverFlowViewState extends State<_CoverFlowView>
                     halfCard;
                 final top0 = (_isPortrait ? _mainAxis : _crossAxis) / 2 -
                     halfCard;
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onVerticalDragStart: _isPortrait ? _onDragStart : null,
-                  onVerticalDragUpdate: _isPortrait ? _onDragUpdate : null,
-                  onVerticalDragEnd: _isPortrait ? _onDragEnd : null,
-                  onHorizontalDragStart: _isPortrait ? null : _onDragStart,
-                  onHorizontalDragUpdate: _isPortrait ? null : _onDragUpdate,
-                  onHorizontalDragEnd: _isPortrait ? null : _onDragEnd,
-                  // 横屏长按：切换封面流沉浸（隐藏/恢复 tab 栏），返回键可恢复
-                  onLongPress: () {
-                    if (MediaQuery.orientationOf(context) ==
-                        Orientation.landscape) {
-                      kCoverFlowImmersive.value = !kCoverFlowImmersive.value;
+                return Focus(
+                  // 遥控模式：封面流聚焦时左右方向键翻页（不影响全局焦点遍历）
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent &&
+                        context.read<RemoteControlProvider>().enabled) {
+                      final logical = event.logicalKey;
+                      if (logical == LogicalKeyboardKey.arrowLeft) {
+                        _animateTo(_page.round() - 1);
+                        return KeyEventResult.handled;
+                      }
+                      if (logical == LogicalKeyboardKey.arrowRight) {
+                        _animateTo(_page.round() + 1);
+                        return KeyEventResult.handled;
+                      }
                     }
+                    return KeyEventResult.ignored;
                   },
-                  child: Stack(
+                  child: RemoteFocusHighlight(
+                    scale: 1.0,
+                    borderRadius: const BorderRadius.all(Radius.circular(16)),
+                    // 遥控 OK 键：播放当前居中歌曲并进入播放器
+                    onTap: _playCurrentCenter,
+                    // 遥控菜单键：替代横屏长按切换沉浸（隐藏/恢复 tab 栏），返回键可恢复
+                    onContextMenu: () {
+                      if (MediaQuery.orientationOf(context) ==
+                          Orientation.landscape) {
+                        kCoverFlowImmersive.value = !kCoverFlowImmersive.value;
+                      }
+                    },
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onVerticalDragStart: _isPortrait ? _onDragStart : null,
+                      onVerticalDragUpdate: _isPortrait ? _onDragUpdate : null,
+                      onVerticalDragEnd: _isPortrait ? _onDragEnd : null,
+                      onHorizontalDragStart: _isPortrait ? null : _onDragStart,
+                      onHorizontalDragUpdate: _isPortrait ? null : _onDragUpdate,
+                      onHorizontalDragEnd: _isPortrait ? null : _onDragEnd,
+                      child: Stack(
                     // 以视口为界裁剪：部分滑出仅切掉界外部分，而非页边界硬切
                     clipBehavior: Clip.hardEdge,
                     children: [
@@ -359,7 +395,9 @@ class _CoverFlowViewState extends State<_CoverFlowView>
                         ),
                     ],
                   ),
-                );
+                ),
+              ),
+            );
               },
             ),
           ),

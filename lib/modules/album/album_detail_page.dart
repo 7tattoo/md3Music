@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/remote_text_field.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/collected_playlist_store.dart';
@@ -39,7 +40,8 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   bool _isSearching = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
+  // 遥控模式：搜索框上/下键移出（见 remoteTextFieldFocusNode）
+  final FocusNode _searchFocusNode = remoteTextFieldFocusNode();
 
   // 定位正在播放歌曲
   String? _highlightSongId;

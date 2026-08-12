@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/remote/focus_highlight.dart';
 import '../data/models/song.dart';
 import '../modules/player/comments_view.dart';
 import '../modules/player/mv_player_page.dart';
@@ -10,7 +11,7 @@ import '../providers/player_provider.dart';
 import 'playing_spectrum_indicator.dart';
 import 'smart_artwork_image.dart';
 
-class SongListItem extends StatelessWidget {
+class SongListItem extends StatefulWidget {
   final Song song;
   final VoidCallback? onTap;
   final VoidCallback? onMoreTap;
@@ -23,6 +24,10 @@ class SongListItem extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onSelectToggle;
 
+  /// 遥控模式下「菜单键」回调覆盖。默认弹出更多菜单；
+  /// 歌单/收藏/云音乐等页面可重定向为进入多选/管理模式。
+  final VoidCallback? onContextMenuOverride;
+
   const SongListItem({
     super.key,
     required this.song,
@@ -34,7 +39,23 @@ class SongListItem extends StatelessWidget {
     this.isSelected = false,
     this.onLongPress,
     this.onSelectToggle,
+    this.onContextMenuOverride,
   });
+
+  @override
+  State<SongListItem> createState() => _SongListItemState();
+}
+
+class _SongListItemState extends State<SongListItem> {
+  /// 整行 InkWell 的焦点节点：`canRequestFocus: false` 禁用其自身焦点，
+  /// 焦点收归外层 RemoteFocusHighlight（提供聚焦视觉 + 菜单键），
+  /// 避免与整行 wrapper 双重触发；同时 `descendantsAreFocusable: true`
+  /// 保留行内图标的独立焦点。
+  final FocusNode _rowFocusNode = FocusNode()
+    ..debugLabel = 'song_list_item_row'
+    ..canRequestFocus = false;
+
+  Song get song => widget.song;
 
   void _showMoreMenu(BuildContext context) {
     showModalBottomSheet(
@@ -78,6 +99,23 @@ class SongListItem extends StatelessWidget {
     );
   }
 
+  /// 遥控模式菜单键回调：优先用页面覆盖，多选模式切选中，否则弹更多菜单。
+  VoidCallback? _buildContextMenuAction(BuildContext context) {
+    if (widget.onContextMenuOverride != null) {
+      return widget.onContextMenuOverride;
+    }
+    if (widget.isSelectMode) {
+      return widget.onSelectToggle;
+    }
+    return () => _showMoreMenu(context);
+  }
+
+  @override
+  void dispose() {
+    _rowFocusNode.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     // 关键：用 context.select 只订阅本条目关心的字段，避免在播放进度等
@@ -88,7 +126,7 @@ class SongListItem extends StatelessWidget {
     );
     final isPlaying =
         context.select<PlayerProvider, bool>((p) => p.isPlaying);
-    final isFavorited = forceFavorited
+    final isFavorited = widget.forceFavorited
         ? true
         : song.isOnline
             ? context.select<FavoritesProvider, bool>(
@@ -98,7 +136,6 @@ class SongListItem extends StatelessWidget {
                 (f) => f.isFavorite(song.id),
               );
     // 操作回调用 read，不建立订阅（避免跟随进度刷新）
-    final playerProvider = context.read<PlayerProvider>();
     final favoritesProvider = context.read<FavoritesProvider>();
     final localFavoritesProvider = context.read<LocalFavoritesProvider>();
     final colorScheme = Theme.of(context).colorScheme;
@@ -106,18 +143,23 @@ class SongListItem extends StatelessWidget {
 
     const imgSize = 52.0; // 正方形封面，不被 ListTile 压缩
 
-    return InkWell(
-      onTap: isSelectMode ? onSelectToggle : onTap,
-      onLongPress: onLongPress,
+    final VoidCallback? rowTap =
+        widget.isSelectMode ? widget.onSelectToggle : widget.onTap;
+    final VoidCallback? contextMenuAction = _buildContextMenuAction(context);
+
+    final rowBody = InkWell(
+      focusNode: _rowFocusNode,
+      onTap: rowTap,
+      onLongPress: widget.onLongPress,
       child: Container(
-        color: isSelectMode && isSelected
+        color: widget.isSelectMode && widget.isSelected
             ? colorScheme.primaryContainer.withValues(alpha: 0.3)
             : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: Row(
           children: [
             // 多选模式：圆形复选框；普通模式：封面图
-            if (isSelectMode)
+            if (widget.isSelectMode)
               _buildCheckbox(colorScheme, imgSize)
             else
               // 封面图：智能选择 Image.network（在线/content://）或 LocalArtworkImage（文件路径）
@@ -160,7 +202,7 @@ class SongListItem extends StatelessWidget {
             ),
 
             // 右侧操作区：多选模式下不显示
-            if (!isSelectMode)
+            if (!widget.isSelectMode)
               Row(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -177,16 +219,19 @@ class SongListItem extends StatelessWidget {
                         isPlaying: isPlaying,
                       ),
                     ),
-                  if (showDuration)
+                  if (widget.showDuration)
                     Padding(
                       padding: const EdgeInsets.only(right: 4),
                       child: Text(song.displayDuration, style: textTheme.labelSmall),
                     ),
-                  GestureDetector(
+                  // 收藏
+                  RemoteFocusHighlight(
+                    borderRadius: const BorderRadius.all(Radius.circular(8)),
+                    scale: 1.2,
                     onTap: () => song.isOnline
                         ? favoritesProvider.toggleFavorite(song)
                         : localFavoritesProvider.toggleFavorite(song.id),
-                    behavior: HitTestBehavior.opaque,
+                    onContextMenu: contextMenuAction,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
                       child: Icon(
@@ -196,21 +241,27 @@ class SongListItem extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // MV（仅在线歌曲）
                   if (song.isOnline)
-                    GestureDetector(
+                    RemoteFocusHighlight(
+                      borderRadius: const BorderRadius.all(Radius.circular(8)),
+                      scale: 1.2,
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => MvPlayerPage(song: song)),
                       ),
-                      behavior: HitTestBehavior.opaque,
+                      onContextMenu: contextMenuAction,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
                         child: Icon(Icons.music_video_outlined, size: 18, color: colorScheme.onSurfaceVariant),
                       ),
                     ),
-                  GestureDetector(
+                  // 更多
+                  RemoteFocusHighlight(
+                    borderRadius: const BorderRadius.all(Radius.circular(8)),
+                    scale: 1.2,
                     onTap: () => _showMoreMenu(context),
-                    behavior: HitTestBehavior.opaque,
+                    onContextMenu: contextMenuAction,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
                       child: Icon(Icons.more_vert, size: 18, color: colorScheme.onSurfaceVariant),
@@ -222,6 +273,18 @@ class SongListItem extends StatelessWidget {
         ),
       ),
     );
+
+    // 遥控模式：整行提供单一焦点入口 + 菜单键。
+    // descendantsAreFocusable: true 保留行内图标的独立焦点；
+    // InkWell 自身焦点已通过 _rowFocusNode.canRequestFocus = false 禁用。
+    return RemoteFocusHighlight(
+      scale: 1.0,
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      descendantsAreFocusable: true,
+      onTap: rowTap,
+      onContextMenu: contextMenuAction,
+      child: rowBody,
+    );
   }
 
   /// 多选模式下的圆形复选框，与封面同等大小。
@@ -231,7 +294,7 @@ class SongListItem extends StatelessWidget {
       height: size,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 150),
-        child: isSelected
+        child: widget.isSelected
             ? Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/remote/remote_text_field.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../widgets/md3e_loading_indicator.dart';
@@ -23,6 +24,9 @@ class _LoginPageState extends State<LoginPage> {
   // 手机登录表单
   final _phoneCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
+  // 遥控模式：输入框上/下键移出（见 remoteTextFieldFocusNode）
+  late final FocusNode _phoneFocus = remoteTextFieldFocusNode();
+  late final FocusNode _codeFocus = remoteTextFieldFocusNode();
   bool _sendingCode = false;
   bool _loggingIn = false;
   int _countdown = 0;
@@ -46,6 +50,8 @@ class _LoginPageState extends State<LoginPage> {
     _countdownTimer?.cancel();
     _phoneCtrl.dispose();
     _codeCtrl.dispose();
+    _phoneFocus.dispose();
+    _codeFocus.dispose();
     super.dispose();
   }
 
@@ -354,6 +360,7 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           TextField(
             controller: _phoneCtrl,
+            focusNode: _phoneFocus,
             keyboardType: TextInputType.phone,
             maxLength: 11,
             decoration: const InputDecoration(
@@ -368,6 +375,7 @@ class _LoginPageState extends State<LoginPage> {
               Expanded(
                 child: TextField(
                   controller: _codeCtrl,
+                  focusNode: _codeFocus,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
                   decoration: const InputDecoration(

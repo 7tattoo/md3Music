@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/remote/remote_slider.dart';
 import '../../providers/dlna_provider.dart';
 
 /// 投屏遥控页面：从悬浮窗点击进入，提供完整的传输控制。
@@ -82,7 +83,7 @@ class _DlnaRemotePageState extends State<DlnaRemotePage> {
                   const SizedBox(height: 32),
                   // 进度条
                   if (totalSeconds > 0) ...[
-                    Slider(
+                    RemoteSlider(
                       value: positionSeconds.toDouble(),
                       max: totalSeconds.toDouble(),
                       onChanged: (v) {
@@ -147,7 +148,7 @@ class _DlnaRemotePageState extends State<DlnaRemotePage> {
                     children: [
                       const Icon(Icons.volume_down),
                       Expanded(
-                        child: Slider(
+                        child: RemoteSlider(
                           value: dlna.volume.toDouble(),
                           max: 100,
                           onChanged: (v) {
