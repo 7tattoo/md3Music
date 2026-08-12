@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../lib/widgets/apple_lyrics/apple_lyrics_view.dart';
-import '../../../lib/widgets/apple_lyrics/models/lyric_line.dart';
+import 'package:md3music/widgets/apple_lyrics/models/lyric_line.dart';
 
 /// AppleLyricsView 行为测试。
 ///

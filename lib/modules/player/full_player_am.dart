@@ -32,7 +32,7 @@ import '../../widgets/apple_lyrics/apple_lyrics_view.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
 import '../../widgets/flowing_background.dart';
-import '../../widgets/apple_lyrics/models/lyric_line.dart';
+import 'package:md3music/widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
 import '../../widgets/md3e_loading_indicator.dart';
 import '../../services/kugou_api/kugou_api_client.dart';

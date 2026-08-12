@@ -23,7 +23,7 @@ import '../data/repositories/player_state_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import '../main.dart';
 import '../services/kugou_server.dart';
-import '../widgets/apple_lyrics/models/lyric_line.dart';
+import 'package:md3music/widgets/apple_lyrics/models/lyric_line.dart';
 import '../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
 import 'favorites_provider.dart';
 import 'kugou_provider.dart';
@@ -678,17 +678,32 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// 加载歌单播放顺序：随机开启时保持点击曲目为首曲、其余打乱；
+  /// 关闭时按原顺序播放。始终以原始顺序同步 [_originalPlaylist]
+  /// （关闭随机时用于还原）。
+  void _loadPlaylist(List<Song> songs, int startIndex) {
+    _originalPlaylist = List.from(songs);
+    if (_shuffleEnabled) {
+      final currentSong = songs[startIndex];
+      final remaining = songs.where((s) => s.id != currentSong.id).toList();
+      remaining.shuffle();
+      _playlist = [currentSong, ...remaining];
+      _currentIndex = 0;
+    } else {
+      _playlist = List.from(songs);
+      _currentIndex = startIndex;
+    }
+  }
+
   Future<void> playPlaylist(List<Song> songs, int startIndex) async {
     if (songs.isEmpty) return;
     _resetAbnormalRetry();
 
-    _playlist = List.from(songs);
-    _originalPlaylist = List.from(songs);
-    _currentIndex = startIndex;
-    _currentSong = songs[startIndex];
+    _loadPlaylist(songs, startIndex);
+    _currentSong = _playlist[_currentIndex];
     _resolveError = null;
     _position = Duration.zero;
-    _recordHistory(songs[startIndex]);
+    _recordHistory(_currentSong!);
     _saveState();
     notifyListeners();
 
@@ -710,7 +725,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _actualPlayingQuality = result.quality;
           final resolvedSong = _currentSong!.copyWith(url: result.url);
           _currentSong = resolvedSong;
-          _playlist[startIndex] = resolvedSong;
+          _playlist[_currentIndex] = resolvedSong;
           _isResolvingUrl = false;
           notifyListeners();
 
@@ -734,7 +749,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
       }
 
-      _prefetchNextSongs(startIndex);
+      _prefetchNextSongs(_currentIndex);
     } else if (_audioService != null) {
       final playbackUrl = await _resolvePlaybackUrl(_currentSong!);
       if (playbackUrl == null || playbackUrl.isEmpty) {
@@ -762,14 +777,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    _playlist = List.from(songs);
-    _originalPlaylist = List.from(songs);
-    _currentIndex = startIndex;
-    _currentSong = songs[startIndex];
+    _loadPlaylist(songs, startIndex);
+    _currentSong = _playlist[_currentIndex];
     _isResolvingUrl = true;
     _resolveError = null;
     _position = Duration.zero;
-    _recordHistory(songs[startIndex]);
+    _recordHistory(_currentSong!);
     _updateNotification();
     notifyListeners();
 
@@ -788,7 +801,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _actualPlayingQuality = result.quality;
         final resolvedSong = _currentSong!.copyWith(url: result.url);
         _currentSong = resolvedSong;
-        _playlist[startIndex] = resolvedSong;
+        _playlist[_currentIndex] = resolvedSong;
         _isResolvingUrl = false;
         notifyListeners();
 
@@ -812,7 +825,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
     }
 
-    _prefetchNextSongs(startIndex);
+    _prefetchNextSongs(_currentIndex);
     _fetchClimaxData();
   }
 
@@ -851,24 +864,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    _playlist = List.from(songs);
-    _originalPlaylist = List.from(songs);
-    _currentIndex = startIndex;
-    _currentSong = songs[startIndex];
+    _loadPlaylist(songs, startIndex);
+    _currentSong = _playlist[_currentIndex];
     _isResolvingUrl = true;
     _resolveError = null;
     _position = Duration.zero;
-    _recordHistory(songs[startIndex]);
+    _recordHistory(_currentSong!);
     _updateNotification();
     notifyListeners();
 
     try {
       final apiClient = KugouApiClient();
-      final url = await _resolveCloudUrl(apiClient, songs[startIndex]);
+      final url = await _resolveCloudUrl(apiClient, _currentSong!);
       if (url != null && url.isNotEmpty) {
-        final resolvedSong = songs[startIndex].copyWith(url: url);
+        final resolvedSong = _currentSong!.copyWith(url: url);
         _currentSong = resolvedSong;
-        _playlist[startIndex] = resolvedSong;
+        _playlist[_currentIndex] = resolvedSong;
         _isResolvingUrl = false;
         notifyListeners();
         if (_audioService != null) {
@@ -885,7 +896,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
     }
 
-    _prefetchCloudSongs(startIndex);
+    _prefetchCloudSongs(_currentIndex);
     _fetchClimaxData();
   }
 
