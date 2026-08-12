@@ -308,10 +308,10 @@ class SettingsRepository {
   // ===== 遥控器模式 =====
   static const String _keyRemoteControlEnabled = 'settings_remote_control_enabled';
 
-  /// 是否启用遥控器模式（D-pad 焦点导航 + 菜单键操作），默认 false。
+  /// 是否启用遥控器模式（D-pad 焦点导航 + 菜单键操作），默认 true。
   Future<bool> getRemoteControlEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyRemoteControlEnabled) ?? false;
+    return prefs.getBool(_keyRemoteControlEnabled) ?? true;
   }
 
   Future<void> setRemoteControlEnabled(bool value) async {

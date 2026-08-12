@@ -14,7 +14,8 @@ import '../../lib/providers/remote_control_provider.dart';
 /// - 遥控模式开启 + 文本框聚焦：上下键改走焦点遍历移出文本框
 void main() {
   testWidgets('遥控模式关闭：TextField 上下键不移动焦点（保持编辑行为）', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    // 遥控模式默认开启，此处显式写入 false 偏好模拟关闭
+    SharedPreferences.setMockInitialValues({'settings_remote_control_enabled': false});
     final provider = RemoteControlProvider();
     final textFocus = remoteTextFieldFocusNode();
     final controller = TextEditingController();

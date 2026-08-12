@@ -22,7 +22,10 @@ void main() {
     VoidCallback? onTap,
     VoidCallback? onContextMenu,
   }) async {
-    SharedPreferences.setMockInitialValues({});
+    // 遥控模式默认开启；remoteOn=false 用例显式写入 false 偏好以模拟关闭
+    SharedPreferences.setMockInitialValues({
+      if (!remoteOn) 'settings_remote_control_enabled': false,
+    });
     final provider = RemoteControlProvider();
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
