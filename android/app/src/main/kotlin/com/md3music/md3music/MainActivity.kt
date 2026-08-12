@@ -38,6 +38,8 @@ class MainActivity : FlutterActivity() {
         private var cachedChannel: MethodChannel? = null
         // KugouApiService 单例引用，便于 Activity onDestroy / onTrimMemory 时确定性关停
         @Volatile private var kugouApiService: KugouApiService? = null
+        // 频谱插件引用，Activity 销毁时释放 Visualizer
+        @Volatile private var spectrumPlugin: SpectrumPlugin? = null
 
         // 记录自定义插件已注册到的引擎：provideFlutterEngine 复用后台（headless）
         // 引擎时 configureFlutterEngine 会再次执行，若对同一引擎重复注册
@@ -104,6 +106,9 @@ class MainActivity : FlutterActivity() {
 
             // 注册 USB 独占输出插件：MethodChannel + 动态拔插广播 + AudioSink 拦截桥接
             UsbAudioPlugin(this).register(flutterEngine)
+
+            // 注册频谱可视化插件：Android 原生 Visualizer，回传 FFT 数据给 Dart 端绘制环形频谱
+            spectrumPlugin = SpectrumPlugin().also { it.register(flutterEngine) }
         }
 
         // 初始化 Node.js 本地 API 服务器
@@ -495,6 +500,9 @@ class MainActivity : FlutterActivity() {
         // Activity 销毁（含应用从最近任务划掉时系统先回调 onDestroy 再杀进程）
         // 同步通知 Rust 服务器停止监听，释放端口
         shutdownNodeJs()
+        // 释放频谱 Visualizer，避免 native 资源泄漏
+        try { spectrumPlugin?.cleanup() } catch (_: Throwable) {}
+        spectrumPlugin = null
         cachedEngine = null
         cachedChannel = null
         super.onDestroy()
