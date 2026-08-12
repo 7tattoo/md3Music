@@ -302,10 +302,10 @@ class SettingsRepository {
     await prefs.setInt(_keySpectrumBandCount, value);
   }
 
-  /// 频谱样式：0=柱状图，1=曲线（默认 0）。
+  /// 频谱样式：0=柱状图，1=曲线（默认 1）。
   Future<int> getSpectrumStyle() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_keySpectrumStyle) ?? 0;
+    return prefs.getInt(_keySpectrumStyle) ?? 1;
   }
 
   Future<void> setSpectrumStyle(int value) async {

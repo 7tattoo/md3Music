@@ -92,8 +92,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _spectrumEnabled = false;
   // 频谱柱数量（20~80，默认 40）
   int _spectrumBandCount = 40;
-  // 频谱样式：0=柱状图(环绕)，1=曲线(环绕)，2=背景层(条形)
-  int _spectrumStyle = 0;
+  // 频谱样式：0=柱状图(环绕)，1=曲线(环绕，默认)，2=背景层(条形)
+  int _spectrumStyle = 1;
   // 频谱背景层参数（仅 style=2 时使用）
   double _spectrumBgOpacity = 0.4;
   double _spectrumBgHeight = 0.4;
