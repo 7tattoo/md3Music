@@ -42,13 +42,19 @@ const List<TabItem> kDefaultTabs = [
   TabItem(id: 'user', label: '我的', isRemovable: false),
 ];
 
-/// 可选 Tab（默认隐藏，需在设置页手动开启）。
+/// 可选 Tab（默认隐藏，需在设置页手动开启；本地音乐除外）。
 const List<TabItem> kOptionalTabs = [
   TabItem(id: 'library', label: '本地音乐'),
   TabItem(id: 'search', label: '搜索'),
   TabItem(id: 'charts', label: '排行榜'),
   TabItem(id: 'recognition', label: '听歌识曲'),
 ];
+
+/// 默认隐藏的可选 Tab id：本地音乐默认开启，其余可选 Tab 默认隐藏。
+final Set<String> kDefaultHiddenTabIds = {
+  for (final t in kOptionalTabs)
+    if (t.id != 'library') t.id,
+};
 
 /// 所有可用 Tab（默认显示 + 可选）。
 final List<TabItem> kAllAvailableTabs = [...kDefaultTabs, ...kOptionalTabs];
@@ -65,8 +71,8 @@ class TabConfigProvider extends ChangeNotifier {
   /// 所有 tab 的完整排序（含隐藏项），用于设置页展示。
   List<TabItem> _allTabs = List.from(kAllAvailableTabs);
 
-  /// 隐藏的 tab id 集合。可选 Tab 默认隐藏。
-  Set<String> _hiddenTabs = {for (final t in kOptionalTabs) t.id};
+  /// 隐藏的 tab id 集合。可选 Tab 默认隐藏（本地音乐默认显示）。
+  Set<String> _hiddenTabs = {...kDefaultHiddenTabIds};
 
   List<TabItem> get visibleTabs => _visibleTabs;
   List<TabItem> get allTabs => _allTabs;
@@ -99,11 +105,9 @@ class TabConfigProvider extends ChangeNotifier {
         }
         _allTabs = ordered;
       } else {
-        // 新用户：使用全部可用 Tab，可选 Tab 默认隐藏
+        // 新用户：使用全部可用 Tab，可选 Tab 默认隐藏（本地音乐默认显示）
         _allTabs = List.from(kAllAvailableTabs);
-        for (final tab in kOptionalTabs) {
-          _hiddenTabs.add(tab.id);
-        }
+        _hiddenTabs.addAll(kDefaultHiddenTabIds);
       }
 
       _rebuildVisible();
@@ -160,7 +164,7 @@ class TabConfigProvider extends ChangeNotifier {
   /// 重置为默认配置。
   Future<void> resetToDefault() async {
     _allTabs = List.from(kAllAvailableTabs);
-    _hiddenTabs = {for (final t in kOptionalTabs) t.id};
+    _hiddenTabs = {...kDefaultHiddenTabIds};
     _rebuildVisible();
     notifyListeners();
     await _repo.setTabOrder(kAllAvailableTabs.map((t) => t.id).toList());
