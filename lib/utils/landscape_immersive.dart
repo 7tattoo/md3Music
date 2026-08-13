@@ -17,6 +17,21 @@ const SystemUiOverlayStyle kPlayerOverlayStyle = SystemUiOverlayStyle(
   systemNavigationBarIconBrightness: Brightness.light,
 );
 
+/// 主页面（非播放器）系统栏样式：surface 背景 + 主题亮度图标。
+///
+/// 供全屏播放器拖拽展开期间使用：展开完成前保持主页面外观，
+/// 避免系统栏提前切换成播放器的透明 + 浅色图标样式造成闪烁。
+SystemUiOverlayStyle mainPageOverlayStyle(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  return SystemUiOverlayStyle(
+    statusBarColor: scheme.surface,
+    statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+    systemNavigationBarColor: scheme.surface,
+    systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+  );
+}
+
 /// 根据当前屏幕方向启用或禁用全屏沉浸模式。
 ///
 /// - 横屏（landscape）：启用 [SystemUiMode.immersiveSticky]，隐藏状态栏和导航栏。
@@ -33,7 +48,13 @@ void applyImmersiveForOrientation() {
     // 横屏：完全沉浸，隐藏状态栏和导航栏
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   } else {
-    // 竖屏：edgeToEdge，导航栏透明，内容延伸到导航栏后面
+    // 竖屏：edgeToEdge，导航栏透明，内容延伸到导航栏后面。
+    // 先强制恢复系统栏显示：从 immersiveSticky（zen/横屏）切到 edgeToEdge 时，
+    // 部分设备状态栏不会自动重新显示，必须先 manual 显式 show 再切 edgeToEdge。
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     // 引用公共 const，与 AnnotatedRegion 共用同一实例
     // 避免引用不等触发平台 channel 真实调用导致闪烁

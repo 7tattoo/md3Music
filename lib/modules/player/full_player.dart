@@ -104,6 +104,20 @@ class _FullPlayerState extends State<FullPlayer>
   /// 防止 PopScope 回调与 dismiss() 重复触发。
   bool _isDismissing = false;
 
+  /// 拖拽展开模式下的源路由：展开完成前延迟应用沉浸模式，
+  /// 避免拖动过程系统栏提前切换造成闪烁。
+  DraggablePlayerRoute? _dragRoute;
+
+  /// 系统栏/沉浸模式初始化是否已完成。
+  /// 需在 [didChangeDependencies] 中执行一次（[ModalRoute.of] 依赖
+  /// `_ModalScopeStatus` inherited widget，initState 阶段不可用）。
+  bool _systemUiInitialized = false;
+
+  /// 是否为拖拽覆盖层（非路由）场景：拖拽期间由 Navigator 之上的
+  /// PlayerDragOverlay 渲染，无 ModalRoute；系统栏与收起行为需走覆盖层逻辑。
+  bool get _isDragOverlay =>
+      ModalRoute.of(context) == null && playerDragActive.value;
+
   /// 上次的物理尺寸，用于 didChangeMetrics 方向变化防抖。
   /// 避免 immersiveSticky 下用户触摸边缘唤醒系统栏等 insets 抖动
   /// 引发无效的 applyImmersiveForOrientation 调用导致系统栏闪烁。
@@ -126,13 +140,14 @@ class _FullPlayerState extends State<FullPlayer>
   bool _spectrumEnabled = false;
   // SpectrumService 是否已启动（避免重复 start）
   bool _spectrumStarted = false;
-  // 频谱开启时是否提示过 sessionId 为空（避免反复弹 SnackBar）
-  bool _spectrumSessionWarned = false;
   // 频谱样式：0=柱状图(环绕)，1=曲线(环绕)，2=背景层(条形)
   int _spectrumStyle = 0;
   // 频谱背景层参数（仅 style=2 时使用）
   double _spectrumBgOpacity = 0.4;
   double _spectrumBgHeight = 0.4;
+  // 环绕频谱透明度（style 0/1 分开记忆，默认不透明）
+  double _spectrumBarOpacity = 1.0;
+  double _spectrumCurveOpacity = 1.0;
 
   void _collapseByButton() {
     final route = ModalRoute.of(context);
@@ -142,6 +157,15 @@ class _FullPlayerState extends State<FullPlayer>
     } else {
       Navigator.of(context).maybePop();
     }
+  }
+
+  /// 拖拽展开完成：切换沉浸模式并移除监听。
+  void _onDragRouteStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    applyImmersiveForOrientation();
+    _dragRoute?.controller.removeStatusListener(_onDragRouteStatus);
+    _dragRoute = null;
+    if (mounted) setState(() {});
   }
 
   /// 跳转到当前歌曲所在专辑页。
@@ -366,8 +390,6 @@ class _FullPlayerState extends State<FullPlayer>
       parent: _zenController,
       curve: Curves.easeInOut,
     );
-    // 进入播放器时会根据当前方向应用沉浸模式
-    applyImmersiveForOrientation();
     // 记录初始物理尺寸，避免首次 didChangeMetrics 因 _lastPhysicalSize==null 误判方向变化
     _lastPhysicalSize =
         WidgetsBinding.instance.platformDispatcher.views.first.physicalSize;
@@ -389,6 +411,8 @@ class _FullPlayerState extends State<FullPlayer>
     final style = await SettingsRepository().getSpectrumStyle();
     final bgOpacity = await SettingsRepository().getSpectrumBgOpacity();
     final bgHeight = await SettingsRepository().getSpectrumBgHeight();
+    final barOpacity = await SettingsRepository().getSpectrumBarOpacity();
+    final curveOpacity = await SettingsRepository().getSpectrumCurveOpacity();
     if (!mounted) return;
     SpectrumService.instance.bandCount = bandCount;
     setState(() {
@@ -396,10 +420,18 @@ class _FullPlayerState extends State<FullPlayer>
       _spectrumStyle = style;
       _spectrumBgOpacity = bgOpacity;
       _spectrumBgHeight = bgHeight;
+      _spectrumBarOpacity = barOpacity;
+      _spectrumCurveOpacity = curveOpacity;
     });
     if (enabled) {
       // 已开启频谱时注册降级监听
       SpectrumService.instance.simulatedNotifier.addListener(_onSpectrumSimulated);
+      if (_isDragOverlay) {
+        // 拖拽覆盖层（非路由）：只显示频谱 UI、不启动服务。
+        // 覆盖层销毁时会 dispose 并调用 _stopSpectrum（全局 stop），
+        // 若此处启动会与接管路由的频谱冲突，导致频谱卡住/失效
+        return;
+      }
       if (Platform.isAndroid) {
         // 确保权限已请求（可能用户上次未授权）
         await Permission.microphone.request();
@@ -415,19 +447,8 @@ class _FullPlayerState extends State<FullPlayer>
   Future<void> _tryStartSpectrum({bool isPlaying = false}) async {
     if (!Platform.isAndroid) return;
     if (_spectrumStarted) return;
-    if (!isPlaying) {
-      if (!_spectrumSessionWarned && mounted) {
-        _spectrumSessionWarned = true;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('频谱模式将在播放后生效'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
+    // 未在播放时不启动（PCM 截取在 AudioSink 层，播放才会产生数据）
+    if (!isPlaying) return;
     // 传入 just_audio 的实际 audioSessionId，Kotlin 端会先尝试绑定它
     final sessionId = AudioService().androidAudioSessionId ?? 0;
     final ok = await SpectrumService.instance.start(sessionId);
@@ -450,7 +471,6 @@ class _FullPlayerState extends State<FullPlayer>
     setState(() => _spectrumEnabled = newEnabled);
     await SettingsRepository().setSpectrumEnabled(newEnabled);
     if (newEnabled) {
-      _spectrumSessionWarned = false;
       // 开启频谱时请求录音权限（部分 ROM 如 HyperOS 要求此权限才能用 Visualizer）
       if (Platform.isAndroid) {
         final status = await Permission.microphone.request();
@@ -527,6 +547,21 @@ class _FullPlayerState extends State<FullPlayer>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _checkPadMode();
+    // 系统栏/沉浸模式初始化：只在首次依赖建立时执行一次。
+    // ModalRoute.of 依赖 _ModalScopeStatus（inherited widget），
+    // 不能在 initState 中调用，否则报 dependOnInheritedWidgetOfExactType 错误
+    if (_systemUiInitialized) return;
+    _systemUiInitialized = true;
+    // 进入播放器时会根据当前方向应用沉浸模式；
+    // 拖拽展开模式下延迟到展开完成后再切换，避免拖动过程系统栏提前闪烁
+    final route = ModalRoute.of(context);
+    if (route is DraggablePlayerRoute && route.isDragMode) {
+      _dragRoute = route;
+      route.controller.addStatusListener(_onDragRouteStatus);
+    } else {
+      _dragRoute = null;
+      applyImmersiveForOrientation();
+    }
   }
 
   @override
@@ -596,6 +631,8 @@ class _FullPlayerState extends State<FullPlayer>
 
   @override
   void dispose() {
+    // 未完成展开就收起时，移除拖拽展开的监听（未切换系统栏，无需恢复）
+    _dragRoute?.controller.removeStatusListener(_onDragRouteStatus);
     _zenLongPressTimer?.cancel();
     try {
       context.read<PlayerProvider>().removeListener(_onPlayerSongChanged);
@@ -833,8 +870,9 @@ class _FullPlayerState extends State<FullPlayer>
     // 动画完成后用 removeRoute 移除路由（绕过 PopScope 避免死循环）。
     // 引用 kPlayerOverlayStyle 与 applyImmersiveForOrientation 共用同一 const 实例
     // 避免 SystemUiOverlayStyle 引用不等触发平台 channel 真实调用导致闪烁
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: kPlayerOverlayStyle,
+    // 拖拽展开模式下系统栏样式跟随展开进度，避免拖动过程提前切换（见 PlayerSystemUiScope）
+    return PlayerSystemUiScope(
+      dragRoute: _dragRoute,
       child: PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
@@ -860,12 +898,13 @@ class _FullPlayerState extends State<FullPlayer>
                     }
                   },
                 ),
-              // 频谱背景层：style=2 时显示底部条形频谱图
+              // 频谱背景层：style=2 时显示底部条形频谱图（播放时淡入、暂停时淡出）
               if (_spectrumEnabled && _spectrumStyle == 2)
                 SpectrumBackground(
                   color: colorScheme.primary,
                   opacity: _spectrumBgOpacity,
                   heightRatio: _spectrumBgHeight,
+                  visible: playerProvider.isPlaying,
                 ),
               ResponsiveLayout(
                 compact: (_) => _buildCompactLayout(
@@ -1030,9 +1069,13 @@ class _FullPlayerState extends State<FullPlayer>
                                       child: Stack(
                                         children: [
                                           AnimatedScale(
-                                            scale: playerProvider.isPlaying
+                                            // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
+                                            scale: _spectrumEnabled &&
+                                                    _spectrumStyle < 2
                                                 ? 1.0
-                                                : 0.85,
+                                                : (playerProvider.isPlaying
+                                                    ? 1.0
+                                                    : 0.85),
                                             duration: const Duration(
                                               milliseconds: 500,
                                             ),
@@ -1252,9 +1295,13 @@ class _FullPlayerState extends State<FullPlayer>
                                         child: Stack(
                                           children: [
                                             AnimatedScale(
-                                              scale: playerProvider.isPlaying
+                                              // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
+                                              scale: _spectrumEnabled &&
+                                                      _spectrumStyle < 2
                                                   ? 1.0
-                                                  : 0.85,
+                                                  : (playerProvider.isPlaying
+                                                      ? 1.0
+                                                      : 0.85),
                                               duration: const Duration(
                                                 milliseconds: 500,
                                               ),
@@ -1506,6 +1553,8 @@ class _FullPlayerState extends State<FullPlayer>
         isPlaying: isPlaying,
         bandCount: SpectrumService.instance.bandCount,
         style: _spectrumStyle,
+        // 柱状图/曲线透明度分开记忆
+        opacity: _spectrumStyle == 1 ? _spectrumCurveOpacity : _spectrumBarOpacity,
       );
     }
     return ClipRRect(
@@ -1559,7 +1608,10 @@ class _FullPlayerState extends State<FullPlayer>
                         child: AspectRatio(
                           aspectRatio: 1,
                           child: AnimatedScale(
-                            scale: playerProvider.isPlaying ? 1.0 : 0.85,
+                            // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
+                            scale: _spectrumEnabled && _spectrumStyle < 2
+                                ? 1.0
+                                : (playerProvider.isPlaying ? 1.0 : 0.85),
                             duration: const Duration(milliseconds: 500),
                             curve: Curves.easeOutBack,
                             child: _buildCrossfadeArtworkWrapper(
@@ -1583,7 +1635,10 @@ class _FullPlayerState extends State<FullPlayer>
               child: AspectRatio(
                 aspectRatio: 1,
                 child: AnimatedScale(
-                  scale: playerProvider.isPlaying ? 1.0 : 0.85,
+                  // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
+                  scale: _spectrumEnabled && _spectrumStyle < 2
+                      ? 1.0
+                      : (playerProvider.isPlaying ? 1.0 : 0.85),
                   duration: const Duration(milliseconds: 500),
                   curve: Curves.easeOutBack,
                   child: _buildCrossfadeArtworkWrapper(
