@@ -3,13 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/theme/ios_grouped_theme.dart';
 import '../../data/models/album.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/album_card.dart';
-import '../../widgets/app_animation.dart';
 import '../../widgets/md3e_loading_indicator.dart';
 import '../../widgets/md3e_refresh_indicator.dart';
 import '../../widgets/pinchable_grid_view.dart';
@@ -141,9 +139,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       });
     }
     try {
-      // 渐进加载：最多等 1.5s 就结束 loading，先渲染已到达的数据，
-      // 其余请求在后台完成（各 section 用 Selector 随数据到达自动填充）。
-      await Future.wait<dynamic>([
+      await Future.wait([
         kugou.getPlaylist(forceRefresh: hasExistingData),
         kugou.getRankList(forceRefresh: hasExistingData),
         kugou.getRecommendDaily(forceRefresh: hasExistingData),
@@ -153,10 +149,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         kugou.getThemePlaylist(forceRefresh: hasExistingData),
         kugou.getIpHome(forceRefresh: hasExistingData),
         kugou.getPersonalFm(forceRefresh: hasExistingData),
-      ]).timeout(
-        const Duration(milliseconds: 1500),
-        onTimeout: () => <dynamic>[],
-      );
+      ]);
 
       // 只有确实加载到数据时才标记为已加载
       final hasAnyData =
@@ -186,20 +179,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   @override
   Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
-    final colorScheme = IosColors.scheme(context);
+    final colorScheme = Theme.of(context).colorScheme;
 
-    final scaffold = Scaffold(
+    return Scaffold(
       appBar: ScrollAwareAppBar(
         title: 'MD3Music',
         scrollController: _scrollController,
-        leading: IconButton(
-          icon: const Icon(Icons.search),
-          onPressed: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
-        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
+          ),
           IconButton(
             icon: const Icon(Icons.mic_outlined),
             onPressed: () => Navigator.of(context).push(
@@ -250,18 +242,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
               ),
       ),
     );
-
-    return Theme(
-      data: baseTheme.copyWith(
-        colorScheme: colorScheme,
-        scaffoldBackgroundColor: IosColors.bg(context),
-        appBarTheme: baseTheme.appBarTheme.copyWith(
-          backgroundColor: IosColors.bg(context),
-          surfaceTintColor: Colors.transparent,
-        ),
-      ),
-      child: scaffold,
-    );
   }
 
   String _getGreeting() {
@@ -297,6 +277,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: avatarUrl,
+          memCacheWidth: 96,
+          memCacheHeight: 96,
           cacheKey: 'avatar_$userId',
           width: 32,
           height: 32,
@@ -357,50 +339,48 @@ class _DiscoverPageState extends State<DiscoverPage> {
   Widget _buildBannerSection(ColorScheme cs) {
     final tt = Theme.of(context).textTheme;
     return SliverToBoxAdapter(
-      child: FadeInUp(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 140),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: cs.primaryContainer,
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -12,
-                  top: -12,
-                  child: Icon(
-                    Icons.music_note,
-                    size: 80,
-                    color: cs.onPrimaryContainer.withValues(alpha: 0.1),
-                  ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 140),
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: cs.primaryContainer,
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -12,
+                top: -12,
+                child: Icon(
+                  Icons.music_note,
+                  size: 80,
+                  color: cs.onPrimaryContainer.withValues(alpha: 0.1),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _getGreeting(),
-                        style: tt.displaySmall?.copyWith(
-                          color: cs.onPrimaryContainer,
-                          fontWeight: FontWeight.bold,
-                        ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getGreeting(),
+                      style: tt.displaySmall?.copyWith(
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '发现你喜欢的音乐',
-                        style: tt.bodyLarge?.copyWith(
-                          color: cs.onPrimaryContainer.withValues(alpha: 0.8),
-                        ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '发现你喜欢的音乐',
+                      style: tt.bodyLarge?.copyWith(
+                        color: cs.onPrimaryContainer.withValues(alpha: 0.8),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -413,55 +393,52 @@ class _DiscoverPageState extends State<DiscoverPage> {
       builder: (context, songs, _) {
         if (songs.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
         return SliverToBoxAdapter(
-          child: FadeInUp(
-            delayMs: 150,
-            child: _CollapsibleSection(
-              title: '每日推荐',
-              isExpanded: _isDailyExpanded,
-              onToggle: () => _toggleCollapse(
-                prefKey: _kCollapsedDaily,
-                currentlyExpanded: _isDailyExpanded,
-                apply: (v) => _isDailyExpanded = v,
-              ),
-              trailing: TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const _DailyRecommendDetailPage(),
+          child: _CollapsibleSection(
+            title: '每日推荐',
+            isExpanded: _isDailyExpanded,
+            onToggle: () => _toggleCollapse(
+              prefKey: _kCollapsedDaily,
+              currentlyExpanded: _isDailyExpanded,
+              apply: (v) => _isDailyExpanded = v,
+            ),
+            trailing: TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const _DailyRecommendDetailPage(),
+                  ),
+                );
+              },
+              child: const Text('查看更多'),
+            ),
+            child: SizedBox(
+              height: 72,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: songs.length > 5 ? 5 : songs.length,
+                itemBuilder: (context, i) {
+                  final s = songs[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ActionChip(
+                      avatar: CircleAvatar(
+                        backgroundColor: cs.primaryContainer,
+                        child: Text(
+                          '${i + 1}',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: cs.onPrimaryContainer),
+                        ),
+                      ),
+                      label: Text(s.songName),
+                      onPressed: () =>
+                          context.read<PlayerProvider>().playOnlinePlaylist(
+                            songs.map((e) => e.toSong()).toList(),
+                            i,
+                          ),
                     ),
                   );
                 },
-                child: const Text('查看更多'),
-              ),
-              child: SizedBox(
-                height: 72,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: songs.length > 5 ? 5 : songs.length,
-                  itemBuilder: (context, i) {
-                    final s = songs[i];
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ActionChip(
-                        avatar: CircleAvatar(
-                          backgroundColor: cs.primaryContainer,
-                          child: Text(
-                            '${i + 1}',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: cs.onPrimaryContainer),
-                          ),
-                        ),
-                        label: Text(s.songName),
-                        onPressed: () =>
-                            context.read<PlayerProvider>().playOnlinePlaylist(
-                              songs.map((e) => e.toSong()).toList(),
-                              i,
-                            ),
-                      ),
-                    );
-                  },
-                ),
               ),
             ),
           ),
@@ -476,83 +453,78 @@ class _DiscoverPageState extends State<DiscoverPage> {
       builder: (context, themes, _) {
         if (themes.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
         return SliverToBoxAdapter(
-          child: FadeInUp(
-            delayMs: 200,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '主题歌单',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      TextButton(onPressed: () {}, child: const Text('查看更多')),
-                    ],
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '主题歌单',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    TextButton(onPressed: () {}, child: const Text('查看更多')),
+                  ],
                 ),
-                SizedBox(
-                  height: 180,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: themes.length,
-                    itemBuilder: (context, i) => Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: FadeInUp(
-                        delayMs: i * 30,
-                        animate: false,
-                        child: SizedBox(
-                          width: 130,
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: CachedNetworkImage(
-                                    imageUrl: themes[i].coverUrl ?? '',
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    placeholder: (_, _) => Container(
-                                      color: cs.surfaceContainerHighest,
-                                      child: Icon(
-                                        Icons.music_note,
-                                        color: cs.onSurfaceVariant,
-                                      ),
-                                    ),
-                                    errorWidget: (_, _, _) => Container(
-                                      color: cs.surfaceContainerHighest,
-                                      child: Icon(
-                                        Icons.music_note,
-                                        color: cs.onSurfaceVariant,
-                                      ),
-                                    ),
+              ),
+              SizedBox(
+                height: 180,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: themes.length,
+                  itemBuilder: (context, i) => Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: SizedBox(
+                      width: 130,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: CachedNetworkImage(
+                                imageUrl: themes[i].coverUrl ?? '',
+                                memCacheWidth: 450,
+                                memCacheHeight: 450,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                placeholder: (_, _) => Container(
+                                  color: cs.surfaceContainerHighest,
+                                  child: Icon(
+                                    Icons.music_note,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                                errorWidget: (_, _, _) => Container(
+                                  color: cs.surfaceContainerHighest,
+                                  child: Icon(
+                                    Icons.music_note,
+                                    color: cs.onSurfaceVariant,
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                themes[i].name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w500,
-                                      color: cs.onSurface,
-                                    ),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 6),
+                          Text(
+                            themes[i].name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                  color: cs.onSurface,
+                                ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -572,59 +544,56 @@ class _DiscoverPageState extends State<DiscoverPage> {
         }
         final items = list;
         return SliverToBoxAdapter(
-          child: FadeInUp(
-            delayMs: 250,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text(
-                    '场景音乐',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  '场景音乐',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                SizedBox(
-                  height: 110,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: items.length,
-                    itemBuilder: (context, i) {
-                      final item = items[i] as Map<String, dynamic>;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: Container(
-                          width: 90,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            color: cs.surfaceContainerLow,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.headphones,
-                                color: cs.primary,
-                                size: 28,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                item['name']?.toString() ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: cs.onSurface),
-                              ),
-                            ],
-                          ),
+              ),
+              SizedBox(
+                height: 110,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) {
+                    final item = items[i] as Map<String, dynamic>;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Container(
+                        width: 90,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: cs.surfaceContainerLow,
                         ),
-                      );
-                    },
-                  ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.headphones,
+                              color: cs.primary,
+                              size: 28,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              item['name']?.toString() ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: cs.onSurface),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -637,58 +606,54 @@ class _DiscoverPageState extends State<DiscoverPage> {
       builder: (context, plist, _) {
         if (plist.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
         return SliverToBoxAdapter(
-          child: FadeInUp(
-            delayMs: 300,
-            child: _CollapsibleSection(
-              title: '热门歌单',
-              isExpanded: _isPlaylistExpanded,
-              onToggle: () => _toggleCollapse(
-                prefKey: _kCollapsedPlaylist,
-                currentlyExpanded: _isPlaylistExpanded,
-                apply: (v) => _isPlaylistExpanded = v,
-              ),
-              trailing: TextButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const _PlaylistBrowsePage(),
-                  ),
+          child: _CollapsibleSection(
+            title: '热门歌单',
+            isExpanded: _isPlaylistExpanded,
+            onToggle: () => _toggleCollapse(
+              prefKey: _kCollapsedPlaylist,
+              currentlyExpanded: _isPlaylistExpanded,
+              apply: (v) => _isPlaylistExpanded = v,
+            ),
+            trailing: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const _PlaylistBrowsePage(),
                 ),
-                child: const Text('查看更多'),
               ),
-              child: SizedBox(
-                height: 200,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  cacheExtent: 600,
-                  itemCount: plist.length,
-                  itemBuilder: (context, i) => Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: SizedBox(
-                      width: 150,
-                      child: AlbumCard(
-                          album: Album(
-                            id: plist[i].id,
-                            name: plist[i].name,
-                            artist: '',
-                            artworkUri: plist[i].coverUrl,
-                            songCount: plist[i].songCount,
-                          ),
-                          onTap: () {
-                            final brief = plist[i];
-                            final playlist = brief.toPlaylist();
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    PlaylistPage(playlist: playlist),
-                              ),
-                            );
-                          },
-                        ),
+              child: const Text('查看更多'),
+            ),
+            child: SizedBox(
+              height: 200,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: plist.length,
+                itemBuilder: (context, i) => Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: SizedBox(
+                    width: 150,
+                    child: AlbumCard(
+                      album: Album(
+                        id: plist[i].id,
+                        name: plist[i].name,
+                        artist: '',
+                        artworkUri: plist[i].coverUrl,
+                        songCount: plist[i].songCount,
                       ),
+                      onTap: () {
+                        final brief = plist[i];
+                        final playlist = brief.toPlaylist();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                PlaylistPage(playlist: playlist),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
+              ),
             ),
           ),
         );
@@ -703,46 +668,42 @@ class _DiscoverPageState extends State<DiscoverPage> {
         final ranks = rankList?.ranks.map((e) => e.toAlbum()).toList() ?? [];
         if (ranks.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
         return SliverToBoxAdapter(
-          child: FadeInUp(
-            delayMs: 350,
-            child: _CollapsibleSection(
-              title: '排行榜',
-              isExpanded: _isRankExpanded,
-              onToggle: () => _toggleCollapse(
-                prefKey: _kCollapsedRank,
-                currentlyExpanded: _isRankExpanded,
-                apply: (v) => _isRankExpanded = v,
-              ),
-              trailing: TextButton(
-                onPressed: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const ChartsPage())),
-                child: const Text('查看更多'),
-              ),
-              child: SizedBox(
-                height: 200,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  cacheExtent: 600,
-                  itemCount: ranks.length,
-                  itemBuilder: (context, i) => Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: SizedBox(
-                      width: 150,
-                      child: AlbumCard(
-                        album: ranks[i],
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => _RankDetailPage(
-                                rankId: rankList!.ranks[i].id,
-                                rankName: ranks[i].name,
-                              ),
+          child: _CollapsibleSection(
+            title: '排行榜',
+            isExpanded: _isRankExpanded,
+            onToggle: () => _toggleCollapse(
+              prefKey: _kCollapsedRank,
+              currentlyExpanded: _isRankExpanded,
+              apply: (v) => _isRankExpanded = v,
+            ),
+            trailing: TextButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ChartsPage())),
+              child: const Text('查看更多'),
+            ),
+            child: SizedBox(
+              height: 200,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: ranks.length,
+                itemBuilder: (context, i) => Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: SizedBox(
+                    width: 150,
+                    child: AlbumCard(
+                      album: ranks[i],
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => _RankDetailPage(
+                              rankId: rankList!.ranks[i].id,
+                              rankName: ranks[i].name,
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -791,20 +752,20 @@ class _PlaylistBrowsePageState extends State<_PlaylistBrowsePage> {
                   spacing: 12,
                   itemCount: list.length,
                   itemBuilder: (context, i) => AlbumCard(
-                    album: Album(
-                      id: list[i].id,
-                      name: list[i].name,
-                      artist: '',
-                      artworkUri: list[i].coverUrl,
-                      songCount: list[i].songCount,
-                    ),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            PlaylistPage(playlist: list[i].toPlaylist()),
+                      album: Album(
+                        id: list[i].id,
+                        name: list[i].name,
+                        artist: '',
+                        artworkUri: list[i].coverUrl,
+                        songCount: list[i].songCount,
+                      ),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              PlaylistPage(playlist: list[i].toPlaylist()),
+                        ),
                       ),
                     ),
-                  ),
                 );
               },
             ),
@@ -875,96 +836,15 @@ class _RankDetailPage extends StatefulWidget {
 }
 
 class _RankDetailPageState extends State<_RankDetailPage> {
-  final List<KugouSongDetail> _songs = [];
-  final ScrollController _scrollController = ScrollController();
-  int _currentPage = 1;
-  bool _hasMore = true;
   bool _isLoading = true;
-  bool _isLoadingMore = false;
-  String? _error;
-  static const int _pageSize = 30;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadFirstPage());
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (_isLoadingMore || !_hasMore) return;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final current = _scrollController.position.pixels;
-    if (maxScroll - current <= 200) {
-      _loadMore();
-    }
-  }
-
-  Future<void> _loadFirstPage() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<KugouProvider>().getRankSongs(rankId: widget.rankId);
+      if (mounted) setState(() => _isLoading = false);
     });
-    try {
-      final apiClient = context.read<KugouProvider>().apiClient;
-      final songs = await apiClient.getRankAudio(
-        rankId: widget.rankId,
-        page: 1,
-        pagesize: _pageSize,
-      );
-      if (!mounted) return;
-      setState(() {
-        _songs.clear();
-        if (songs != null) {
-          _songs.addAll(songs);
-          _hasMore = songs.length >= _pageSize;
-        } else {
-          _error = '获取排行榜歌曲失败';
-          _hasMore = false;
-        }
-        _currentPage = 1;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (_isLoadingMore) return;
-    setState(() => _isLoadingMore = true);
-    try {
-      final apiClient = context.read<KugouProvider>().apiClient;
-      final songs = await apiClient.getRankAudio(
-        rankId: widget.rankId,
-        page: _currentPage + 1,
-        pagesize: _pageSize,
-      );
-      if (!mounted) return;
-      setState(() {
-        if (songs != null && songs.isNotEmpty) {
-          _songs.addAll(songs);
-          _currentPage++;
-          _hasMore = songs.length >= _pageSize;
-        } else {
-          _hasMore = false;
-        }
-        _isLoadingMore = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoadingMore = false);
-    }
   }
 
   @override
@@ -973,46 +853,47 @@ class _RankDetailPageState extends State<_RankDetailPage> {
       appBar: AppBar(title: Text(widget.rankName)),
       body: _isLoading
           ? const Center(child: MD3ELoadingIndicator())
-          : _error != null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(_error!),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: _loadFirstPage,
-                    child: const Text('重试'),
-                  ),
-                ],
-              ),
-            )
-          : MD3ERefreshIndicator(
-              onRefresh: _loadFirstPage,
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: _songs.length + (_hasMore ? 1 : 0),
-                itemBuilder: (context, i) {
-                  if (i == _songs.length) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: MD3ELoadingIndicator(size: 20)),
-                    );
-                  }
-                  final song = _songs[i].toSong();
-                  return SongListItem(
-                    song: song,
-                    onTap: () =>
-                        context.read<PlayerProvider>().playOnlinePlaylist(
-                      _songs.map((e) => e.toSong()).toList(),
-                      i,
+          : Selector<KugouProvider, List<KugouSongDetail>>(
+              selector: (_, kugou) => kugou.rankSongs,
+              builder: (context, songs, _) {
+                if (songs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('暂无数据'),
+                        ElevatedButton(
+                          onPressed: () async {
+                            setState(() => _isLoading = true);
+                            await context.read<KugouProvider>().getRankSongs(
+                              rankId: widget.rankId,
+                              forceRefresh: true,
+                            );
+                            if (mounted) setState(() => _isLoading = false);
+                          },
+                          child: const Text('重试'),
+                        ),
+                      ],
                     ),
-                    onMoreTap: () {},
                   );
-                },
-              ),
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: songs.length,
+                  itemBuilder: (context, i) {
+                    final song = songs[i].toSong();
+                    return SongListItem(
+                      song: song,
+                      onTap: () =>
+                          context.read<PlayerProvider>().playOnlinePlaylist(
+                            songs.map((e) => e.toSong()).toList(),
+                            i,
+                          ),
+                      onMoreTap: () {},
+                    );
+                  },
+                );
+              },
             ),
     );
   }

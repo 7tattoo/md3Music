@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/custom_font_loader.dart';
 import '../../core/services/desktop_lyric_service.dart';
 import '../../core/services/equalizer_service.dart';
+import '../../core/services/folder_picker_service.dart';
 import '../../core/services/lyricon_provider_service.dart';
 import '../../core/services/media_notification_service.dart';
 import '../../core/services/spectrum_service.dart';
@@ -33,13 +34,12 @@ import '../../widgets/seed_color_picker.dart';
 import '../../widgets/usb_exclusive_section.dart';
 import '../player/mini_player.dart';
 import 'equalizer_settings_page.dart';
-import 'license_view_page.dart';
 
 /// CI compile-time version injection via --dart-define=APP_VERSION=X
 /// Fallback display when runtime PackageInfo read fails.
 const String kBuildAppVersion = String.fromEnvironment(
   'APP_VERSION',
-  defaultValue: '5.1.2',
+  defaultValue: '4.0.0',
 );
 
 class SettingsPage extends StatefulWidget {
@@ -58,6 +58,8 @@ class _SettingsPageState extends State<SettingsPage>
   // 本地 API 服务器重启中（在线音乐区块显示加载态）
   bool _isRestarting = false;
   bool _useDynamicColor = false;
+  // 封面动态取色开关（与系统主题色独立、可叠加；开启时封面优先）
+  bool _useCoverSeedColor = false;
   // Apple Music 风格播放页开关（默认关闭，开启后用 AM 风格 FullPlayer）
   bool _useAmStylePlayer = false;
   bool _useGaussianBlur = true;
@@ -93,8 +95,8 @@ class _SettingsPageState extends State<SettingsPage>
   bool _spectrumEnabled = false;
   // 频谱柱数量（20~80，默认 40）
   int _spectrumBandCount = 40;
-  // 频谱样式：0=柱状图(环绕)，1=曲线(环绕，默认)，2=背景层(条形)
-  int _spectrumStyle = 1;
+  // 频谱样式：0=柱状图(环绕)，1=曲线(环绕)，2=背景层(条形)
+  int _spectrumStyle = 0;
   // 频谱背景层参数（仅 style=2 时使用）
   double _spectrumBgOpacity = 0.4;
   double _spectrumBgHeight = 0.4;
@@ -131,15 +133,15 @@ class _SettingsPageState extends State<SettingsPage>
     super.dispose();
   }
 
-  /// 桌面歌词开关状态变化回调：触发 UI 刷新
-  void _onDesktopLyricChanged() {
+  /// Lyricon 服务状态变化回调：触发 UI 刷新
+  void _onLyriconStateChanged() {
     if (mounted) {
       setState(() {});
     }
   }
 
-  /// Lyricon 服务状态变化回调：触发 UI 刷新
-  void _onLyriconStateChanged() {
+  /// 桌面歌词开关状态变化回调：触发 UI 刷新
+  void _onDesktopLyricChanged() {
     if (mounted) {
       setState(() {});
     }
@@ -195,6 +197,8 @@ class _SettingsPageState extends State<SettingsPage>
     final autoReceiveVip = await _settingsRepository.getAutoReceiveVip();
     // 从 ThemeProvider 同步「使用系统主题色」开关状态
     final useDynamicColor = context.read<ThemeProvider>().useDynamicColor;
+    // 从 ThemeProvider 同步「封面动态取色」开关状态
+    final useCoverSeedColor = context.read<ThemeProvider>().useCoverSeedColor;
     // 从 ThemeProvider 同步「Apple Music 风格播放页」开关状态
     final useAmStylePlayer = context.read<ThemeProvider>().useAmStylePlayer;
     final lyricDoubleTapToJump = context
@@ -230,6 +234,7 @@ class _SettingsPageState extends State<SettingsPage>
       _defaultQuality = quality;
       _autoReceiveVip = autoReceiveVip;
       _useDynamicColor = useDynamicColor;
+      _useCoverSeedColor = useCoverSeedColor;
       _useAmStylePlayer = useAmStylePlayer;
       _lyricDoubleTapToJump = lyricDoubleTapToJump;
       _useArtistPhotoBackground = useArtistPhotoBackground;
@@ -364,7 +369,7 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   /// 分类条目：图标 + 标题 + 二级页面内容构建器
-  List<(String, IconData, List<Widget> Function(ColorScheme))> get _categories => [
+  List<(String, IconData, Widget Function(ColorScheme))> get _categories => [
         ('外观', Icons.palette_outlined, _buildAppearanceSection),
         ('播放页样式', Icons.music_note_outlined, _buildPlayerStyleSection),
         ('歌词', Icons.lyrics_outlined, _buildLyricSection),
@@ -372,11 +377,9 @@ class _SettingsPageState extends State<SettingsPage>
         (
           'USB 独占',
           Icons.usb,
-          (colorScheme) => [
-            UsbExclusiveSection(
-              onAutoPause: () => context.read<PlayerProvider>().pause(),
-            ),
-          ],
+          (colorScheme) => UsbExclusiveSection(
+            onAutoPause: () => context.read<PlayerProvider>().pause(),
+          ),
         ),
         ('主页管理', Icons.tab_outlined, _buildTabManagementSection),
         ('在线音乐', Icons.cloud_outlined, _buildOnlineMusicSection),
@@ -388,7 +391,7 @@ class _SettingsPageState extends State<SettingsPage>
   Widget _buildActiveSectionContent(ColorScheme colorScheme) {
     for (final (title, _, builder) in _categories) {
       if (title == _activeSection) {
-        return Column(mainAxisSize: MainAxisSize.min, children: builder(colorScheme));
+        return builder(colorScheme);
       }
     }
     return const SizedBox.shrink();
@@ -407,7 +410,8 @@ class _SettingsPageState extends State<SettingsPage>
     ];
   }
 
-  /// 分组卡片：圆角容器包裹子内容。
+  /// 将 section 内容包裹在圆角矩形卡片内，提升视觉分组。
+  /// 卡片背景使用 surfaceContainerLow，与播放器风格卡片保持一致。
   Widget _buildSettingsCard(Widget child) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
@@ -423,37 +427,35 @@ class _SettingsPageState extends State<SettingsPage>
   /// 歌词设置 section：MD3 与 Apple Music 两种风格播放页的歌词
   /// （字号/行间距/字体）均已移入播放页右上角菜单的"歌词显示设置"入口，
   /// 设置页不再保留独立入口。
-  List<Widget> _buildLyricSection(ColorScheme colorScheme) {
-    return [
-        // Lyricon 词幕推送主开关（开关 + 连接状态合并为一行组，避免插入分隔线）
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SwitchListTile(
-              title: const Text('Lyricon 词幕推送'),
-              subtitle: const Text('向 Lyricon 提供方实时推送歌词'),
-              value: _lyriconEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _lyriconEnabled = value;
-                });
-                LyriconProviderService.instance.setEnabled(value);
-                _settingsRepository.setLyriconEnabled(value);
-              },
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _getLyriconStateText(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
+  Widget _buildLyricSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
+        // Lyricon 词幕推送主开关
+        SwitchListTile(
+          title: const Text('Lyricon 词幕推送'),
+          subtitle: const Text('向 Lyricon 提供方实时推送歌词'),
+          value: _lyriconEnabled,
+          onChanged: (value) {
+            HapticFeedback.lightImpact();
+            setState(() {
+              _lyriconEnabled = value;
+            });
+            LyriconProviderService.instance.setEnabled(value);
+            _settingsRepository.setLyriconEnabled(value);
+          },
+        ),
+        // 主开关下方显示当前连接状态
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _getLyriconStateText(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
-          ],
+          ),
         ),
         // 次级开关：翻译歌词（主开关关闭时禁用）
         SwitchListTile(
@@ -462,6 +464,7 @@ class _SettingsPageState extends State<SettingsPage>
           value: _lyriconDisplayTranslation,
           onChanged: _lyriconEnabled
               ? (value) {
+                  HapticFeedback.lightImpact();
                   setState(() {
                     _lyriconDisplayTranslation = value;
                   });
@@ -477,6 +480,7 @@ class _SettingsPageState extends State<SettingsPage>
           value: _lyriconDisplayRoma,
           onChanged: _lyriconEnabled
               ? (value) {
+                  HapticFeedback.lightImpact();
                   setState(() {
                     _lyriconDisplayRoma = value;
                   });
@@ -495,6 +499,7 @@ class _SettingsPageState extends State<SettingsPage>
           value: _lyriconPreferTranslation,
           onChanged: _lyriconEnabled
               ? (value) async {
+                  HapticFeedback.lightImpact();
                   setState(() {
                     _lyriconPreferTranslation = value;
                   });
@@ -517,6 +522,7 @@ class _SettingsPageState extends State<SettingsPage>
           ),
           value: DesktopLyricService.instance.locked,
           onChanged: (_) async {
+            HapticFeedback.lightImpact();
             await DesktopLyricService.instance.unlock();
           },
         ),
@@ -526,6 +532,7 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: const Text('通过蓝牙在汽车主机等设备显示当前歌词（标题显示歌词，作者显示「作者 - 标题」）'),
           value: _bluetoothLyricEnabled,
           onChanged: (value) async {
+            HapticFeedback.lightImpact();
             setState(() => _bluetoothLyricEnabled = value);
             await _settingsRepository.setBluetoothLyricEnabled(value);
             // 同步到歌词服务（启停定时器）和原生端（元数据替换开关）
@@ -533,7 +540,8 @@ class _SettingsPageState extends State<SettingsPage>
             MediaNotificationService.setBluetoothLyricEnabled(value);
           },
         ),
-    ];
+      ],
+    );
   }
 
   /// 歌词字体来源中文标签（用于"歌词字体"ListTile 的 subtitle）。
@@ -657,51 +665,55 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  List<Widget> _buildAppearanceSection(ColorScheme colorScheme) {
+  Widget _buildAppearanceSection(ColorScheme colorScheme) {
     final themeProvider = context.read<ThemeProvider>();
     // 仅 ThemeMode.light 时禁用 OLED 开关；dark 与 system 均可勾选。
     // system 模式下勾选后，等系统切到深色时 darkTheme 自动应用纯黑（MaterialApp 机制）。
     final canToggleOled = _themeMode != ThemeMode.light;
-    return [
+    return Column(
+      children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
             children: [
-              Text('主题模式', style: Theme.of(context).textTheme.bodyLarge),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<ThemeMode>(
-                  segments: const [
-                    ButtonSegment(
-                      value: ThemeMode.light,
-                      label: Text('浅色'),
-                      icon: Icon(Icons.light_mode),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.dark,
-                      label: Text('深色'),
-                      icon: Icon(Icons.dark_mode),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.system,
-                      label: Text('跟随系统'),
-                      icon: Icon(Icons.brightness_auto),
-                    ),
-                  ],
-                  selected: {_themeMode},
-                  onSelectionChanged: (modes) {
-                    final mode = modes.first;
-                    setState(() {
-                      _themeMode = mode;
-                    });
-                    context.read<ThemeProvider>().setThemeMode(mode);
-                    _settingsRepository.setThemeMode(mode);
-                  },
+              Expanded(
+                child: Text(
+                  '主题模式',
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
               ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SegmentedButton<ThemeMode>(
+            segments: const [
+              ButtonSegment(
+                value: ThemeMode.light,
+                label: Text('浅色'),
+                icon: Icon(Icons.light_mode),
+              ),
+              ButtonSegment(
+                value: ThemeMode.dark,
+                label: Text('深色'),
+                icon: Icon(Icons.dark_mode),
+              ),
+              ButtonSegment(
+                value: ThemeMode.system,
+                label: Text('跟随系统'),
+                icon: Icon(Icons.brightness_auto),
+              ),
+            ],
+            selected: {_themeMode},
+            onSelectionChanged: (modes) {
+              final mode = modes.first;
+              setState(() {
+                _themeMode = mode;
+              });
+              context.read<ThemeProvider>().setThemeMode(mode);
+              _settingsRepository.setThemeMode(mode);
+            },
           ),
         ),
         // app全局字体入口：点击弹出三选一面板（系统 / 内置 SimHei / 自定义 TTF）
@@ -714,14 +726,20 @@ class _SettingsPageState extends State<SettingsPage>
           onTap: () => _showFontSourceSheet(themeProvider),
         ),
         // 主题色入口：点击弹出 8 色预设面板。
-        // 系统色开启时用 IgnorePointer 禁用点击（不灰显，色块仍显示当前 effectiveSeedColor）。
+        // 系统主题色 / 封面动态取色开启时用 IgnorePointer 禁用点击
+        // （不灰显，色块仍显示当前 effectiveSeedColor）。
         IgnorePointer(
-          ignoring: themeProvider.useDynamicColor,
+          ignoring:
+              themeProvider.useDynamicColor || themeProvider.useCoverSeedColor,
           child: ListTile(
             leading: const Icon(Icons.palette),
             title: const Text('主题色'),
             subtitle: Text(
-              themeProvider.useDynamicColor ? '跟随系统壁纸取色' : '手动选择种子色',
+              themeProvider.useCoverSeedColor
+                  ? '跟随歌曲封面取色'
+                  : (themeProvider.useDynamicColor
+                      ? '跟随系统壁纸取色'
+                      : '手动选择种子色'),
             ),
             trailing: Container(
               width: 24,
@@ -740,8 +758,19 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: const Text('跟随系统壁纸取色（Android 12+ 莫奈色，HCT 多点量化）'),
           value: _useDynamicColor,
           onChanged: (v) {
+            HapticFeedback.lightImpact();
             setState(() => _useDynamicColor = v);
             context.read<ThemeProvider>().setUseDynamicColor(v);
+          },
+        ),
+        SwitchListTile(
+          title: const Text('封面动态取色'),
+          subtitle: const Text('根据当前播放歌曲封面动态改变主题色（可叠加系统主题色，封面优先）'),
+          value: _useCoverSeedColor,
+          onChanged: (v) {
+            HapticFeedback.lightImpact();
+            setState(() => _useCoverSeedColor = v);
+            context.read<ThemeProvider>().setUseCoverSeedColor(v);
           },
         ),
         // OLED 纯黑开关：light 模式禁用；dark 与 system 可勾选。
@@ -751,74 +780,75 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: const Text('将深色背景改为纯黑（仅深色模式生效，节省 OLED 电量）'),
           value: themeProvider.useOledBlack,
           onChanged: canToggleOled
-              ? (v) => themeProvider.setUseOledBlack(v)
+              ? (v) {
+                  HapticFeedback.lightImpact();
+                  themeProvider.setUseOledBlack(v);
+                }
               : null,
         ),
-        // UI 缩放滑块（滑块 + 说明合并为一行组，避免卡片插入分隔线）
+        const Divider(),
+        // UI 缩放滑块
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Icon(Icons.format_size, color: colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 4,
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 8,
-                        ),
-                      ),
-                      child: Slider(
-                        value: _uiScale,
-                        min: 0.5,
-                        max: 2.0,
-                        divisions: 15,
-                        label: '${_uiScale.toStringAsFixed(1)}x',
-                        onChanged: (v) {
-                          setState(() => _uiScale = v);
-                          HapticFeedback.lightImpact();
-                        },
-                        onChangeEnd: (v) {
-                          context.read<ThemeProvider>().setUiScale(v);
-                        },
-                      ),
+              Icon(Icons.format_size, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 8,
                     ),
                   ),
-                  SizedBox(
-                    width: 40,
-                    child: Text(
-                      '${_uiScale.toStringAsFixed(1)}x',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  child: Slider(
+                    value: _uiScale,
+                    min: 0.5,
+                    max: 2.0,
+                    divisions: 15,
+                    label: '${_uiScale.toStringAsFixed(1)}x',
+                    onChanged: (v) {
+                      setState(() => _uiScale = v);
+                      HapticFeedback.lightImpact();
+                    },
+                    onChangeEnd: (v) {
+                      context.read<ThemeProvider>().setUiScale(v);
+                    },
                   ),
-                ],
+                ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
+              SizedBox(
+                width: 40,
                 child: Text(
-                  '调整全局界面大小（歌词界面不受影响）',
+                  '${_uiScale.toStringAsFixed(1)}x',
+                  textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ],
           ),
         ),
-    ];
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            '调整全局界面大小（歌词界面不受影响）',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   /// 播放页样式 section：播放器风格卡片选择 + 视觉特效开关。
-  List<Widget> _buildPlayerStyleSection(ColorScheme colorScheme) {
-    return [
+  Widget _buildPlayerStyleSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: _buildStyleCards(colorScheme),
@@ -828,6 +858,7 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: const Text('开启后需双击歌词行才能跳转播放位置'),
           value: _lyricDoubleTapToJump,
           onChanged: (v) {
+            HapticFeedback.lightImpact();
             setState(() => _lyricDoubleTapToJump = v);
             context.read<ThemeProvider>().setLyricDoubleTapToJump(v);
           },
@@ -838,6 +869,7 @@ class _SettingsPageState extends State<SettingsPage>
           value: _useArtistPhotoBackground,
           onChanged: !_useAmStylePlayer
               ? (v) {
+                  HapticFeedback.lightImpact();
                   setState(() => _useArtistPhotoBackground = v);
                   context.read<ThemeProvider>().setUseArtistPhotoBackground(v);
                 }
@@ -881,6 +913,7 @@ class _SettingsPageState extends State<SettingsPage>
           value: _useGaussianBlur,
           onChanged: _useAmStylePlayer
               ? (v) {
+                  HapticFeedback.lightImpact();
                   setState(() => _useGaussianBlur = v);
                   LyricPreferences.instance.setUseGaussianBlur(v);
                 }
@@ -892,6 +925,7 @@ class _SettingsPageState extends State<SettingsPage>
           value: _useGlowEffect,
           onChanged: _useAmStylePlayer
               ? (v) {
+                  HapticFeedback.lightImpact();
                   setState(() => _useGlowEffect = v);
                   LyricPreferences.instance.setUseGlowEffect(v);
                 }
@@ -903,6 +937,7 @@ class _SettingsPageState extends State<SettingsPage>
           value: _useFlowingBackground,
           onChanged: _useAmStylePlayer
               ? (v) {
+                  HapticFeedback.lightImpact();
                   setState(() => _useFlowingBackground = v);
                   LyricPreferences.instance.setUseFlowingBackground(v);
                 }
@@ -914,6 +949,7 @@ class _SettingsPageState extends State<SettingsPage>
           value: _useDuetLayout,
           onChanged: _useAmStylePlayer
               ? (v) {
+                  HapticFeedback.lightImpact();
                   setState(() => _useDuetLayout = v);
                   LyricPreferences.instance.setUseDuetLayout(v);
                 }
@@ -1097,7 +1133,8 @@ class _SettingsPageState extends State<SettingsPage>
             trailing: Text('${(_spectrumBgHeight * 100).round()}%'),
           ),
         ],
-    ];
+      ],
+    );
   }
 
   /// 弹出 8 色预设种子色选择面板。
@@ -1250,8 +1287,9 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  List<Widget> _buildPlaybackSection(ColorScheme colorScheme) {
-    return [
+  Widget _buildPlaybackSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
         ListTile(
           title: const Text('默认音质'),
           subtitle: Text(_getQualityLabel(_defaultQuality)),
@@ -1286,6 +1324,7 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: const Text('每次启动自动领取每日VIP（需要登录）'),
           value: _autoReceiveVip,
           onChanged: (value) {
+            HapticFeedback.lightImpact();
             setState(() {
               _autoReceiveVip = value;
             });
@@ -1297,6 +1336,7 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: const Text('暂停/播放时音量平滑过渡，避免突然出声'),
           value: _pauseFadeEnabled,
           onChanged: (value) {
+            HapticFeedback.lightImpact();
             setState(() {
               _pauseFadeEnabled = value;
             });
@@ -1308,6 +1348,7 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: const Text('播放歌曲或 MV 时屏幕不会自动息屏'),
           value: _keepScreenOn,
           onChanged: (value) {
+            HapticFeedback.lightImpact();
             setState(() {
               _keepScreenOn = value;
             });
@@ -1329,12 +1370,14 @@ class _SettingsPageState extends State<SettingsPage>
             _settingsRepository.setMiniPlayerSwipeSwitchEnabled(value);
           },
         ),
-    ];
+      ],
+    );
   }
 
   /// 主页管理 section：Tab 显示/隐藏开关 + 拖拽排序
-  List<Widget> _buildTabManagementSection(ColorScheme colorScheme) {
-    return [
+  Widget _buildTabManagementSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
         ListTile(
           leading: const Icon(Icons.tab),
           title: const Text('主页 Tab 管理'),
@@ -1342,7 +1385,8 @@ class _SettingsPageState extends State<SettingsPage>
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: () => _showTabManagementSheet(),
         ),
-    ];
+      ],
+    );
   }
 
   /// 弹出 Tab 管理面板：支持拖拽排序 + 显示/隐藏开关。
@@ -1355,53 +1399,49 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  List<Widget> _buildOnlineMusicSection(ColorScheme colorScheme) {
-    return [
-        // 本地数据接口（单元格 + 说明合并为一行组，避免插入分隔线）
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ListTile(
-              leading: Icon(Icons.dns, color: colorScheme.primary),
-              title: const Text('本地数据接口'),
-              subtitle: Text('端口：${KugouApiServer.currentPort}'),
-              trailing: _isRestarting
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: colorScheme.primary,
-                      ),
-                    )
-                  : Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '运行中',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onPrimaryContainer,
-                        ),
-                      ),
+
+  Widget _buildOnlineMusicSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(Icons.dns, color: colorScheme.primary),
+          title: const Text('本地数据接口'),
+          subtitle: Text('端口：${KugouApiServer.currentPort}'),
+          trailing: _isRestarting
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                  ),
+                )
+              : Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '运行中',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onPrimaryContainer,
                     ),
-              onTap: _isRestarting ? null : _confirmRestartServer,
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
-              child: Text(
-                '本地 Rust 服务器运行中，推荐/排行/搜索/播放/登录等数据接口均通过本地处理（点击上方可重启）',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-            ),
-          ],
+          onTap: _isRestarting ? null : _confirmRestartServer,
         ),
-    ];
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            '本地 Rust 服务器运行中，推荐/排行/搜索/播放/登录等数据接口均通过本地处理（点击上方可重启）',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   /// 询问是否重启本地 API 服务器，确认后重启并更新端口展示。
@@ -1453,8 +1493,9 @@ class _SettingsPageState extends State<SettingsPage>
     }
   }
 
-  List<Widget> _buildCacheSection(ColorScheme colorScheme) {
-    return [
+  Widget _buildCacheSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
         ListTile(
           title: const Text('清除缓存'),
           leading: Icon(Icons.delete_outline, color: colorScheme.error),
@@ -1466,7 +1507,8 @@ class _SettingsPageState extends State<SettingsPage>
           leading: Icon(Icons.bug_report, color: colorScheme.tertiary),
           onTap: () => _showDataMigrationDialog(),
         ),
-    ];
+      ],
+    );
   }
 
   Future<void> _showDataMigrationDialog() async {
@@ -1530,8 +1572,9 @@ class _SettingsPageState extends State<SettingsPage>
     }
   }
 
-  List<Widget> _buildAboutSection(ColorScheme colorScheme) {
-    return [
+  Widget _buildAboutSection(ColorScheme colorScheme) {
+    return Column(
+      children: [
         ListTile(
           title: const Text('新手教程'),
           subtitle: const Text('重新查看功能引导'),
@@ -1592,16 +1635,6 @@ class _SettingsPageState extends State<SettingsPage>
             );
           },
         ),
-        ListTile(
-          title: const Text('本应用许可证'),
-          subtitle: const Text('GNU AGPL-3.0'),
-          leading: const Icon(Icons.balance_outlined),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LicenseViewPage()),
-            );
-          },
-        ),
         // 开发者入口：跳转 Apple Music 风格歌词渲染预览页（Task 22.5）
         ListTile(
           title: const Text('歌词预览（开发）'),
@@ -1613,7 +1646,8 @@ class _SettingsPageState extends State<SettingsPage>
             );
           },
         ),
-    ];
+      ],
+    );
   }
 
   Future<void> _openReleasesUrl() async {
@@ -1629,8 +1663,7 @@ class _SettingsPageState extends State<SettingsPage>
       case 'standard':
       case '128':
         return '标准 128k';
-      case '320':
-      case 'hq': // 兼容早期版本遗留的 'hq' 存储值
+      case 'hq':
         return '高品质 320k';
       case 'sq':
       case 'flac':
@@ -1646,7 +1679,7 @@ class _SettingsPageState extends State<SettingsPage>
   void _showQualityDialog() {
     final qualities = [
       ('128', '标准 128k'),
-      ('320', '高品质 320k'),
+      ('hq', '高品质 320k'),
       ('flac', '无损 FLAC'),
       ('high', 'Hi-Res 无损'),
     ];
@@ -1760,6 +1793,7 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: 'Material 3 风格',
           isSelected: !_useAmStylePlayer,
           onTap: () {
+            HapticFeedback.lightImpact();
             setState(() => _useAmStylePlayer = false);
             context.read<ThemeProvider>().setUseAmStylePlayer(false);
           },
@@ -1772,6 +1806,7 @@ class _SettingsPageState extends State<SettingsPage>
           subtitle: '模糊封面 + 逐字歌词',
           isSelected: _useAmStylePlayer,
           onTap: () {
+            HapticFeedback.lightImpact();
             setState(() => _useAmStylePlayer = true);
             context.read<ThemeProvider>().setUseAmStylePlayer(true);
           },
@@ -1862,7 +1897,7 @@ class _TabManagementPanel extends StatelessWidget {
 
     return SafeArea(
       child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.6,
+        height: MediaQuery.sizeOf(context).height * 0.85,
         child: Column(
           children: [
             Padding(
@@ -1932,6 +1967,7 @@ class _TabManagementPanel extends StatelessWidget {
                           Switch(
                             value: !isHidden,
                             onChanged: (_) {
+                              HapticFeedback.lightImpact();
                               tabConfig.toggleTabVisibility(tab.id);
                             },
                           ),
@@ -1954,6 +1990,9 @@ class _TabManagementPanel extends StatelessWidget {
 
   IconData _getTabIcon(String tabId) {
     switch (tabId) {
+      case 'launchpad':
+        // 与主页 tab 图标保持一致（见 app.dart 的 launchpad case）
+        return Icons.grid_view;
       case 'discover':
         return Icons.explore;
       case 'coverflow':
@@ -1969,8 +2008,21 @@ class _TabManagementPanel extends StatelessWidget {
         return Icons.search;
       case 'charts':
         return Icons.leaderboard;
+      case 'ip':
+        return Icons.edit_note;
       case 'recognition':
         return Icons.mic;
+      case 'audiobook':
+        return Icons.auto_stories;
+      case 'scene':
+        // 与主页 tab 图标保持一致（见 app.dart 的 scene case）
+        return Icons.landscape;
+      case 'channel':
+        // 与主页 tab 图标保持一致（见 app.dart 的 channel case）
+        return Icons.dynamic_feed;
+      case 'settings':
+        // 与主页 tab 图标保持一致（见 app.dart 的 settings case）
+        return Icons.settings;
       case 'user':
         return Icons.person;
       default:

@@ -20,7 +20,6 @@ import '../../core/utils/artwork_color_extractor.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/settings_repository.dart';
-import '../../services/kugou_api/kugou_models.dart';
 import '../album/album_detail_page.dart';
 import '../artist/artist_detail_page.dart';
 import '../coverflow/coverflow_page.dart';
@@ -34,6 +33,8 @@ import '../../providers/local_favorites_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/comment_display_provider.dart';
+import '../../services/kugou_api/kugou_api_client.dart';
+import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/apple_lyrics/apple_lyrics_view.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences_panel.dart';
@@ -41,12 +42,12 @@ import '../../widgets/flowing_background.dart';
 import 'package:md3music/widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
 import '../../widgets/md3e_loading_indicator.dart';
-import '../../services/kugou_api/kugou_api_client.dart';
+import '../../widgets/ai_recommend_sheet.dart';
 import '../../widgets/player_artwork_image.dart';
 import '../../widgets/spectrum_artwork.dart';
 import '../../widgets/spectrum_background.dart';
 import '../../utils/landscape_immersive.dart';
-import '../../widgets/player_playlist_dialog.dart';
+import '../../widgets/player_playlist_view.dart';
 import 'comments_view.dart';
 import 'dlna_cast_sheet.dart';
 import 'full_player_route.dart';
@@ -105,13 +106,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   // 桌面歌词状态监听：长按歌词按钮 toggle 后同步 icon
   late final VoidCallback _onDesktopLyricChanged;
 
-  // 动态字体颜色：从专辑封面提取的主色（歌词当前行「85% 白 + 15% 提取色」混色用）
+  // 动态字体颜色：从专辑封面提取的主色（歌词当前行「70% 白 + 30% 提取色」混色用）
   Color? _lyricAccentColor;
   String? _lastAccentUrl;
 
   // Pad 模式：左侧已有封面，隐藏"封面"Tab，只保留 2 个 Tab
   bool _isPadMode = false;
-  int _currentTabLength = 3;
+  int _currentTabLength = 4;
   // 手机横屏模式：保留封面Tab，但隐藏左侧歌曲信息
   bool _isPhoneLandscape = false;
 
@@ -132,6 +133,18 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   /// PlayerDragOverlay 渲染，无 ModalRoute；系统栏与收起行为需走覆盖层逻辑。
   bool get _isDragOverlay =>
       ModalRoute.of(context) == null && playerDragActive.value;
+
+  /// 是否已修改过系统栏（沉浸模式）。
+  /// 覆盖层（非路由）场景从未修改，dispose 时无需恢复系统栏。
+  bool _systemUiModified = false;
+
+  // ── 顶栏向下拖拽收起状态（与上滑展开镜像） ──
+  DraggablePlayerRoute? _topBarDragRoute; // 正在拖拽的路由
+  double _topBarDragDistance = 0.0; // 向下累计距离（px，≥0）
+  double _topBarDragTotal = 0.0; // 完整收起距离（px）
+  double? _topBarDragLastY; // 上次 Y（速度估计用）
+  Duration? _topBarDragLastTime;
+  double _topBarDragVelocity = 0.0; // 向下速度 px/s
 
   /// 上次的物理尺寸，用于 didChangeMetrics 方向变化防抖。
   /// 避免 immersiveSticky 下用户触摸边缘唤醒系统栏等 insets 抖动
@@ -185,7 +198,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _tabController = TabController(length: 3, vsync: this);
+    // 默认停在专辑 tab（index 1，播放列表 tab 在左侧）
+    _tabController = TabController(length: 4, vsync: this, initialIndex: 1);
     // 桌面歌词状态变化时刷新 UI（同步歌词按钮 icon）
     _onDesktopLyricChanged = () {
       if (mounted) setState(() {});
@@ -246,7 +260,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       _spectrumDynamicColor = dynamicColor;
     });
     if (enabled) {
-      SpectrumService.instance.simulatedNotifier.addListener(_onSpectrumSimulated);
+      SpectrumService.instance.simulatedNotifier.addListener(
+        _onSpectrumSimulated,
+      );
       if (_isDragOverlay) {
         // 拖拽覆盖层（非路由）：只显示频谱 UI、不启动服务。
         // 覆盖层销毁时会 dispose 并调用 _stopSpectrum（全局 stop），
@@ -304,9 +320,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       }
       final isPlaying = context.read<PlayerProvider>().isPlaying;
       await _tryStartSpectrum(isPlaying: isPlaying);
-      SpectrumService.instance.simulatedNotifier.addListener(_onSpectrumSimulated);
+      SpectrumService.instance.simulatedNotifier.addListener(
+        _onSpectrumSimulated,
+      );
     } else {
-      SpectrumService.instance.simulatedNotifier.removeListener(_onSpectrumSimulated);
+      SpectrumService.instance.simulatedNotifier.removeListener(
+        _onSpectrumSimulated,
+      );
       await _stopSpectrum();
     }
   }
@@ -333,15 +353,15 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     final shouldBePadMode = deviceIsPad || width >= 600;
     // 手机横屏：宽度 >= 600 但设备不是 Pad
     final shouldBePhoneLandscape = !deviceIsPad && width >= 600;
-    // 与手机端统一：3 个 tab（封面 / 歌词 / 评论），ActionBar 按钮索引对齐
-    const newTabLength = 3;
+    // 与手机端统一：4 个 tab（播放列表 / 封面 / 歌词 / 评论），ActionBar 按钮索引对齐
+    const newTabLength = 4;
 
-    // Pad 模式首次进入（从非 pad → pad 且当前停在默认封面 index 0）
-    // 时直接跳到歌词（index 1），无需重建 TabController。
-    // 避免每次从 miniplayer 点开都停在封面 tab。
+    // Pad 模式首次进入（从非 pad → pad 且当前停在默认专辑 index 1）
+    // 时直接跳到歌词（index 2），无需重建 TabController。
+    // 避免每次从 miniplayer 点开都停在专辑 tab。
     // 后续用户手动切换 tab 后保留用户当前选择。
-    if (shouldBePadMode && !_isPadMode && _tabController.index == 0) {
-      _tabController.index = 1;
+    if (shouldBePadMode && !_isPadMode && _tabController.index == 1) {
+      _tabController.index = 2;
     }
 
     if (_currentTabLength != newTabLength) {
@@ -372,15 +392,20 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     // 不能在 initState 中调用，否则报 dependOnInheritedWidgetOfExactType 错误
     if (_systemUiInitialized) return;
     _systemUiInitialized = true;
-    // 进入播放器时根据当前方向应用沉浸模式；
-    // 拖拽展开模式下延迟到展开完成后再切换，避免拖动过程系统栏提前闪烁
     final route = ModalRoute.of(context);
     if (route is DraggablePlayerRoute && route.isDragMode) {
+      // 拖拽路由：延迟到展开完成后再切换沉浸，避免拖动过程系统栏提前闪烁
       _dragRoute = route;
       route.controller.addStatusListener(_onDragRouteStatus);
+    } else if (route == null) {
+      // 拖拽覆盖层（非路由）：不切换系统栏，展开后由路由接管
+      _dragRoute = null;
+      _systemUiModified = false;
     } else {
+      // 点击打开 / 普通路由：立即应用沉浸模式
       _dragRoute = null;
       applyImmersiveForOrientation();
+      _systemUiModified = true;
     }
   }
 
@@ -462,14 +487,19 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     _zenController.dispose();
     _tabController.dispose();
     // 退出播放器时停止频谱采集
-    SpectrumService.instance.simulatedNotifier.removeListener(_onSpectrumSimulated);
+    SpectrumService.instance.simulatedNotifier.removeListener(
+      _onSpectrumSimulated,
+    );
     _stopSpectrum();
     // 退出播放器时恢复系统栏；若仍处于封面流页横屏沉浸（从封面流进入播放器后返回），
     // 则保持沉浸，避免返回后状态栏闪现。
-    if (kCoverFlowImmersiveActive.value) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    } else {
-      restoreSystemUi();
+    // 拖拽覆盖层（非路由）从未修改系统栏，无需恢复
+    if (_systemUiModified) {
+      if (kCoverFlowImmersiveActive.value) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      } else {
+        restoreSystemUi();
+      }
     }
     super.dispose();
   }
@@ -497,10 +527,14 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   void _onArtworkLongPressStart() {
     if (!_zenMode) return;
     _zenLongPressActive = true;
+    // 轻震：提示用户已开始长按倒计时
+    HapticFeedback.lightImpact();
     setState(() {}); // 触发文字提示显示
     _zenLongPressTimer = Timer(const Duration(milliseconds: 2000), () {
       if (_zenLongPressActive && _zenMode) {
         _zenLongPressActive = false;
+        // 中震：确认长按达到 2000ms，Zen 模式退出
+        HapticFeedback.mediumImpact();
         _exitZenMode();
       }
     });
@@ -516,26 +550,30 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   }
 
   /// Zen 模式长按退出提示层：覆盖在封面上，半透明黑色背景 + 文字提示。
-  /// 仅在长按激活时显示，IgnorePointer 避免拦截指针事件。
+  /// 通过 AnimatedOpacity 淡入淡出（200ms），IgnorePointer 避免拦截指针事件。
   Widget _buildZenLongPressHint() {
-    if (!_zenLongPressActive) return const SizedBox.shrink();
     return Positioned.fill(
       child: IgnorePointer(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.6),
-            alignment: Alignment.center,
-            child: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.exit_to_app, color: Colors.white, size: 32),
-                SizedBox(height: 8),
-                Text(
-                  '继续长按退出 Zen 模式',
-                  style: TextStyle(color: Colors.white, fontSize: 14),
-                ),
-              ],
+        child: AnimatedOpacity(
+          opacity: _zenLongPressActive ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.6),
+              alignment: Alignment.center,
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.exit_to_app, color: Colors.white, size: 32),
+                  SizedBox(height: 8),
+                  Text(
+                    '继续长按退出 Zen 模式',
+                    style: TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -550,7 +588,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   Future<void> _updateLyricAccent(String? url) async {
     // 仅歌词动态取色或频谱动态取色任一开启时才需要提取（默认关闭，避免每次
     // 进播放器都多一次封面下载 + 解码 + PaletteGenerator 分析的无谓开销）
-    if (!LyricPreferences.instance.useDynamicLyricColor && !_spectrumDynamicColor) {
+    if (!LyricPreferences.instance.useDynamicLyricColor &&
+        !_spectrumDynamicColor) {
       return;
     }
     if (url == _lastAccentUrl) return;
@@ -564,7 +603,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   /// 开关时，立即为当前歌曲补提取封面主色（首次打开时 _fetchLyrics 的提取
   /// 因开关关闭已被跳过）。
   void _onLyricPrefsChanged() {
-    if ((LyricPreferences.instance.useDynamicLyricColor || _spectrumDynamicColor) &&
+    if ((LyricPreferences.instance.useDynamicLyricColor ||
+            _spectrumDynamicColor) &&
         _lyricAccentColor == null &&
         mounted) {
       final song = context.read<PlayerProvider>().currentSong;
@@ -692,10 +732,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Selector<PlayerProvider, (String?, String?)>(
-        selector: (_, p) => (
-          p.currentSong?.artworkUri,
-          p.currentSong?.localPath,
-        ),
+        selector: (_, p) =>
+            (p.currentSong?.artworkUri, p.currentSong?.localPath),
         builder: (context, data, __) => _buildCrossfadeArtwork(
           data.$1,
           colorScheme,
@@ -823,8 +861,105 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     if (route is DraggablePlayerRoute) {
       _isDismissing = true;
       route.dismiss();
+    } else if (route == null) {
+      // 拖拽覆盖层（非路由）：收起覆盖层，回到 MiniPlayer
+      _isDismissing = true;
+      playerDragActive.value = false;
+      playerExpansion.value = 0.0;
     } else {
       Navigator.of(context).maybePop();
+    }
+  }
+
+  // ── 顶栏向下拖拽原路返回（与上滑展开镜像） ──
+
+  /// 顶栏向下拖拽开始：接管路由 controller（路由已存在，无 push 事件流风险）。
+  void _onTopBarDragStart(DragStartDetails details) {
+    final route = ModalRoute.of(context);
+    if (route is! DraggablePlayerRoute) return;
+    _topBarDragRoute = route;
+    // 停掉可能仍在进行的松手动画、重置 dismiss 标志，并从全屏开始拖拽：
+    // 1) 修复连续拖拽不跟手（手指已移动一段才收到首个 update，若不停动画
+    //    播放页会从动画中的位置跳变到拖拽位置）；
+    // 2) 修复上一次 dismiss 动画中再拖拽时 _isDismissing=true 残留，
+    //    导致松手 settleToFull 被吞掉、动画状态错乱。
+    route.beginDrag();
+    route.controller.value = 1.0;
+    // 完整收起距离：拖拽模式用 MiniPlayer 顶端；tap 模式（点击进入）用全局
+    // 记录的 MiniPlayer 顶端，让播放页沿「展开路径」原路下滑（1:1 跟手）
+    final total = route.dragOriginTop ?? playerDragOriginTop;
+    _topBarDragTotal = total > 0 ? total : MediaQuery.sizeOf(context).height;
+    route.topBarDragging = true;
+    route.topBarDragTotal = _topBarDragTotal;
+    _topBarDragDistance = 0.0;
+    _topBarDragLastY = details.globalPosition.dy;
+    _topBarDragLastTime = null;
+    _topBarDragVelocity = 0.0;
+  }
+
+  /// 顶栏向下拖拽：播放页跟随手指原路下滑（向下为正，向上忽略）。
+  void _onTopBarDragUpdate(DragUpdateDetails details) {
+    final route = _topBarDragRoute;
+    if (route == null) return;
+    _topBarDragDistance = (_topBarDragDistance + details.delta.dy).clamp(
+      0.0,
+      double.infinity,
+    );
+    // 速度估计（按事件时间戳差分，向下为正）
+    final ts = details.sourceTimeStamp;
+    if (ts != null && _topBarDragLastTime != null && _topBarDragLastY != null) {
+      final dt = (ts - _topBarDragLastTime!).inMicroseconds / 1e6;
+      if (dt > 0) {
+        _topBarDragVelocity =
+            (details.globalPosition.dy - _topBarDragLastY!) / dt;
+      }
+    }
+    _topBarDragLastY = details.globalPosition.dy;
+    _topBarDragLastTime = ts;
+    // 完整收起距离 = MiniPlayer 顶端（与展开镜像）；value 从 1（全屏）→ 0（MiniPlayer）
+    final total = _topBarDragTotal;
+    if (total <= 0) return;
+    final progress = (1.0 - _topBarDragDistance / total).clamp(0.0, 1.0);
+    route.controller.stop();
+    route.controller.value = progress;
+  }
+
+  /// 顶栏向下拖拽松手：下拉达标（距离/速度）收起，否则弹回全屏。
+  void _onTopBarDragEnd(DragEndDetails details) {
+    final route = _topBarDragRoute;
+    _topBarDragRoute = null;
+    if (route == null) return;
+    route.topBarDragging = false;
+    // 注意：不在此处清空 topBarDragTotal —— 松手动画（dismiss/settleToFull）
+    // 期间保持「原路返回映射」，由 settleToFull 在动画完成时恢复；dismiss 则
+    // 随路由销毁。避免映射切换导致播放页跳变、出现「两次下滑动画」
+    final threshold =
+        MediaQuery.sizeOf(context).height * kPlayerExpandDistanceRatio;
+    final downVelocity = details.primaryVelocity ?? _topBarDragVelocity;
+    final collapse =
+        _topBarDragDistance >= threshold ||
+        downVelocity > kPlayerFlingVelocityThreshold;
+    // ignore: avoid_print
+    print(
+      '[TopBar] end dist=$_topBarDragDistance thr=$threshold vel=$downVelocity collapse=$collapse v=${route.controller.value}',
+    );
+    if (collapse) {
+      route.dismiss(); // 原路返回：reverse 到 0 + removeRoute
+    } else {
+      route.settleToFull(); // 弹回全屏
+    }
+  }
+
+  /// 顶栏拖拽被系统取消（来电/手势中断等）：停在半途时弹回全屏，防御状态残留。
+  void _onTopBarDragCancel() {
+    final route = _topBarDragRoute;
+    _topBarDragRoute = null;
+    if (route == null) return;
+    route.topBarDragging = false;
+    if (route.controller.value < 1.0) {
+      route.settleToFull(); // 弹回动画结束时由路由恢复映射
+    } else {
+      route.topBarDragTotal = null; // 没拖，直接恢复原映射
     }
   }
 
@@ -832,6 +967,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   void _onDragRouteStatus(AnimationStatus status) {
     if (status != AnimationStatus.completed) return;
     applyImmersiveForOrientation();
+    _systemUiModified = true;
     _dragRoute?.controller.removeStatusListener(_onDragRouteStatus);
     _dragRoute = null;
     if (mounted) setState(() {});
@@ -1100,6 +1236,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     // 拖拽展开模式下系统栏样式跟随展开进度，避免拖动过程提前切换（见 PlayerSystemUiScope）
     return PlayerSystemUiScope(
       dragRoute: _dragRoute,
+      // 拖拽覆盖层（非路由）期间系统栏恒为主页面样式
+      forceMainStyle: _isDragOverlay,
       child: Scaffold(
         backgroundColor: Colors.black,
         extendBody: true,
@@ -1183,8 +1321,10 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             child: TabBarView(
               controller: _tabController,
               children: [
+                // 播放列表面板（index 0，专辑封面 tab 左侧）
+                const PlayerPlaylistView(useDisplayName: true),
                 GestureDetector(
-                  onTap: () => _tabController.animateTo(1),
+                  onTap: () => _tabController.animateTo(2),
                   behavior: HitTestBehavior.opaque,
                   // Selector 让 _buildArtworkView 仅在 currentSong / isPlaying 变化时重建，
                   // 不再每 200ms 因 position 变化重建（封面 AnimatedScale 是隐式动画，需要 isPlaying 触发）
@@ -1204,7 +1344,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                       ),
                 ),
                 GestureDetector(
-                  onTap: () => _tabController.animateTo(0),
+                  onTap: () => _tabController.animateTo(1),
                   behavior: HitTestBehavior.translucent,
                   // RepaintBoundary 隔离 AppleLyricsView 每帧 setState 的重绘范围，
                   // 避免父级 TabBarView/Column 被牵连重建
@@ -1214,12 +1354,22 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                         ? const Center(
                             child: MD3ELoadingIndicator(color: Colors.white),
                           )
-                        // 优化：用 positionNotifier 只重建歌词视图，避免整页/全局随进度重建
-                        : ValueListenableBuilder<Duration>(
-                            valueListenable: playerProvider.positionNotifier,
-                            builder: (context, pos, _) => AppleLyricsView(
+                        // P0: 用 ListenableBuilder 同时订阅 positionNotifier（高频 200ms）
+                        // 与 playerProvider（播放/暂停切换等低频通知）。
+                        // 修复：暂停后 positionStream 只发相同值 → ValueNotifier 不通知 →
+                        // AppleLyricsView 的 isPlaying 停留旧值 → 内部 Ticker 永不收敛停止 → 120fps。
+                        // 监听 provider 后，暂停瞬间 notifyListeners → 重建 → isPlaying 更新。
+                        : ListenableBuilder(
+                            listenable: Listenable.merge([
+                              playerProvider.positionNotifier,
+                              playerProvider,
+                            ]),
+                            builder: (context, _) => AppleLyricsView(
                               lines: _parsedLyrics,
-                              currentTimeMs: pos.inMilliseconds,
+                              currentTimeMs: playerProvider
+                                  .positionNotifier
+                                  .value
+                                  .inMilliseconds,
                               isPlaying: playerProvider.isPlaying,
                               forceDarkBackground: true,
                               // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
@@ -1324,12 +1474,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                       children: [
                                         AnimatedScale(
                                           // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
-                                          scale: _spectrumEnabled &&
+                                          scale:
+                                              _spectrumEnabled &&
                                                   _spectrumStyle < 2
                                               ? 1.0
                                               : (playerProvider.isPlaying
-                                                  ? 1.0
-                                                  : 0.85),
+                                                    ? 1.0
+                                                    : 0.85),
                                           duration: const Duration(
                                             milliseconds: 500,
                                           ),
@@ -1413,12 +1564,14 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   flex: 6,
                   child: Column(
                     children: [
-                      // 内容区（歌词 / 评论 / 封面信息）
-                      // 与手机端统一：3 个 tab（封面 / 歌词 / 评论），ActionBar 按钮索引对齐
+                      // 内容区（播放列表 / 封面信息 / 歌词 / 评论）
+                      // 与手机端统一：4 个 tab，ActionBar 按钮索引对齐
                       Expanded(
                         child: TabBarView(
                           controller: _tabController,
                           children: [
+                            // 播放列表面板（index 0，封面信息 tab 左侧）
+                            const PlayerPlaylistView(useDisplayName: true),
                             Selector<PlayerProvider, String?>(
                               selector: (_, p) => p.currentSong?.id,
                               builder: (context, songId, __) {
@@ -1440,27 +1593,33 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                     ),
                                   )
                                 : RepaintBoundary(
-                                    // 优化：用 positionNotifier 只重建歌词视图
-                                    child: ValueListenableBuilder<Duration>(
-                                      valueListenable:
-                                          playerProvider.positionNotifier,
-                                      builder: (context, pos, _) =>
-                                          AppleLyricsView(
-                                            lines: _parsedLyrics,
-                                            currentTimeMs: pos.inMilliseconds,
-                                            isPlaying: playerProvider.isPlaying,
-                                            forceDarkBackground: true,
-                                            // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
-                                            enableInterludeDots:
-                                                !_isLocalLrcLyricWithoutWordTiming(
-                                                  currentSong,
-                                                ),
-                                            doubleTapToJump: lyricDoubleTap,
-                                            accentColor: _lyricAccentColor,
-                                            onSeek: (ms) => playerProvider.seek(
-                                              Duration(milliseconds: ms),
+                                    // P0: ListenableBuilder 同时订阅 positionNotifier（高频 200ms）
+                                    // 与 playerProvider（播放/暂停切换低频通知），保证暂停时
+                                    // AppleLyricsView 的 isPlaying 更新、Ticker 收敛后停止
+                                    child: ListenableBuilder(
+                                      listenable: Listenable.merge([
+                                        playerProvider.positionNotifier,
+                                        playerProvider,
+                                      ]),
+                                      builder: (context, _) => AppleLyricsView(
+                                        lines: _parsedLyrics,
+                                        currentTimeMs: playerProvider
+                                            .positionNotifier
+                                            .value
+                                            .inMilliseconds,
+                                        isPlaying: playerProvider.isPlaying,
+                                        forceDarkBackground: true,
+                                        // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
+                                        enableInterludeDots:
+                                            !_isLocalLrcLyricWithoutWordTiming(
+                                              currentSong,
                                             ),
-                                          ),
+                                        doubleTapToJump: lyricDoubleTap,
+                                        accentColor: _lyricAccentColor,
+                                        onSeek: (ms) => playerProvider.seek(
+                                          Duration(milliseconds: ms),
+                                        ),
+                                      ),
                                     ),
                                   ),
                             // Selector 让 CommentsView 仅在切歌时重建（脱离 200ms 通知路径）
@@ -1563,21 +1722,23 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                         children: [
                                           AnimatedScale(
                                             // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
-                                            scale: _spectrumEnabled &&
+                                            scale:
+                                                _spectrumEnabled &&
                                                     _spectrumStyle < 2
                                                 ? 1.0
                                                 : (playerProvider.isPlaying
-                                                    ? 1.0
-                                                    : 0.85),
+                                                      ? 1.0
+                                                      : 0.85),
                                             duration: const Duration(
                                               milliseconds: 500,
                                             ),
                                             curve: Curves.easeOutBack,
-                                            child: _buildLandscapeArtworkContent(
-                                              playerProvider,
-                                              currentSong,
-                                              colorScheme,
-                                            ),
+                                            child:
+                                                _buildLandscapeArtworkContent(
+                                                  playerProvider,
+                                                  currentSong,
+                                                  colorScheme,
+                                                ),
                                           ),
                                           _buildZenLongPressHint(),
                                         ],
@@ -1656,7 +1817,9 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                         child: TabBarView(
                           controller: _tabController,
                           children: [
-                            // 与手机端统一：3 个 tab（封面 / 歌词 / 评论），
+                            // 播放列表面板（index 0，封面信息 tab 左侧）
+                            const PlayerPlaylistView(useDisplayName: true),
+                            // 与手机端统一：4 个 tab（播放列表 / 封面 / 歌词 / 评论），
                             // ActionBar 按钮 tab 索引对齐。
                             // Pad 模式左侧已有封面，但 ActionBar 仍依赖标准 tab 顺序。
                             Selector<PlayerProvider, String?>(
@@ -1680,27 +1843,33 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                     ),
                                   )
                                 : RepaintBoundary(
-                                    // 优化：用 positionNotifier 只重建歌词视图
-                                    child: ValueListenableBuilder<Duration>(
-                                      valueListenable:
-                                          playerProvider.positionNotifier,
-                                      builder: (context, pos, _) =>
-                                          AppleLyricsView(
-                                            lines: _parsedLyrics,
-                                            currentTimeMs: pos.inMilliseconds,
-                                            isPlaying: playerProvider.isPlaying,
-                                            forceDarkBackground: true,
-                                            // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
-                                            enableInterludeDots:
-                                                !_isLocalLrcLyricWithoutWordTiming(
-                                                  currentSong,
-                                                ),
-                                            doubleTapToJump: lyricDoubleTap,
-                                            accentColor: _lyricAccentColor,
-                                            onSeek: (ms) => playerProvider.seek(
-                                              Duration(milliseconds: ms),
+                                    // P0: ListenableBuilder 同时订阅 positionNotifier（高频 200ms）
+                                    // 与 playerProvider（播放/暂停切换低频通知），保证暂停时
+                                    // AppleLyricsView 的 isPlaying 更新、Ticker 收敛后停止
+                                    child: ListenableBuilder(
+                                      listenable: Listenable.merge([
+                                        playerProvider.positionNotifier,
+                                        playerProvider,
+                                      ]),
+                                      builder: (context, _) => AppleLyricsView(
+                                        lines: _parsedLyrics,
+                                        currentTimeMs: playerProvider
+                                            .positionNotifier
+                                            .value
+                                            .inMilliseconds,
+                                        isPlaying: playerProvider.isPlaying,
+                                        forceDarkBackground: true,
+                                        // 本地歌曲 + LRC 逐行歌词：禁用间奏点（节奏点）
+                                        enableInterludeDots:
+                                            !_isLocalLrcLyricWithoutWordTiming(
+                                              currentSong,
                                             ),
-                                          ),
+                                        doubleTapToJump: lyricDoubleTap,
+                                        accentColor: _lyricAccentColor,
+                                        onSeek: (ms) => playerProvider.seek(
+                                          Duration(milliseconds: ms),
+                                        ),
+                                      ),
                                     ),
                                   ),
                             // Selector 让 CommentsView 仅在切歌时重建（脱离 200ms 通知路径）
@@ -1744,57 +1913,68 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   Widget _buildTopBar(PlayerProvider playerProvider) {
     // AM 风格顶部栏：返回 / 质量徽章 / 菜单分列两侧，无把手、无 TabBar
     // 颜色：白色 + 透明度区分（与 MD 风格的莫奈色对应）
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-            onPressed: _collapseByButton,
-          ),
-          const Spacer(),
-          // AM v2: 顶部栏右侧 FLAC 质量徽章，点击复用 _showQualityDialog，
-          // 长按呼出 _showVolumeDialog（与 MD 风格统一）
-          _buildQualityPill(playerProvider),
-          // 睡眠药丸：用 ListenableBuilder 独立监听，确保每秒走字
-          ListenableBuilder(
-            listenable: playerProvider,
-            builder: (context, _) {
-              if (!playerProvider.isSleepTimerActive) {
-                return const SizedBox.shrink();
-              }
-              return _buildSleepTimerPill(playerProvider);
-            },
-          ),
-          if (playerProvider.currentSong?.isOnline == true)
+    // 整个顶栏支持向下拖拽原路返回（点击按钮仍由子元素处理，竞技场自动区分）
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: _onTopBarDragStart,
+      onVerticalDragUpdate: _onTopBarDragUpdate,
+      onVerticalDragEnd: _onTopBarDragEnd,
+      onVerticalDragCancel: _onTopBarDragCancel,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
             IconButton(
-              icon: const Icon(Icons.music_video_outlined, color: Colors.white),
-              tooltip: '查看 MV',
+              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+              onPressed: _collapseByButton,
+            ),
+            const Spacer(),
+            // AM v2: 顶部栏右侧 FLAC 质量徽章，点击复用 _showQualityDialog，
+            // 长按呼出 _showVolumeDialog（与 MD 风格统一）
+            _buildQualityPill(playerProvider),
+            // 睡眠药丸：用 ListenableBuilder 独立监听，确保每秒走字
+            ListenableBuilder(
+              listenable: playerProvider,
+              builder: (context, _) {
+                if (!playerProvider.isSleepTimerActive) {
+                  return const SizedBox.shrink();
+                }
+                return _buildSleepTimerPill(playerProvider);
+              },
+            ),
+            if (playerProvider.currentSong?.isOnline == true)
+              IconButton(
+                icon: const Icon(
+                  Icons.music_video_outlined,
+                  color: Colors.white,
+                ),
+                tooltip: '查看 MV',
+                onPressed: () {
+                  final song = playerProvider.currentSong;
+                  if (song == null) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => MvPlayerPage(song: song)),
+                  );
+                },
+              ),
+            // 歌曲信息：频率/位深/码率/声道 + USB 独占开关
+            IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.white),
+              tooltip: '歌曲信息',
               onPressed: () {
-                final song = playerProvider.currentSong;
-                if (song == null) return;
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => MvPlayerPage(song: song)),
+                  MaterialPageRoute(builder: (_) => const SongInfoPage()),
                 );
               },
             ),
-          // 歌曲信息：频率/位深/码率/声道 + USB 独占开关
-          IconButton(
-            icon: const Icon(Icons.info_outline, color: Colors.white),
-            tooltip: '歌曲信息',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SongInfoPage()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () => _showMoreMenu(context),
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              onPressed: () => _showMoreMenu(context),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1876,11 +2056,6 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                         ),
                         child: AspectRatio(
                           aspectRatio: 1,
-                          // 专辑封面缩放动画（grill-me 第三轮）：
-                          // 暂停时 scale=0.85，播放时 scale=1.0，带超出回弹效果。
-                          // 用 AnimatedScale + easeOutBack 曲线，overshoot 约 1.7，
-                          // 暂停→播放：1.0 ← 0.85（中间略超 1.05），营造"放大回弹"感
-                          // 播放→暂停：0.85 ← 1.0（中间略低 0.8），营造"缩小回弹"感
                           child: AnimatedScale(
                             // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
                             scale: _spectrumEnabled && _spectrumStyle < 2
@@ -1894,7 +2069,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                     artworkUri: currentSong.artworkUri,
                                     fallbackFilePath: currentSong.localPath,
                                     isPlaying: playerProvider.isPlaying,
-                                    bandCount: SpectrumService.instance.bandCount,
+                                    bandCount:
+                                        SpectrumService.instance.bandCount,
                                     style: _spectrumStyle,
                                     barColor: _spectrumColor,
                                     opacity: _spectrumOpacity,
@@ -2064,12 +2240,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 优化：进度条同时监听 positionNotifier 与 provider 状态，
-          // 只重建进度条本身，避免父级每 200ms position 更新触发整段重建。
+          // P0: 进度条监听 positionNotifier（高频 200ms）+ provider（duration/切歌等低频），
+          // 不再依赖 provider 全量通知更新 position
           ListenableBuilder(
-            listenable: Listenable.merge(
-              [playerProvider, playerProvider.positionNotifier],
-            ),
+            listenable: Listenable.merge([
+              playerProvider.positionNotifier,
+              playerProvider,
+            ]),
             builder: (context, _) => _buildProgressBar(
               playerProvider,
               playerProvider.position,
@@ -2380,10 +2557,14 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   ),
                 ),
               ),
-              // 2. 播放列表 — 弹出播放队列
+              // 2. 播放列表 — 切换到播放列表面板（长按进 Zen 模式）
               Expanded(
                 child: InkWell(
-                  onTap: () => _showPlaylist(playerProvider),
+                  onTap: () {
+                    if (_tabController.index != 0) {
+                      _tabController.animateTo(0);
+                    }
+                  },
                   onLongPress: _enterZenMode,
                   child: Center(
                     child: Icon(
@@ -2394,11 +2575,12 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   ),
                 ),
               ),
+              // 3. 封面 — 短按跳转到封面 tab，长按弹出下载音质选择（本地歌曲屏蔽长按下载）
               Expanded(
                 child: InkWell(
                   onTap: () {
-                    if (_tabController.index != 0) {
-                      _tabController.animateTo(0);
+                    if (_tabController.index != 1) {
+                      _tabController.animateTo(1);
                     }
                   },
                   child: Center(
@@ -2410,8 +2592,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
               Expanded(
                 child: InkWell(
                   onTap: () {
-                    if (_tabController.index != 1) {
-                      _tabController.animateTo(1);
+                    if (_tabController.index != 2) {
+                      _tabController.animateTo(2);
                     }
                   },
                   onLongPress: () async {
@@ -2459,8 +2641,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
               Expanded(
                 child: InkWell(
                   onTap: () {
-                    if (_tabController.index != 2) {
-                      _tabController.animateTo(2);
+                    if (_tabController.index != 3) {
+                      _tabController.animateTo(3);
                     }
                   },
                   child: Center(
@@ -2488,6 +2670,10 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                 .toggleFavorite(song.id);
                           }
                         }
+                      : null,
+                  // 长按：在线歌曲弹出 AI 推荐歌曲面板
+                  onLongPress: song != null && isOnline
+                      ? () => showAiRecommendSheet(context, song)
                       : null,
                   child: Center(
                     child: Icon(
@@ -2569,14 +2755,30 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                       : volume < 0.5
                       ? Icons.volume_down
                       : Icons.volume_up;
+                  final colorScheme = Theme.of(context).colorScheme;
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        icon,
-                        size: 32,
-                        color: Theme.of(context).colorScheme.primary,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '应用音量',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
                       ),
+                      const SizedBox(height: 12),
+                      Icon(icon, size: 32, color: colorScheme.primary),
                       const SizedBox(height: 8),
                       Slider(
                         value: volume,
@@ -2589,6 +2791,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                         '$percent%',
                         style: Theme.of(context).textTheme.labelMedium,
                       ),
+                      const SizedBox(height: 4),
                     ],
                   );
                 },
@@ -2893,6 +3096,17 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                     _showAddToPlaylistDialog(rootContext, song);
                   },
                 ),
+                ListTile(
+                  leading: const Icon(Icons.share),
+                  title: const Text('分享'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    // TODO: 实现分享功能
+                    ScaffoldMessenger.of(
+                      rootContext,
+                    ).showSnackBar(const SnackBar(content: Text('分享功能开发中')));
+                  },
+                ),
                 // 音乐频谱环绕：仅 Android 显示，与 MD 风格一致
                 if (Platform.isAndroid)
                   SwitchListTile(
@@ -2900,8 +3114,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                     subtitle: Text(
                       _spectrumEnabled
                           ? SpectrumService.instance.isSimulated
-                              ? '已开启 · 模拟模式（设备不支持实时频谱）'
-                              : '已开启 · 实时频谱'
+                                ? '已开启 · 模拟模式（设备不支持实时频谱）'
+                                : '已开启 · 实时频谱'
                           : '封面裁圆旋转，频谱环绕跳动',
                     ),
                     value: _spectrumEnabled,
@@ -3514,18 +3728,6 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
         .catchError((_) {
           // 网络错误等，同样静默处理
         });
-  }
-
-  void _showPlaylist(PlayerProvider playerProvider) {
-    // AM 风格播放页：直接复用 PlayerPlaylistDialog（与 MD3 风格统一）
-    // - 圆角 / 背景色 / 拖拽排序 / 左滑删除全部一致
-    // - useDisplayName: true 让标题列显示 displayName（AM 风格习惯）
-    // - playerProvider 参数保留以匹配调用点签名，内部由 Provider.of 获取
-    showDialog(
-      context: context,
-      builder: (dialogContext) =>
-          const PlayerPlaylistDialog(useDisplayName: true),
-    );
   }
 }
 

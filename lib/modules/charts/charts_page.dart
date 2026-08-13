@@ -2,11 +2,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
-import '../../widgets/app_animation.dart';
 import '../../widgets/md3e_loading_indicator.dart';
 import '../../widgets/md3e_refresh_indicator.dart';
 import '../../widgets/pinchable_grid_view.dart';
@@ -45,9 +43,8 @@ class _ChartsPageState extends State<ChartsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
-    final cs = IosColors.scheme(context);
-    final scaffold = Scaffold(
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
       appBar: ScrollAwareAppBar(
         title: '排行榜',
         scrollController: _scrollController,
@@ -67,18 +64,6 @@ class _ChartsPageState extends State<ChartsPage> {
           : _isListMode
           ? _buildRankList(context, cs)
           : _buildRankGrid(context, cs),
-    );
-
-    return Theme(
-      data: baseTheme.copyWith(
-        colorScheme: cs,
-        scaffoldBackgroundColor: IosColors.bg(context),
-        appBarTheme: baseTheme.appBarTheme.copyWith(
-          backgroundColor: IosColors.bg(context),
-          surfaceTintColor: Colors.transparent,
-        ),
-      ),
-      child: scaffold,
     );
   }
 
@@ -122,96 +107,94 @@ class _ChartsPageState extends State<ChartsPage> {
             itemCount: ranks.ranks.length,
             itemBuilder: (context, i) {
               final rank = ranks.ranks[i];
-              return FadeInUp(
-                delayMs: i * 30,
-                animate: false,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: cs.surfaceContainerLow,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(16),
-                    color: cs.surface,
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => _RankSongPage(
-                            rankId: rank.id,
-                            rankName: rank.name,
-                          ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => _RankSongPage(
+                          rankId: rank.id,
+                          rankName: rank.name,
                         ),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          children: [
-                            // 排名徽章
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          // 排名徽章
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: i < 3
+                                  ? cs.primary.withValues(alpha: 0.12)
+                                  : cs.surfaceContainerHighest,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${i + 1}',
+                              style: tt.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
                                 color: i < 3
-                                    ? cs.primary.withValues(alpha: 0.12)
-                                    : cs.surfaceContainerHighest,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                '${i + 1}',
-                                style: tt.labelMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: i < 3
-                                      ? cs.primary
-                                      : cs.onSurfaceVariant,
-                                ),
+                                    ? cs.primary
+                                    : cs.onSurfaceVariant,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            // 封面
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: SizedBox(
-                                width: 52,
-                                height: 52,
-                                child: rank.coverUrl != null
-                                    ? CachedNetworkImage(
-                                        imageUrl: rank.coverUrl!,
-                                        fit: BoxFit.cover,
-                                      )
-                                    : Container(
-                                        color: cs.surfaceContainerHighest,
-                                        child: Icon(
-                                          Icons.album,
-                                          color: cs.onSurfaceVariant,
-                                          size: 24,
-                                        ),
+                          ),
+                          const SizedBox(width: 12),
+                          // 封面
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: rank.coverUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: rank.coverUrl!,
+                                      memCacheWidth: 156,
+                                      memCacheHeight: 156,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Container(
+                                      color: cs.surfaceContainerHighest,
+                                      child: Icon(
+                                        Icons.album,
+                                        color: cs.onSurfaceVariant,
+                                        size: 24,
                                       ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // 标题
+                          Expanded(
+                            child: Text(
+                              rank.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: tt.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            // 标题
-                            Expanded(
-                              child: Text(
-                                rank.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: tt.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              Icons.chevron_right,
-                              color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                              size: 22,
-                            ),
-                          ],
-                        ),
+                          ),
+                          Icon(
+                            Icons.chevron_right,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                            size: 22,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -270,18 +253,14 @@ class _ChartsPageState extends State<ChartsPage> {
             itemCount: ranks.ranks.length,
             itemBuilder: (context, i) {
               final rank = ranks.ranks[i];
-              return FadeInUp(
-                delayMs: i * 30,
-                animate: false,
-                child: _RankGridCard(
-                  name: rank.name,
-                  coverUrl: rank.coverUrl,
-                  songCount: rank.songCount,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          _RankSongPage(rankId: rank.id, rankName: rank.name),
-                    ),
+              return _RankGridCard(
+                name: rank.name,
+                coverUrl: rank.coverUrl,
+                songCount: rank.songCount,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        _RankSongPage(rankId: rank.id, rankName: rank.name),
                   ),
                 ),
               );
@@ -315,7 +294,7 @@ class _RankGridCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: Material(
-        color: colorScheme.surface,
+        color: colorScheme.surfaceContainerLow,
         child: InkWell(
           onTap: onTap,
           child: Column(
@@ -325,6 +304,8 @@ class _RankGridCard extends StatelessWidget {
                 child: coverUrl != null
                     ? CachedNetworkImage(
                         imageUrl: coverUrl!,
+                        memCacheWidth: 540,
+                        memCacheHeight: 540,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         placeholder: (_, _) => _buildPlaceholder(colorScheme),
@@ -391,96 +372,15 @@ class _RankSongPage extends StatefulWidget {
 }
 
 class _RankSongPageState extends State<_RankSongPage> {
-  final List<KugouSongDetail> _songs = [];
-  final ScrollController _scrollController = ScrollController();
-  int _currentPage = 1;
-  bool _hasMore = true;
   bool _isLoading = true;
-  bool _isLoadingMore = false;
-  String? _error;
-  static const int _pageSize = 30;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadFirstPage());
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (_isLoadingMore || !_hasMore) return;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final current = _scrollController.position.pixels;
-    if (maxScroll - current <= 200) {
-      _loadMore();
-    }
-  }
-
-  Future<void> _loadFirstPage() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<KugouProvider>().getRankSongs(rankId: widget.rankId);
+      if (mounted) setState(() => _isLoading = false);
     });
-    try {
-      final apiClient = context.read<KugouProvider>().apiClient;
-      final songs = await apiClient.getRankAudio(
-        rankId: widget.rankId,
-        page: 1,
-        pagesize: _pageSize,
-      );
-      if (!mounted) return;
-      setState(() {
-        _songs.clear();
-        if (songs != null) {
-          _songs.addAll(songs);
-          _hasMore = songs.length >= _pageSize;
-        } else {
-          _error = '获取排行榜歌曲失败';
-          _hasMore = false;
-        }
-        _currentPage = 1;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (_isLoadingMore) return;
-    setState(() => _isLoadingMore = true);
-    try {
-      final apiClient = context.read<KugouProvider>().apiClient;
-      final songs = await apiClient.getRankAudio(
-        rankId: widget.rankId,
-        page: _currentPage + 1,
-        pagesize: _pageSize,
-      );
-      if (!mounted) return;
-      setState(() {
-        if (songs != null && songs.isNotEmpty) {
-          _songs.addAll(songs);
-          _currentPage++;
-          _hasMore = songs.length >= _pageSize;
-        } else {
-          _hasMore = false;
-        }
-        _isLoadingMore = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoadingMore = false);
-    }
   }
 
   @override
@@ -496,82 +396,59 @@ class _RankSongPageState extends State<_RankSongPage> {
       ),
       body: _isLoading
           ? const Center(child: MD3ELoadingIndicator())
-          : _error != null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.music_off,
-                    size: 48,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: tt.titleMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
+          : Selector<KugouProvider, List<KugouSongDetail>>(
+              selector: (_, kugou) => kugou.rankSongs,
+              builder: (context, songs, _) {
+                if (songs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.music_off,
+                          size: 48,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '暂无数据',
+                          style: tt.titleMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.tonal(
+                          onPressed: () async {
+                            setState(() => _isLoading = true);
+                            await context.read<KugouProvider>().getRankSongs(
+                              rankId: widget.rankId,
+                              forceRefresh: true,
+                            );
+                            if (mounted) setState(() => _isLoading = false);
+                          },
+                          child: const Text('重试'),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.tonal(
-                    onPressed: _loadFirstPage,
-                    child: const Text('重试'),
-                  ),
-                ],
-              ),
-            )
-          : _songs.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.music_off,
-                    size: 48,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '暂无数据',
-                    style: tt.titleMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.tonal(
-                    onPressed: _loadFirstPage,
-                    child: const Text('重试'),
-                  ),
-                ],
-              ),
-            )
-          : MD3ERefreshIndicator(
-              onRefresh: _loadFirstPage,
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: _songs.length + (_hasMore ? 1 : 0),
-                itemBuilder: (context, i) {
-                  if (i == _songs.length) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: MD3ELoadingIndicator(size: 20)),
-                    );
-                  }
-                  final song = _songs[i].toSong();
-                  return SongListItem(
-                    song: song,
-                    onTap: () =>
-                        context.read<PlayerProvider>().playOnlinePlaylist(
-                      _songs.map((e) => e.toSong()).toList(),
-                      i,
-                    ),
-                    onMoreTap: () {},
                   );
-                },
-              ),
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: songs.length,
+                  itemBuilder: (context, i) {
+                    final song = songs[i].toSong();
+                    return SongListItem(
+                      song: song,
+                      onTap: () =>
+                          context.read<PlayerProvider>().playOnlinePlaylist(
+                            songs.map((e) => e.toSong()).toList(),
+                            i,
+                          ),
+                      onMoreTap: () {},
+                    );
+                  },
+                );
+              },
             ),
     );
   }

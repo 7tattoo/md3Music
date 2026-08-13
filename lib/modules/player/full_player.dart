@@ -17,9 +17,9 @@ import '../../core/utils/audio_scanner.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/settings_repository.dart';
-import '../../services/kugou_api/kugou_models.dart';
 import '../album/album_detail_page.dart';
 import '../artist/artist_detail_page.dart';
+import '../coverflow/coverflow_page.dart';
 import '../settings/equalizer_settings_page.dart';
 import 'artist_photo_background.dart';
 import 'mv_player_page.dart';
@@ -31,13 +31,15 @@ import '../../providers/local_favorites_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/comment_display_provider.dart';
+import '../../services/kugou_api/kugou_api_client.dart';
+import '../../services/kugou_api/kugou_models.dart';
 import 'comments_view.dart';
 import 'lyrics_view.dart';
 import '../../utils/landscape_immersive.dart';
 import '../../widgets/md3_lyric_preferences_panel.dart';
+import '../../widgets/ai_recommend_sheet.dart';
 import '../../widgets/md3e_loading_indicator.dart';
 import '../../widgets/md3e_transport_row.dart';
-import '../../services/kugou_api/kugou_api_client.dart';
 import '../../widgets/player_artwork_image.dart';
 import '../../widgets/player_playlist_dialog.dart';
 import '../../widgets/spectrum_artwork.dart';
@@ -118,6 +120,18 @@ class _FullPlayerState extends State<FullPlayer>
   bool get _isDragOverlay =>
       ModalRoute.of(context) == null && playerDragActive.value;
 
+  /// 是否已修改过系统栏（沉浸模式）。
+  /// 覆盖层（非路由）场景从未修改，dispose 时无需恢复系统栏。
+  bool _systemUiModified = false;
+
+  // ── 顶栏向下拖拽收起状态（与上滑展开镜像） ──
+  DraggablePlayerRoute? _topBarDragRoute; // 正在拖拽的路由
+  double _topBarDragDistance = 0.0; // 向下累计距离（px，≥0）
+  double _topBarDragTotal = 0.0; // 完整收起距离（px）
+  double? _topBarDragLastY; // 上次 Y（速度估计用）
+  Duration? _topBarDragLastTime;
+  double _topBarDragVelocity = 0.0; // 向下速度 px/s
+
   /// 上次的物理尺寸，用于 didChangeMetrics 方向变化防抖。
   /// 避免 immersiveSticky 下用户触摸边缘唤醒系统栏等 insets 抖动
   /// 引发无效的 applyImmersiveForOrientation 调用导致系统栏闪烁。
@@ -154,8 +168,105 @@ class _FullPlayerState extends State<FullPlayer>
     if (route is DraggablePlayerRoute) {
       _isDismissing = true;
       route.dismiss();
+    } else if (route == null) {
+      // 拖拽覆盖层（非路由）：收起覆盖层，回到 MiniPlayer
+      _isDismissing = true;
+      playerDragActive.value = false;
+      playerExpansion.value = 0.0;
     } else {
       Navigator.of(context).maybePop();
+    }
+  }
+
+  // ── 顶栏向下拖拽原路返回（与上滑展开镜像） ──
+
+  /// 顶栏向下拖拽开始：接管路由 controller（路由已存在，无 push 事件流风险）。
+  void _onTopBarDragStart(DragStartDetails details) {
+    final route = ModalRoute.of(context);
+    if (route is! DraggablePlayerRoute) return;
+    _topBarDragRoute = route;
+    // 停掉可能仍在进行的松手动画、重置 dismiss 标志，并从全屏开始拖拽：
+    // 1) 修复连续拖拽不跟手（手指已移动一段才收到首个 update，若不停动画
+    //    播放页会从动画中的位置跳变到拖拽位置）；
+    // 2) 修复上一次 dismiss 动画中再拖拽时 _isDismissing=true 残留，
+    //    导致松手 settleToFull 被吞掉、动画状态错乱。
+    route.beginDrag();
+    route.controller.value = 1.0;
+    // 完整收起距离：拖拽模式用 MiniPlayer 顶端；tap 模式（点击进入）用全局
+    // 记录的 MiniPlayer 顶端，让播放页沿「展开路径」原路下滑（1:1 跟手）
+    final total = route.dragOriginTop ?? playerDragOriginTop;
+    _topBarDragTotal = total > 0 ? total : MediaQuery.sizeOf(context).height;
+    route.topBarDragging = true;
+    route.topBarDragTotal = _topBarDragTotal;
+    _topBarDragDistance = 0.0;
+    _topBarDragLastY = details.globalPosition.dy;
+    _topBarDragLastTime = null;
+    _topBarDragVelocity = 0.0;
+  }
+
+  /// 顶栏向下拖拽：播放页跟随手指原路下滑（向下为正，向上忽略）。
+  void _onTopBarDragUpdate(DragUpdateDetails details) {
+    final route = _topBarDragRoute;
+    if (route == null) return;
+    _topBarDragDistance = (_topBarDragDistance + details.delta.dy).clamp(
+      0.0,
+      double.infinity,
+    );
+    // 速度估计（按事件时间戳差分，向下为正）
+    final ts = details.sourceTimeStamp;
+    if (ts != null && _topBarDragLastTime != null && _topBarDragLastY != null) {
+      final dt = (ts - _topBarDragLastTime!).inMicroseconds / 1e6;
+      if (dt > 0) {
+        _topBarDragVelocity =
+            (details.globalPosition.dy - _topBarDragLastY!) / dt;
+      }
+    }
+    _topBarDragLastY = details.globalPosition.dy;
+    _topBarDragLastTime = ts;
+    // 完整收起距离 = MiniPlayer 顶端（与展开镜像）；value 从 1（全屏）→ 0（MiniPlayer）
+    final total = _topBarDragTotal;
+    if (total <= 0) return;
+    final progress = (1.0 - _topBarDragDistance / total).clamp(0.0, 1.0);
+    route.controller.stop();
+    route.controller.value = progress;
+  }
+
+  /// 顶栏向下拖拽松手：下拉达标（距离/速度）收起，否则弹回全屏。
+  void _onTopBarDragEnd(DragEndDetails details) {
+    final route = _topBarDragRoute;
+    _topBarDragRoute = null;
+    if (route == null) return;
+    route.topBarDragging = false;
+    // 注意：不在此处清空 topBarDragTotal —— 松手动画（dismiss/settleToFull）
+    // 期间保持「原路返回映射」，由 settleToFull 在动画完成时恢复；dismiss 则
+    // 随路由销毁。避免映射切换导致播放页跳变、出现「两次下滑动画」
+    final threshold =
+        MediaQuery.sizeOf(context).height * kPlayerExpandDistanceRatio;
+    final downVelocity = details.primaryVelocity ?? _topBarDragVelocity;
+    final collapse =
+        _topBarDragDistance >= threshold ||
+        downVelocity > kPlayerFlingVelocityThreshold;
+    // ignore: avoid_print
+    print(
+      '[TopBar] end dist=$_topBarDragDistance thr=$threshold vel=$downVelocity collapse=$collapse v=${route.controller.value}',
+    );
+    if (collapse) {
+      route.dismiss(); // 原路返回：reverse 到 0 + removeRoute
+    } else {
+      route.settleToFull(); // 弹回全屏
+    }
+  }
+
+  /// 顶栏拖拽被系统取消（来电/手势中断等）：停在半途时弹回全屏，防御状态残留。
+  void _onTopBarDragCancel() {
+    final route = _topBarDragRoute;
+    _topBarDragRoute = null;
+    if (route == null) return;
+    route.topBarDragging = false;
+    if (route.controller.value < 1.0) {
+      route.settleToFull(); // 弹回动画结束时由路由恢复映射
+    } else {
+      route.topBarDragTotal = null; // 没拖，直接恢复原映射
     }
   }
 
@@ -163,6 +274,7 @@ class _FullPlayerState extends State<FullPlayer>
   void _onDragRouteStatus(AnimationStatus status) {
     if (status != AnimationStatus.completed) return;
     applyImmersiveForOrientation();
+    _systemUiModified = true;
     _dragRoute?.controller.removeStatusListener(_onDragRouteStatus);
     _dragRoute = null;
     if (mounted) setState(() {});
@@ -425,7 +537,9 @@ class _FullPlayerState extends State<FullPlayer>
     });
     if (enabled) {
       // 已开启频谱时注册降级监听
-      SpectrumService.instance.simulatedNotifier.addListener(_onSpectrumSimulated);
+      SpectrumService.instance.simulatedNotifier.addListener(
+        _onSpectrumSimulated,
+      );
       if (_isDragOverlay) {
         // 拖拽覆盖层（非路由）：只显示频谱 UI、不启动服务。
         // 覆盖层销毁时会 dispose 并调用 _stopSpectrum（全局 stop），
@@ -487,9 +601,13 @@ class _FullPlayerState extends State<FullPlayer>
       final isPlaying = context.read<PlayerProvider>().isPlaying;
       await _tryStartSpectrum(isPlaying: isPlaying);
       // 监听降级模式通知
-      SpectrumService.instance.simulatedNotifier.addListener(_onSpectrumSimulated);
+      SpectrumService.instance.simulatedNotifier.addListener(
+        _onSpectrumSimulated,
+      );
     } else {
-      SpectrumService.instance.simulatedNotifier.removeListener(_onSpectrumSimulated);
+      SpectrumService.instance.simulatedNotifier.removeListener(
+        _onSpectrumSimulated,
+      );
       await _stopSpectrum();
     }
   }
@@ -552,15 +670,20 @@ class _FullPlayerState extends State<FullPlayer>
     // 不能在 initState 中调用，否则报 dependOnInheritedWidgetOfExactType 错误
     if (_systemUiInitialized) return;
     _systemUiInitialized = true;
-    // 进入播放器时会根据当前方向应用沉浸模式；
-    // 拖拽展开模式下延迟到展开完成后再切换，避免拖动过程系统栏提前闪烁
     final route = ModalRoute.of(context);
     if (route is DraggablePlayerRoute && route.isDragMode) {
+      // 拖拽路由：延迟到展开完成后再切换沉浸，避免拖动过程系统栏提前闪烁
       _dragRoute = route;
       route.controller.addStatusListener(_onDragRouteStatus);
+    } else if (route == null) {
+      // 拖拽覆盖层（非路由）：不切换系统栏，展开后由路由接管
+      _dragRoute = null;
+      _systemUiModified = false;
     } else {
+      // 点击打开 / 普通路由：立即应用沉浸模式
       _dragRoute = null;
       applyImmersiveForOrientation();
+      _systemUiModified = true;
     }
   }
 
@@ -643,10 +766,20 @@ class _FullPlayerState extends State<FullPlayer>
     _zenController.dispose();
     _tabController.dispose();
     // 退出播放器时停止频谱采集，释放原生 Visualizer
-    SpectrumService.instance.simulatedNotifier.removeListener(_onSpectrumSimulated);
+    SpectrumService.instance.simulatedNotifier.removeListener(
+      _onSpectrumSimulated,
+    );
     _stopSpectrum();
-    // 退出播放器时立即恢复系统栏，确保从横屏沉浸模式正确退出
-    restoreSystemUi();
+    // 退出播放器时恢复系统栏；若仍处于封面流页横屏沉浸（从封面流进入播放器后返回），
+    // 则保持沉浸，避免返回后状态栏闪现。
+    // 拖拽覆盖层（非路由）从未修改系统栏，无需恢复
+    if (_systemUiModified) {
+      if (kCoverFlowImmersiveActive.value) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      } else {
+        restoreSystemUi();
+      }
+    }
     super.dispose();
   }
 
@@ -873,6 +1006,8 @@ class _FullPlayerState extends State<FullPlayer>
     // 拖拽展开模式下系统栏样式跟随展开进度，避免拖动过程提前切换（见 PlayerSystemUiScope）
     return PlayerSystemUiScope(
       dragRoute: _dragRoute,
+      // 拖拽覆盖层（非路由）期间系统栏恒为主页面样式
+      forceMainStyle: _isDragOverlay,
       child: PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
@@ -970,7 +1105,19 @@ class _FullPlayerState extends State<FullPlayer>
                   behavior: HitTestBehavior.translucent,
                   child: _isLoadingLyrics
                       ? const Center(child: MD3ELoadingIndicator())
-                      : _buildPositionedLyrics(playerProvider, lyricDoubleTap),
+                      // P0: 歌词时间只订阅 positionNotifier（高频 200ms），
+                      // 不再因 positionStream 触发整页重建
+                      : ValueListenableBuilder<Duration>(
+                          valueListenable: playerProvider.positionNotifier,
+                          builder: (context, position, _) => LyricsView(
+                            lyrics: _lyrics,
+                            position: position,
+                            doubleTapToJump: lyricDoubleTap,
+                            onSeek: (duration) {
+                              playerProvider.seek(duration);
+                            },
+                          ),
+                        ),
                 ),
                 CommentsView(
                   songHash: currentSong.id,
@@ -1070,27 +1217,25 @@ class _FullPlayerState extends State<FullPlayer>
                                         children: [
                                           AnimatedScale(
                                             // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
-                                            scale: _spectrumEnabled &&
+                                            scale:
+                                                _spectrumEnabled &&
                                                     _spectrumStyle < 2
                                                 ? 1.0
                                                 : (playerProvider.isPlaying
-                                                    ? 1.0
-                                                    : 0.85),
+                                                      ? 1.0
+                                                      : 0.85),
                                             duration: const Duration(
                                               milliseconds: 500,
                                             ),
                                             curve: Curves.easeOutBack,
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                              child: _buildCrossfadeArtwork(
-                                                currentSong.artworkUri,
-                                                colorScheme,
-                                                iconSize: 48,
-                                                fallbackFilePath:
-                                                    currentSong.localPath,
-                                              ),
-                                            ),
+                                            child:
+                                                _buildCrossfadeArtworkWrapper(
+                                                  currentSong,
+                                                  colorScheme,
+                                                  iconSize: 48,
+                                                  isPlaying:
+                                                      playerProvider.isPlaying,
+                                                ),
                                           ),
                                           _buildZenLongPressHint(),
                                         ],
@@ -1188,7 +1333,20 @@ class _FullPlayerState extends State<FullPlayer>
                               ),
                             _isLoadingLyrics
                                 ? const Center(child: MD3ELoadingIndicator())
-                                : _buildPositionedLyrics(playerProvider, lyricDoubleTap),
+                                // P0: 歌词时间只订阅 positionNotifier（高频 200ms）
+                                : ValueListenableBuilder<Duration>(
+                                    valueListenable:
+                                        playerProvider.positionNotifier,
+                                    builder: (context, position, _) =>
+                                        LyricsView(
+                                          lyrics: _lyrics,
+                                          position: position,
+                                          doubleTapToJump: lyricDoubleTap,
+                                          onSeek: (duration) {
+                                            playerProvider.seek(duration);
+                                          },
+                                        ),
+                                  ),
                             CommentsView(
                               songHash: currentSong.id,
                               albumAudioId: currentSong.albumAudioId,
@@ -1296,27 +1454,25 @@ class _FullPlayerState extends State<FullPlayer>
                                           children: [
                                             AnimatedScale(
                                               // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
-                                              scale: _spectrumEnabled &&
+                                              scale:
+                                                  _spectrumEnabled &&
                                                       _spectrumStyle < 2
                                                   ? 1.0
                                                   : (playerProvider.isPlaying
-                                                      ? 1.0
-                                                      : 0.85),
+                                                        ? 1.0
+                                                        : 0.85),
                                               duration: const Duration(
                                                 milliseconds: 500,
                                               ),
                                               curve: Curves.easeOutBack,
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                                child: _buildCrossfadeArtwork(
-                                                  currentSong.artworkUri,
-                                                  colorScheme,
-                                                  iconSize: 48,
-                                                  fallbackFilePath:
-                                                      currentSong.localPath,
-                                                ),
-                                              ),
+                                              child:
+                                                  _buildCrossfadeArtworkWrapper(
+                                                    currentSong,
+                                                    colorScheme,
+                                                    iconSize: 48,
+                                                    isPlaying: playerProvider
+                                                        .isPlaying,
+                                                  ),
                                             ),
                                             _buildZenLongPressHint(),
                                           ],
@@ -1408,7 +1564,20 @@ class _FullPlayerState extends State<FullPlayer>
                               ),
                             _isLoadingLyrics
                                 ? const Center(child: MD3ELoadingIndicator())
-                                : _buildPositionedLyrics(playerProvider, lyricDoubleTap),
+                                // P0: 歌词时间只订阅 positionNotifier（高频 200ms）
+                                : ValueListenableBuilder<Duration>(
+                                    valueListenable:
+                                        playerProvider.positionNotifier,
+                                    builder: (context, position, _) =>
+                                        LyricsView(
+                                          lyrics: _lyrics,
+                                          position: position,
+                                          doubleTapToJump: lyricDoubleTap,
+                                          onSeek: (duration) {
+                                            playerProvider.seek(duration);
+                                          },
+                                        ),
+                                  ),
                             CommentsView(
                               songHash: currentSong.id,
                               albumAudioId: currentSong.albumAudioId,
@@ -1443,56 +1612,65 @@ class _FullPlayerState extends State<FullPlayer>
 
   Widget _buildTopBar(PlayerProvider playerProvider) {
     // 顶部栏：返回/音质/菜单分列两侧，无把手
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.keyboard_arrow_down),
-            onPressed: _collapseByButton,
-          ),
-          const Spacer(),
-          // MD3E v2: 顶部栏右侧 FLAC 质量徽章，点击复用 _showQualityDialog
-          _buildQualityPill(playerProvider),
-          // 睡眠药丸：用 ListenableBuilder 独立监听，确保每秒走字
-          ListenableBuilder(
-            listenable: playerProvider,
-            builder: (context, _) {
-              if (!playerProvider.isSleepTimerActive) {
-                return const SizedBox.shrink();
-              }
-              return _buildSleepTimerPill(playerProvider);
-            },
-          ),
-          if (playerProvider.currentSong?.isOnline == true)
+    // 整个顶栏支持向下拖拽原路返回（点击按钮仍由子元素处理，竞技场自动区分）
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: _onTopBarDragStart,
+      onVerticalDragUpdate: _onTopBarDragUpdate,
+      onVerticalDragEnd: _onTopBarDragEnd,
+      onVerticalDragCancel: _onTopBarDragCancel,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
             IconButton(
-              icon: const Icon(Icons.music_video_outlined),
-              tooltip: '查看 MV',
+              icon: const Icon(Icons.keyboard_arrow_down),
+              onPressed: _collapseByButton,
+            ),
+            const Spacer(),
+            // MD3E v2: 顶部栏右侧 FLAC 质量徽章，点击复用 _showQualityDialog
+            _buildQualityPill(playerProvider),
+            // 睡眠药丸：用 ListenableBuilder 独立监听，确保每秒走字
+            ListenableBuilder(
+              listenable: playerProvider,
+              builder: (context, _) {
+                if (!playerProvider.isSleepTimerActive) {
+                  return const SizedBox.shrink();
+                }
+                return _buildSleepTimerPill(playerProvider);
+              },
+            ),
+            // 音乐频谱环绕开关已收纳到右上角菜单（more_vert），与歌手写真背景一致
+            if (playerProvider.currentSong?.isOnline == true)
+              IconButton(
+                icon: const Icon(Icons.music_video_outlined),
+                tooltip: '查看 MV',
+                onPressed: () {
+                  final song = playerProvider.currentSong;
+                  if (song == null) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => MvPlayerPage(song: song)),
+                  );
+                },
+              ),
+            // 歌曲信息：频率/位深/码率/声道 + USB 独占开关
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              tooltip: '歌曲信息',
               onPressed: () {
-                final song = playerProvider.currentSong;
-                if (song == null) return;
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => MvPlayerPage(song: song)),
+                  MaterialPageRoute(builder: (_) => const SongInfoPage()),
                 );
               },
             ),
-          // 歌曲信息：频率/位深/码率/声道 + USB 独占开关
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            tooltip: '歌曲信息',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SongInfoPage()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () => _showMoreMenu(context),
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.more_vert),
+              onPressed: () => _showMoreMenu(context),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1554,7 +1732,9 @@ class _FullPlayerState extends State<FullPlayer>
         bandCount: SpectrumService.instance.bandCount,
         style: _spectrumStyle,
         // 柱状图/曲线透明度分开记忆
-        opacity: _spectrumStyle == 1 ? _spectrumCurveOpacity : _spectrumBarOpacity,
+        opacity: _spectrumStyle == 1
+            ? _spectrumCurveOpacity
+            : _spectrumBarOpacity,
       );
     }
     return ClipRRect(
@@ -1765,19 +1945,6 @@ class _FullPlayerState extends State<FullPlayer>
     );
   }
 
-  /// 歌词视图只随播放进度重建（避免整页每 200ms 重建）。
-  Widget _buildPositionedLyrics(PlayerProvider p, bool doubleTap) {
-    return ValueListenableBuilder<Duration>(
-      valueListenable: p.positionNotifier,
-      builder: (context, pos, _) => LyricsView(
-        lyrics: _lyrics,
-        position: pos,
-        doubleTapToJump: doubleTap,
-        onSeek: (duration) => p.seek(duration),
-      ),
-    );
-  }
-
   Widget _buildControls(
     PlayerProvider playerProvider,
     ColorScheme colorScheme, {
@@ -1792,10 +1959,19 @@ class _FullPlayerState extends State<FullPlayer>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ValueListenableBuilder<Duration>(
-            valueListenable: playerProvider.positionNotifier,
-            builder: (context, pos, _) =>
-                _buildProgressBar(playerProvider, pos, duration, colorScheme),
+          // P0: 进度条监听 positionNotifier（高频 200ms）+ provider（duration 等低频），
+          // 不再因 positionStream 触发 _buildControls 整体重建
+          ListenableBuilder(
+            listenable: Listenable.merge([
+              playerProvider.positionNotifier,
+              playerProvider,
+            ]),
+            builder: (context, _) => _buildProgressBar(
+              playerProvider,
+              playerProvider.position,
+              duration,
+              colorScheme,
+            ),
           ),
           SizedBox(height: verticalSpacing),
           _buildMainControls(
@@ -2030,7 +2206,7 @@ class _FullPlayerState extends State<FullPlayer>
   /// MD3E v2 底部操作条 — 6 个常用动作收纳在单条长 pill 内。
   ///
   /// 替代原 `_buildSecondaryControls` 的 9 个独立按钮。
-  /// 不在 ActionBar 中的动作（音量/音质/歌单）通过 more_vert 菜单访问。
+  /// 不在 ActionBar 中的动作（下载/音量/音质/歌单）通过 more_vert 菜单访问。
   Widget _buildActionBar(
     PlayerProvider playerProvider,
     ColorScheme colorScheme, {
@@ -2083,6 +2259,7 @@ class _FullPlayerState extends State<FullPlayer>
                 ),
               ),
             ),
+            // 3. 封面 — 短按跳转到封面 tab，长按弹出下载音质选择（本地歌曲屏蔽长按下载）
             Expanded(
               child: InkWell(
                 onTap: () {
@@ -2183,6 +2360,10 @@ class _FullPlayerState extends State<FullPlayer>
                         }
                       }
                     : null,
+                // 长按：在线歌曲弹出 AI 推荐歌曲面板
+                onLongPress: song != null && isOnline
+                    ? () => showAiRecommendSheet(context, song)
+                    : null,
                 child: Center(
                   child: Icon(
                     isFavorited ? Icons.favorite : Icons.favorite_border,
@@ -2222,14 +2403,30 @@ class _FullPlayerState extends State<FullPlayer>
                       : volume < 0.5
                       ? Icons.volume_down
                       : Icons.volume_up;
+                  final colorScheme = Theme.of(context).colorScheme;
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        icon,
-                        size: 32,
-                        color: Theme.of(context).colorScheme.primary,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '应用音量',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
                       ),
+                      const SizedBox(height: 12),
+                      Icon(icon, size: 32, color: colorScheme.primary),
                       const SizedBox(height: 8),
                       Slider(
                         value: volume,
@@ -2242,6 +2439,7 @@ class _FullPlayerState extends State<FullPlayer>
                         '$percent%',
                         style: Theme.of(context).textTheme.labelMedium,
                       ),
+                      const SizedBox(height: 4),
                     ],
                   );
                 },
@@ -2396,6 +2594,7 @@ class _FullPlayerState extends State<FullPlayer>
     return '$minutes:$seconds';
   }
 
+
   void _showMoreMenu(BuildContext rootContext) {
     final song = context.read<PlayerProvider>().currentSong;
     if (song == null) return;
@@ -2525,6 +2724,17 @@ class _FullPlayerState extends State<FullPlayer>
                     _showAddToPlaylistDialog(rootContext, song);
                   },
                 ),
+                ListTile(
+                  leading: const Icon(Icons.share),
+                  title: const Text('分享'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    // TODO: 实现分享功能
+                    ScaffoldMessenger.of(
+                      rootContext,
+                    ).showSnackBar(const SnackBar(content: Text('分享功能开发中')));
+                  },
+                ),
                 SwitchListTile(
                   title: const Text('歌手写真背景'),
                   value: context.read<ThemeProvider>().useArtistPhotoBackground,
@@ -2542,8 +2752,8 @@ class _FullPlayerState extends State<FullPlayer>
                     subtitle: Text(
                       _spectrumEnabled
                           ? SpectrumService.instance.isSimulated
-                              ? '已开启 · 模拟模式（设备不支持实时频谱）'
-                              : '已开启 · 实时频谱'
+                                ? '已开启 · 模拟模式（设备不支持实时频谱）'
+                                : '已开启 · 实时频谱'
                           : '封面裁圆旋转，频谱环绕跳动',
                     ),
                     value: _spectrumEnabled,
@@ -2571,6 +2781,9 @@ class _FullPlayerState extends State<FullPlayer>
           child: Consumer<CommentDisplayProvider>(
             builder: (context, display, _) {
               final colorScheme = Theme.of(context).colorScheme;
+              // 文字颜色与其它二级菜单（如歌词显示设置）保持一致：
+              // 全部使用主题标准色（onSurface / onSurfaceVariant / primary），
+              // 由主题自动适配深色/浅色模式，不做手写黑白。
               return Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 child: Column(
@@ -2605,7 +2818,13 @@ class _FullPlayerState extends State<FullPlayer>
                     // 楼主字号滑块
                     Row(
                       children: [
-                        const Text('楼主', style: TextStyle(fontSize: 14)),
+                        Text(
+                          '楼主',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           '${display.commentFontSize.toStringAsFixed(0)} 号',

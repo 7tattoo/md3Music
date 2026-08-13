@@ -2604,8 +2604,12 @@ class KugouApiClient {
     return await _get(KugouEndpoints.brush);
   }
 
-  Future<Map<String, dynamic>?> getAiRecommend() async {
-    return await _get(KugouEndpoints.aiRecommend);
+  Future<Map<String, dynamic>?> getAiRecommend([String albumAudioId = '']) async {
+    return await _get(
+      KugouEndpoints.aiRecommend,
+      queryParameters:
+          albumAudioId.isNotEmpty ? {'album_audio_id': albumAudioId} : null,
+    );
   }
 
   Future<Map<String, dynamic>?> getServerNow() async {

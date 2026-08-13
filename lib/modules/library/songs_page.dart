@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../data/models/song.dart';
 import '../../providers/player_provider.dart';
-import '../../widgets/app_animation.dart';
 import '../../widgets/song_list_item.dart';
 
 enum SongSortBy { title, artist, dateAdded }
@@ -154,10 +153,8 @@ class _SongsPageState extends State<SongsPage> {
   @override
   Widget build(BuildContext context) {
     final songs = _sortedSongs;
-    // 只订阅当前歌曲 ID，避免播放进度高频通知导致整个列表反复重建
-    final currentId = context.select<PlayerProvider, String?>(
-      (p) => p.currentSong?.id,
-    );
+    final player = context.watch<PlayerProvider>();
+    final currentId = player.currentSong?.id;
     final currentIndex = (currentId == null || songs.isEmpty)
         ? -1
         : songs.indexWhere((s) => s.id == currentId);
@@ -175,8 +172,7 @@ class _SongsPageState extends State<SongsPage> {
       );
     }
 
-    return ContentEntrance(
-      child: Column(
+    return Column(
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -246,6 +242,6 @@ class _SongsPageState extends State<SongsPage> {
           ),
         ),
       ],
-    ));
+    );
   }
 }

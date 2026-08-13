@@ -9,6 +9,7 @@ import 'core/layout/responsive_layout.dart';
 import 'core/services/lyricon_provider_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/motion_constants.dart';
+import 'core/utils/artwork_color_extractor.dart';
 import 'data/models/playlist.dart';
 import 'main.dart'
     show
@@ -31,6 +32,7 @@ import 'modules/search/search_page.dart';
 import 'modules/settings/settings_page.dart';
 import 'modules/library/library_page.dart';
 import 'modules/login/login_page.dart';
+import 'widgets/app_animation.dart';
 import 'modules/onboarding/onboarding_page.dart';
 import 'modules/onboarding/user_agreement_page.dart';
 import 'modules/personal_fm/personal_fm_page.dart';
@@ -158,6 +160,13 @@ class _AppView extends StatefulWidget {
 }
 
 class _AppViewState extends State<_AppView> {
+  // 封面动态取色桥接：监听 PlayerProvider 切歌 → 提取封面主色 → 注入 ThemeProvider。
+  // 持有引用以便 dispose 时移除 listener（provider 销毁顺序晚于 _AppViewState）。
+  PlayerProvider? _playerProvider;
+  // 上一次已提取/正在提取的封面 url：同一首歌反复 notify 不重复提取，
+  // 且异步提取期间切歌时丢弃过期结果（参考 AM 歌词动态取色 _lastAccentUrl 模式）。
+  String? _lastCoverUrl;
+
   @override
   void initState() {
     super.initState();
@@ -191,6 +200,37 @@ class _AppViewState extends State<_AppView> {
         handleShortcut(type!);
       });
     }
+    // 延迟一帧再建立封面取色桥接：ChangeNotifierProvider 惰性 create，
+    // 此时 provider 实例已就绪，且不影响首帧渲染。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupCoverColorBridge();
+    });
+  }
+
+  /// 建立封面动态取色桥接：监听 PlayerProvider 切歌，把封面主色注入 ThemeProvider。
+  void _setupCoverColorBridge() {
+    final player = context.read<PlayerProvider>();
+    _playerProvider = player;
+    player.addListener(_onPlayerChanged);
+    // 启动时按当前歌曲提取一次（若 App 有恢复播放）
+    _onPlayerChanged();
+  }
+
+  /// 切歌回调：当前歌曲封面 url 变化时异步提取主色并注入 ThemeProvider。
+  Future<void> _onPlayerChanged() async {
+    final url = context.read<PlayerProvider>().currentSong?.artworkUri;
+    if (url == null || url == _lastCoverUrl) return;
+    _lastCoverUrl = url;
+    final color = await ArtworkColorExtractor.extract(url);
+    // 过期校验：提取期间已切歌则丢弃结果（参考 AM 歌词动态取色模式）
+    if (context.read<PlayerProvider>().currentSong?.artworkUri != url) return;
+    context.read<ThemeProvider>().setCoverSeedColor(color);
+  }
+
+  @override
+  void dispose() {
+    _playerProvider?.removeListener(_onPlayerChanged);
+    super.dispose();
   }
 
   @override
@@ -386,9 +426,14 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 
   /// 根据 tab id 构建对应页面 Widget。
   Widget _buildPageForTab(String tabId) {
+    // 统一在 tab 页外层包 ContentEntrance：向上淡入滑动（400ms, easeOutCubic），
+    // 与本地音乐 SongsPage 的入场动画一致。
+    // ContentEntrance 只在首次构建时播放，父组件 rebuild 不会重播。
+    // 与外层 AnimatedSwitcher 的左右滑动叠加，形成"内容上浮 → 页面滑入"的层次感。
+    Widget page;
     switch (tabId) {
       case 'discover':
-        return DiscoverPage(
+        page = DiscoverPage(
           onAvatarTap: () {
             final tabConfig = context.read<TabConfigProvider>();
             final userIdx = tabConfig.visibleIndexOf('user');
@@ -400,89 +445,190 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             }
           },
         );
+        break;
       case 'coverflow':
-        return const CoverFlowPage();
+        page = const CoverFlowPage();
+        break;
       case 'library':
-        return const LibraryPage();
+        page = const LibraryPage();
+        break;
       case 'favorites':
-        return const FavoritesPage();
+        page = const FavoritesPage();
+        break;
       case 'fm':
-        return const PersonalFmPage();
+        page = const PersonalFmPage();
+        break;
       case 'search':
         // Tab 模式：隐藏页面自带 MiniPlayer，由 _MainLayout 统一提供全局 MiniPlayer
-        return const SearchPage(showMiniPlayer: false);
+        page = const SearchPage(showMiniPlayer: false);
+        break;
       case 'charts':
-        return const ChartsPage();
+        page = const ChartsPage();
+        break;
       case 'recognition':
-        return const SongRecognitionPage();
+        // Tab 模式：由 _MainLayout 统一提供全局 MiniPlayer，页面不自带
+        page = const SongRecognitionPage();
+        break;
+      case 'settings':
+        page = const SettingsPage();
+        break;
       case 'user':
-        return const UserCenterPage();
+        page = const UserCenterPage();
+        break;
       default:
-        return const SizedBox.shrink();
+        page = const SizedBox.shrink();
     }
+    return ContentEntrance(child: page);
   }
 
   /// 根据 tab id 获取对应的 NavigationDestination 图标。
-  NavigationDestination _buildDestination(TabItem tab) {
+  /// 不使用 selectedIcon（Flutter 原生内部为硬切，无过渡动画），
+  /// 改由 _AnimatedTabIcon 在选中变化时做缩放弹跳，使切换更生动。
+  NavigationDestination _buildDestination(TabItem tab, int index) {
+    final isSelected = index == _selectedIndex;
     switch (tab.id) {
+      case 'launchpad':
+        return NavigationDestination(
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.grid_view_outlined,
+            filledIcon: Icons.grid_view,
+          ),
+          label: tab.label,
+        );
       case 'discover':
         return NavigationDestination(
-          icon: const Icon(Icons.explore_outlined),
-          selectedIcon: const Icon(Icons.explore),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.explore_outlined,
+            filledIcon: Icons.explore,
+          ),
           label: tab.label,
         );
       case 'coverflow':
         return NavigationDestination(
-          icon: const Icon(Icons.album_outlined),
-          selectedIcon: const Icon(Icons.album),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.album_outlined,
+            filledIcon: Icons.album,
+          ),
           label: tab.label,
         );
       case 'library':
         return NavigationDestination(
-          icon: const Icon(Icons.library_music_outlined),
-          selectedIcon: const Icon(Icons.library_music),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.library_music_outlined,
+            filledIcon: Icons.library_music,
+          ),
           label: tab.label,
         );
       case 'favorites':
         return NavigationDestination(
-          icon: const Icon(Icons.favorite_outline),
-          selectedIcon: const Icon(Icons.favorite),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.favorite_outline,
+            filledIcon: Icons.favorite,
+          ),
           label: tab.label,
         );
       case 'fm':
         return NavigationDestination(
-          icon: const Icon(Icons.radio_outlined),
-          selectedIcon: const Icon(Icons.radio),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.radio_outlined,
+            filledIcon: Icons.radio,
+          ),
           label: tab.label,
         );
       case 'search':
         return NavigationDestination(
-          icon: const Icon(Icons.search_outlined),
-          selectedIcon: const Icon(Icons.search),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.search_outlined,
+            filledIcon: Icons.search,
+          ),
           label: tab.label,
         );
       case 'charts':
         return NavigationDestination(
-          icon: const Icon(Icons.leaderboard_outlined),
-          selectedIcon: const Icon(Icons.leaderboard),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.leaderboard_outlined,
+            filledIcon: Icons.leaderboard,
+          ),
+          label: tab.label,
+        );
+      case 'ip':
+        return NavigationDestination(
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.edit_note_outlined,
+            filledIcon: Icons.edit_note,
+          ),
           label: tab.label,
         );
       case 'recognition':
         return NavigationDestination(
-          icon: const Icon(Icons.mic_none_outlined),
-          selectedIcon: const Icon(Icons.mic),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.mic_none_outlined,
+            filledIcon: Icons.mic,
+          ),
+          label: tab.label,
+        );
+      case 'audiobook':
+        return NavigationDestination(
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.auto_stories_outlined,
+            filledIcon: Icons.auto_stories,
+          ),
+          label: tab.label,
+        );
+      case 'scene':
+        return NavigationDestination(
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.landscape_outlined,
+            filledIcon: Icons.landscape,
+          ),
+          label: tab.label,
+        );
+      case 'channel':
+        return NavigationDestination(
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.dynamic_feed_outlined,
+            filledIcon: Icons.dynamic_feed,
+          ),
+          label: tab.label,
+        );
+      case 'settings':
+        return NavigationDestination(
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.settings_outlined,
+            filledIcon: Icons.settings,
+          ),
           label: tab.label,
         );
       case 'user':
         return NavigationDestination(
-          icon: const Icon(Icons.person_outlined),
-          selectedIcon: const Icon(Icons.person),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.person_outlined,
+            filledIcon: Icons.person,
+          ),
           label: tab.label,
         );
       default:
         return NavigationDestination(
-          icon: const Icon(Icons.circle_outlined),
-          selectedIcon: const Icon(Icons.circle),
+          icon: _AnimatedTabIcon(
+            selected: isSelected,
+            outlinedIcon: Icons.circle_outlined,
+            filledIcon: Icons.circle,
+          ),
           label: tab.label,
         );
     }
@@ -490,6 +636,12 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 
   NavigationRailDestination _buildRailDestination(TabItem tab) {
     switch (tab.id) {
+      case 'launchpad':
+        return NavigationRailDestination(
+          icon: const Icon(Icons.grid_view_outlined),
+          selectedIcon: const Icon(Icons.grid_view),
+          label: Text(tab.label),
+        );
       case 'discover':
         return NavigationRailDestination(
           icon: const Icon(Icons.explore_outlined),
@@ -532,10 +684,40 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
           selectedIcon: const Icon(Icons.leaderboard),
           label: Text(tab.label),
         );
+      case 'ip':
+        return NavigationRailDestination(
+          icon: const Icon(Icons.edit_note_outlined),
+          selectedIcon: const Icon(Icons.edit_note),
+          label: Text(tab.label),
+        );
       case 'recognition':
         return NavigationRailDestination(
           icon: const Icon(Icons.mic_none_outlined),
           selectedIcon: const Icon(Icons.mic),
+          label: Text(tab.label),
+        );
+      case 'audiobook':
+        return NavigationRailDestination(
+          icon: const Icon(Icons.auto_stories_outlined),
+          selectedIcon: const Icon(Icons.auto_stories),
+          label: Text(tab.label),
+        );
+      case 'scene':
+        return NavigationRailDestination(
+          icon: const Icon(Icons.landscape_outlined),
+          selectedIcon: const Icon(Icons.landscape),
+          label: Text(tab.label),
+        );
+      case 'channel':
+        return NavigationRailDestination(
+          icon: const Icon(Icons.dynamic_feed_outlined),
+          selectedIcon: const Icon(Icons.dynamic_feed),
+          label: Text(tab.label),
+        );
+      case 'settings':
+        return NavigationRailDestination(
+          icon: const Icon(Icons.settings_outlined),
+          selectedIcon: const Icon(Icons.settings),
           label: Text(tab.label),
         );
       case 'user':
@@ -555,6 +737,12 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 
   NavigationDrawerDestination _buildDrawerDestination(TabItem tab) {
     switch (tab.id) {
+      case 'launchpad':
+        return NavigationDrawerDestination(
+          icon: const Icon(Icons.grid_view_outlined),
+          selectedIcon: const Icon(Icons.grid_view),
+          label: Text(tab.label),
+        );
       case 'discover':
         return NavigationDrawerDestination(
           icon: const Icon(Icons.explore_outlined),
@@ -597,10 +785,40 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
           selectedIcon: const Icon(Icons.leaderboard),
           label: Text(tab.label),
         );
+      case 'ip':
+        return NavigationDrawerDestination(
+          icon: const Icon(Icons.edit_note_outlined),
+          selectedIcon: const Icon(Icons.edit_note),
+          label: Text(tab.label),
+        );
       case 'recognition':
         return NavigationDrawerDestination(
           icon: const Icon(Icons.mic_none_outlined),
           selectedIcon: const Icon(Icons.mic),
+          label: Text(tab.label),
+        );
+      case 'audiobook':
+        return NavigationDrawerDestination(
+          icon: const Icon(Icons.auto_stories_outlined),
+          selectedIcon: const Icon(Icons.auto_stories),
+          label: Text(tab.label),
+        );
+      case 'scene':
+        return NavigationDrawerDestination(
+          icon: const Icon(Icons.landscape_outlined),
+          selectedIcon: const Icon(Icons.landscape),
+          label: Text(tab.label),
+        );
+      case 'channel':
+        return NavigationDrawerDestination(
+          icon: const Icon(Icons.dynamic_feed_outlined),
+          selectedIcon: const Icon(Icons.dynamic_feed),
+          label: Text(tab.label),
+        );
+      case 'settings':
+        return NavigationDrawerDestination(
+          icon: const Icon(Icons.settings_outlined),
+          selectedIcon: const Icon(Icons.settings),
           label: Text(tab.label),
         );
       case 'user':
@@ -670,6 +888,93 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     if (index == null) return;
     shortcutTabRequest.value = null;
     setState(() => _selectedIndex = index);
+  }
+
+  /// LaunchPad 导航：切换到指定 tab（仅对已可见的 tab 生效）。
+  /// 与 onDestinationSelected 相同的守卫：FullPlayer 在栈顶时忽略。
+  void _switchToTab(String tabId) {
+    if (isFullPlayerOnTop) return;
+    final index = context.read<TabConfigProvider>().visibleIndexOf(tabId);
+    if (index < 0) return;
+    setState(() {
+      _previousSelectedIndex = _selectedIndex;
+      _selectedIndex = index;
+    });
+  }
+
+  /// LaunchPad 长按启用：先启用隐藏的 tab，再切换到该 tab。
+  /// 与 [toggleTabVisibility] 的差异：这是 LaunchPad 专属入口，
+  /// 隐藏 tab 只有在 LaunchPad 中长按才会被启用（点击不启用）。
+  void _enableAndSwitchToTab(String tabId) {
+    if (isFullPlayerOnTop) return;
+    final tabConfig = context.read<TabConfigProvider>();
+    if (tabConfig.hiddenTabs.contains(tabId)) {
+      // toggleTabVisibility 内部先同步更新 hiddenTabs 再异步持久化，
+      // 调用返回后 visibleIndexOf 即可拿到正确索引，无需等待
+      // ignore: discarded_futures
+      tabConfig.toggleTabVisibility(tabId);
+    }
+    _switchToTab(tabId);
+  }
+
+  /// LaunchPad 点击隐藏 tab：以二级页面路由打开对应功能页（不切换主 tab）。
+  void _openTabAsPage(String tabId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => _pageForTabAsRoute(tabId)),
+    );
+  }
+
+  /// tabId → 可作为二级路由打开的页面（复用主 tab 页面，去掉主 tab 专属参数）。
+  ///
+  /// 二级路由页统一在底部挂全局 MiniPlayer（与主 tab 模式一致）：
+  /// - 页面自带 MiniPlayer 的（如 SearchPage）通过 showMiniPlayer: false 关闭，
+  ///   避免与这里提供的重复；
+  /// - 其余页面在 tab 模式下依赖 _MainLayout 的全局 MiniPlayer，作为二级路由
+  ///   打开时没有该全局条，这里统一补上；
+  /// - 设置页除外：不挂 MiniPlayer，保持纯设置界面。
+  Widget _pageForTabAsRoute(String tabId) {
+    final Widget page;
+    switch (tabId) {
+      case 'discover':
+        page = const DiscoverPage();
+        break;
+      case 'coverflow':
+        page = const CoverFlowPage();
+        break;
+      case 'library':
+        page = const LibraryPage();
+        break;
+      case 'favorites':
+        page = const FavoritesPage();
+        break;
+      case 'fm':
+        page = const PersonalFmPage();
+        break;
+      case 'search':
+        // 路由模式的 MiniPlayer 由本方法统一提供，关闭页面自带的以免重复
+        page = const SearchPage(showMiniPlayer: false);
+        break;
+      case 'charts':
+        page = const ChartsPage();
+        break;
+      case 'recognition':
+        // 路由模式的 MiniPlayer 由本方法统一提供，关闭页面自带的以免重复
+        page = const SongRecognitionPage();
+        break;
+      case 'settings':
+        page = const SettingsPage();
+        break;
+      default:
+        page = const SizedBox.shrink();
+    }
+    // 设置页不挂 MiniPlayer，其余二级路由页统一挂载
+    if (tabId == 'settings') return page;
+    return Column(
+      children: [
+        Expanded(child: page),
+        const MiniPlayer(),
+      ],
+    );
   }
 
   @override
@@ -769,7 +1074,10 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     }
 
     // 动态生成导航目标
-    final destinations = visibleTabs.map(_buildDestination).toList();
+    final destinations = <NavigationDestination>[];
+    for (var i = 0; i < visibleTabs.length; i++) {
+      destinations.add(_buildDestination(visibleTabs[i], i));
+    }
     final railDestinations = visibleTabs.map(_buildRailDestination).toList();
     final drawerDestinations = visibleTabs
         .map(_buildDrawerDestination)
@@ -795,6 +1103,12 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
+        // 上滑拖拽展开中：返回键先收起覆盖层，回到 MiniPlayer
+        if (playerDragActive.value) {
+          playerDragActive.value = false;
+          playerExpansion.value = 0.0;
+          return;
+        }
         if (immersive) {
           kCoverFlowImmersive.value = false;
         } else {
@@ -967,6 +1281,124 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 底部 NavigationBar 的 tab 图标 + 自定义 M3E Expressive 胶囊 indicator。
+///
+/// **设计思路**（对齐 MD3E MotionScheme.expressive()）：
+/// - 关掉 Flutter 原生 NavigationIndicator 的硬切横向拉伸
+///   （见 navigation_bar.dart 第 845-849 行，用 easeInOutCubicEmphasized 单轴缩放）
+/// - 自己在图标背后画一个 secondaryContainer 色的圆角胶囊
+/// - 胶囊出现/消失用 **带过冲的曲线**（easeOutBack，过冲约 10%），
+///   对应 MD3E `defaultSpatialSpec` 的"轻微过冲"原则
+/// - 胶囊做 **单轴 X 拉伸**（0.4 → 1.0），对齐 Flutter 原生 NavigationIndicator 的形变方式
+/// - 图标在胶囊弹起过程中完成 outlined → filled 切换，被弹跳掩盖
+///
+/// **文字行为**：由 `NavigationBarThemeData.labelBehavior = onlyShowSelected` 控制，
+/// Flutter 原生 `_NavigationDestinationLayoutDelegate` 会自动处理：
+/// - 未选中：label 隐藏，icon 垂直居中
+/// - 选中：label 淡入 + icon 上移让位（见 navigation_bar.dart 第 1103-1130 行）
+///
+/// 不使用 NavigationDestination.selectedIcon（Flutter 原生内部是硬切）。
+class _AnimatedTabIcon extends StatefulWidget {
+  final bool selected;
+  final IconData outlinedIcon;
+  final IconData filledIcon;
+
+  const _AnimatedTabIcon({
+    required this.selected,
+    required this.outlinedIcon,
+    required this.filledIcon,
+  });
+
+  @override
+  State<_AnimatedTabIcon> createState() => _AnimatedTabIconState();
+}
+
+class _AnimatedTabIconState extends State<_AnimatedTabIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  // 胶囊的弹簧进度（0 = 隐藏，1 = 完全展开）
+  // 用 easeOutBack 曲线产生轻微过冲，对齐 MD3E Expressive 风格
+  late final Animation<double> _progress;
+
+  // MD3E 胶囊尺寸（对齐 Flutter 原生 _kIndicatorWidth/Height）
+  static const double _indicatorWidth = 64.0;
+  static const double _indicatorHeight = 32.0;
+  static const double _indicatorRadius = 16.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: M3ExpressiveMotion.defaultDuration,
+      vsync: this,
+    );
+    // 初始状态：选中则胶囊已展开
+    _controller.value = widget.selected ? 1.0 : 0.0;
+    _progress = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurveTween(curve: Curves.easeOutBack).animate(_controller));
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedTabIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selected != widget.selected) {
+      if (widget.selected) {
+        _controller.forward(from: 0);
+      } else {
+        _controller.reverse(from: 1);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _progress,
+      builder: (context, child) {
+        // easeOutBack 在 [0,1] 内会有过冲（峰值约 1.1），clamp 到 [0, 1.1]
+        final t = _progress.value;
+        final tClamped = t.clamp(0.0, 1.1);
+        // 胶囊单轴 X 拉伸：从 0.4 → 1.0，带过冲
+        // 对齐 Flutter 原生 NavigationIndicator 的单轴形变方式
+        final scaleX = Tween<double>(begin: 0.4, end: 1.0).transform(tClamped);
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // 底层：自定义 expressive 胶囊 indicator（单轴拉伸 + 过冲）
+            Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.diagonal3Values(scaleX, 1.0, 1.0),
+              child: Opacity(
+                opacity: t.clamp(0.0, 1.0),
+                child: Container(
+                  width: _indicatorWidth,
+                  height: _indicatorHeight,
+                  decoration: BoxDecoration(
+                    color: colorScheme.secondaryContainer,
+                    borderRadius:
+                        BorderRadius.circular(_indicatorRadius),
+                  ),
+                ),
+              ),
+            ),
+            // 上层：图标（选中用 filled，未选中用 outlined）
+            Icon(
+              widget.selected ? widget.filledIcon : widget.outlinedIcon,
+            ),
+          ],
+        );
+      },
     );
   }
 }

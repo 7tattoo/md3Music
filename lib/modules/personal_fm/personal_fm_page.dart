@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
-import '../../widgets/app_animation.dart';
 import '../../widgets/md3e_loading_indicator.dart';
 import '../../widgets/scroll_aware_app_bar.dart';
 
@@ -291,8 +289,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
   Widget build(BuildContext context) {
     final kugou = Provider.of<KugouProvider>(context);
     final player = Provider.of<PlayerProvider>(context);
-    final baseTheme = Theme.of(context);
-    final cs = IosColors.scheme(context);
+    final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     final isLoggedIn = kugou.isLoggedIn;
@@ -306,7 +303,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
       sideTracks = songs.sublist(1).take(_visibleSideCount).toList();
     }
 
-    final scaffold = Scaffold(
+    return Scaffold(
       appBar: ScrollAwareAppBar(
         title: '私人 FM',
         scrollController: _scrollController,
@@ -323,71 +320,31 @@ class _PersonalFmPageState extends State<PersonalFmPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            FadeInUp(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: IosColors.cardDecoration(context),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '实时推荐会根据你的反馈持续更新',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.58),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    if (isLoggedIn) _buildToolbar(cs, textTheme),
-                  ],
-                ),
+            Text(
+              '实时推荐会根据你的反馈持续更新',
+              style: textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.58),
               ),
             ),
             const SizedBox(height: 16),
-            FadeInUp(
-              delayMs: 60,
-              child: isLoggedIn
-                  ? Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: IosColors.cardDecoration(context),
-                      clipBehavior: Clip.antiAlias,
-                      child: _buildRadioHero(
-                        cs,
-                        textTheme,
-                        currentTrack,
-                        isPlaying,
-                        sideTracks,
-                      ),
-                    )
-                  : _buildEmptyState(cs, textTheme),
-            ),
-            if (isLoggedIn && currentTrack != null) const SizedBox(height: 16),
+            if (isLoggedIn) _buildToolbar(cs, textTheme),
+            const SizedBox(height: 18),
+            isLoggedIn
+                ? _buildRadioHero(
+                    cs,
+                    textTheme,
+                    currentTrack,
+                    isPlaying,
+                    sideTracks,
+                  )
+                : _buildEmptyState(cs, textTheme),
+            if (isLoggedIn && currentTrack != null) const SizedBox(height: 28),
             if (isLoggedIn)
-              FadeInUp(
-                delayMs: 90,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: IosColors.cardDecoration(context),
-                  clipBehavior: Clip.antiAlias,
-                  child: _buildNowPanel(cs, textTheme, currentTrack, isPlaying),
-                ),
-              ),
+              _buildNowPanel(cs, textTheme, currentTrack, isPlaying),
             const SizedBox(height: 30),
           ],
         ),
       ),
-    );
-
-    return Theme(
-      data: baseTheme.copyWith(
-        colorScheme: cs,
-        scaffoldBackgroundColor: IosColors.bg(context),
-        appBarTheme: baseTheme.appBarTheme.copyWith(
-          backgroundColor: IosColors.bg(context),
-          surfaceTintColor: Colors.transparent,
-        ),
-      ),
-      child: scaffold,
     );
   }
 
@@ -430,37 +387,57 @@ class _PersonalFmPageState extends State<PersonalFmPage>
       builder: (context, constraints) {
         final isSmallScreen = constraints.maxWidth < 375;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '推荐方式',
-                  style: textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.08,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.54),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    '${_getModeLabel(_selectedMode)} · ${_songPoolOptions.firstWhere((o) => o['value'] == _selectedSongPoolId)['label']}',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.64),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.end,
-                  ),
-                ),
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isSmallScreen ? 12 : 16,
+            vertical: isSmallScreen ? 10 : 14,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: cs.onSurfaceVariant.withValues(alpha: 0.06),
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                cs.onSurfaceVariant.withValues(alpha: 0.025),
+                Colors.transparent,
               ],
             ),
-            SizedBox(height: isSmallScreen ? 8 : 10),
-            _buildStrategySwitch(cs, isSmallScreen),
-          ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '推荐方式',
+                    style: textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.08,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.54),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${_getModeLabel(_selectedMode)} · ${_songPoolOptions.firstWhere((o) => o['value'] == _selectedSongPoolId)['label']}',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.64),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: isSmallScreen ? 8 : 10),
+              _buildStrategySwitch(cs, isSmallScreen),
+            ],
+          ),
         );
       },
     );
@@ -561,7 +538,9 @@ class _PersonalFmPageState extends State<PersonalFmPage>
             ? 8.0
             : (isMediumScreen ? 10.0 : 14.0);
 
-        const maxSideVinyls = 2;
+        final maxSideVinyls = isLandscape
+            ? 2
+            : (isSmallScreen ? 2 : (isMediumScreen ? 3 : 4));
         final displaySideTracks = sideTracks.take(maxSideVinyls).toList();
 
         return SizedBox(

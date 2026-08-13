@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../providers/kugou_provider.dart';
-import '../../widgets/app_animation.dart';
 import '../../widgets/md3e_loading_indicator.dart';
 import '../../widgets/md3e_refresh_indicator.dart';
 import '../../widgets/scroll_aware_app_bar.dart';
@@ -49,132 +48,81 @@ class _UserCenterPageState extends State<UserCenterPage> {
 
   @override
   Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
-    final isDark = baseTheme.brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
-    // iOS 语义色（与设置页一致：中性色固定，tint 用主题品牌色）
-    final bg = isDark ? const Color(0xFF000000) : Colors.white;
-    final card = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final label = isDark ? Colors.white : const Color(0xFF1C1C1E);
-    final secondary =
-        isDark ? const Color(0xFFAEAEB2) : const Color(0xFF8E8E93);
-    final separator =
-        isDark ? const Color(0xFF38383A) : const Color(0xFFE5E5E5);
-
-    final cs = baseTheme.colorScheme.copyWith(
-      surface: card,
-      onSurface: label,
-      onSurfaceVariant: secondary,
-      surfaceContainerLowest: bg,
-    );
-    final tt = baseTheme.textTheme;
-
-    return Theme(
-      data: baseTheme.copyWith(
-        colorScheme: cs,
-        scaffoldBackgroundColor: bg,
-        dividerColor: separator,
-        appBarTheme: baseTheme.appBarTheme.copyWith(
-          backgroundColor: bg,
-          surfaceTintColor: Colors.transparent,
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: bg,
-        appBar: ScrollAwareAppBar(
-          title: '我的',
-          scrollController: _scrollController,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings),
-              onPressed: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
-            ),
-            Consumer<KugouProvider>(
-              builder: (context, kugou, _) => IconButton(
-                icon: Icon(kugou.isLoggedIn ? Icons.logout : Icons.login),
-                onPressed: kugou.isLoggedIn
-                    ? () => showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('退出登录'),
-                          content: const Text('确定要退出登录吗？'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: const Text('取消'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                kugou.logout();
-                                Navigator.pop(ctx);
-                              },
-                              child: const Text('确定'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const LoginPage(),
-                        ),
+    return Scaffold(
+      appBar: ScrollAwareAppBar(
+        title: '我的',
+        scrollController: _scrollController,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+          ),
+          Consumer<KugouProvider>(
+            builder: (context, kugou, _) => IconButton(
+              icon: Icon(kugou.isLoggedIn ? Icons.logout : Icons.login),
+              onPressed: kugou.isLoggedIn
+                  ? () => showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('退出登录'),
+                        content: const Text('确定要退出登录吗？'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('取消'),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              kugou.logout();
+                              Navigator.pop(ctx);
+                            },
+                            child: const Text('确定'),
+                          ),
+                        ],
                       ),
-              ),
-            ),
-          ],
-        ),
-        body: Consumer<KugouProvider>(
-          builder: (context, kugou, _) {
-            // 监听 20028 二次安全验证请求，弹出腾讯滑块验证码
-            final pending = kugou.pendingVerifyCaptcha;
-            if (pending != null && !_captchaDialogShowing) {
-              _captchaDialogShowing = true;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _showVerifyCaptchaDialog(context, kugou, pending);
-              });
-            }
-            if (!kugou.isLoggedIn) return _buildNotLoggedIn(cs, tt);
-            return MD3ERefreshIndicator(
-              onRefresh: () async {
-                await kugou.getVipDetail();
-                await kugou.getVipMonthRecord();
-              },
-              child: CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  _buildUserHeader(cs, tt, kugou),
-                  _buildVipCard(cs, tt, kugou),
-                  _buildSectionLabel('常用功能', cs),
-                  _buildActionGrid(cs),
-                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                  _buildVipCalendar(cs, tt, kugou, context),
-                  const SliverToBoxAdapter(child: SizedBox(height: 80)),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  /// iOS 风格分区小标题。
-  Widget _buildSectionLabel(String title, ColorScheme cs) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 12, 16, 6),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: cs.onSurfaceVariant,
+                    )
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
+                    ),
             ),
           ),
-        ),
+        ],
+      ),
+      body: Consumer<KugouProvider>(
+        builder: (context, kugou, _) {
+          // 监听 20028 二次安全验证请求，弹出腾讯滑块验证码
+          final pending = kugou.pendingVerifyCaptcha;
+          if (pending != null && !_captchaDialogShowing) {
+            _captchaDialogShowing = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _showVerifyCaptchaDialog(context, kugou, pending);
+            });
+          }
+          if (!kugou.isLoggedIn) return _buildNotLoggedIn(cs, tt);
+          return MD3ERefreshIndicator(
+            onRefresh: () async {
+              await kugou.getVipDetail();
+              await kugou.getVipMonthRecord();
+            },
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                _buildUserHeader(cs, tt, kugou),
+                _buildVipCard(cs, tt, kugou),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                _buildActionGrid(cs),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                _buildVipCalendar(cs, tt, kugou, context),
+                const SliverToBoxAdapter(child: SizedBox(height: 80)),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -242,6 +190,8 @@ class _UserCenterPageState extends State<UserCenterPage> {
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: avatarUrl,
+          memCacheWidth: 192,
+          memCacheHeight: 192,
           cacheKey: cacheKey,
           width: 64,
           height: 64,
@@ -257,42 +207,39 @@ class _UserCenterPageState extends State<UserCenterPage> {
 
   Widget _buildUserHeader(ColorScheme cs, TextTheme tt, KugouProvider kugou) {
     return SliverToBoxAdapter(
-      child: FadeInUp(
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: cs.surface,
-          ),
-          child: Row(
-            children: [
-              _buildUserAvatar(kugou, cs),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      kugou.userInfo?.nickname ?? '用户',
-                      style: tt.titleLarge?.copyWith(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: cs.primaryContainer,
+        ),
+        child: Row(
+          children: [
+            _buildUserAvatar(kugou, cs),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    kugou.userInfo?.nickname ?? '用户',
+                    style: tt.titleLarge?.copyWith(
+                      color: cs.onPrimaryContainer,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'ID: ${kugou.userid ?? ''}',
-                      style: tt.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'ID: ${kugou.userid ?? ''}',
+                    style: tt.labelSmall?.copyWith(
+                      color: cs.onPrimaryContainer.withValues(alpha: 0.7),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-            ],
-          ),
+            ),
+            Icon(Icons.chevron_right, color: cs.onPrimaryContainer),
+          ],
         ),
       ),
     );
@@ -302,58 +249,53 @@ class _UserCenterPageState extends State<UserCenterPage> {
     final vip = kugou.vipInfo;
     final isVip = vip?.isVip == true;
     return SliverToBoxAdapter(
-      child: FadeInUp(
-        delayMs: 50,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: cs.surface,
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: isVip
-                      ? cs.primaryContainer
-                      : cs.surfaceContainerHighest,
-                ),
-                child: Icon(
-                  isVip
-                      ? Icons.workspace_premium
-                      : Icons.workspace_premium_outlined,
-                  color: isVip ? cs.primary : cs.onSurfaceVariant,
-                ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: isVip
+                    ? cs.secondaryContainer
+                    : cs.surfaceContainerHighest,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isVip
-                          ? (kugou.isTodayYouthVip ? '概念版VIP会员' : 'VIP会员')
-                          : '开通VIP会员',
-                      style: tt.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isVip
-                          ? '概念版VIP 有效期至: ${vip?.conceptExpireTime ?? vip?.expireTime ?? '永久'}'
-                          : '畅享无损音质、个性皮肤等',
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ],
-                ),
+              child: Icon(
+                isVip
+                    ? Icons.workspace_premium
+                    : Icons.workspace_premium_outlined,
+                color: isVip ? cs.onSecondaryContainer : cs.onSurfaceVariant,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isVip
+                        ? (kugou.isTodayYouthVip ? '概念版VIP会员' : 'VIP会员')
+                        : '开通VIP会员',
+                    style: tt.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    isVip
+                        ? '概念版VIP 有效期至: ${vip?.conceptExpireTime ?? vip?.expireTime ?? '永久'}'
+                        : '畅享无损音质、个性皮肤等',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -361,68 +303,60 @@ class _UserCenterPageState extends State<UserCenterPage> {
 
   Widget _buildActionGrid(ColorScheme cs) {
     return SliverToBoxAdapter(
-      child: FadeInUp(
-        delayMs: 100,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              _actionRow(cs, Icons.history, '历史', () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PlayHistoryPage()),
-                );
-              }),
-              const Divider(height: 0.5, thickness: 0.5, indent: 16),
-              _actionRow(cs, Icons.bar_chart, '排行', () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ListenRankingPage()),
-                );
-              }),
-              const Divider(height: 0.5, thickness: 0.5, indent: 16),
-              _actionRow(cs, Icons.cloud, '云盘', () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CloudMusicPage()),
-                );
-              }),
-            ],
-          ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _actionItem(cs, Icons.history, '历史', () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PlayHistoryPage()),
+              );
+            }),
+            _actionItem(cs, Icons.bar_chart, '排行', () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ListenRankingPage()),
+              );
+            }),
+            _actionItem(cs, Icons.cloud, '云盘', () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CloudMusicPage()),
+              );
+            }),
+          ],
         ),
       ),
     );
   }
 
-  /// 操作区单行（iOS 设置式：图标 + 标题 + 右箭头）。
-  Widget _actionRow(
+  Widget _actionItem(
     ColorScheme cs,
     IconData icon,
     String label,
     VoidCallback onTap,
   ) {
-    return ListTile(
+    return GestureDetector(
       onTap: onTap,
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: cs.primaryContainer,
-        ),
-        child: Icon(icon, size: 18, color: cs.primary),
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: cs.surfaceContainerHighest,
+            ),
+            child: Icon(icon, color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ],
       ),
-      title: Text(
-        label,
-        style: TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w500,
-          color: cs.onSurface,
-        ),
-      ),
-      trailing: const Icon(Icons.chevron_right, size: 18),
     );
   }
 
@@ -469,40 +403,41 @@ class _UserCenterPageState extends State<UserCenterPage> {
     final leading = DateTime(curYear, curMonth, 1).weekday - 1;
 
     return SliverToBoxAdapter(
-      child: FadeInUp(
-        delayMs: 80,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildCalendarHeader(cs, tt, monthLabel, kugou, context),
-                  const SizedBox(height: 16),
-                  _buildWeekdayHeader(cs),
-                  const SizedBox(height: 8),
-                  _buildCalendarGrid(
-                    cs,
-                    curYear,
-                    curMonth,
-                    leading,
-                    daysInMonth,
-                    receivedDays,
-                    now,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildStatFooter(cs, tt, receivedDays.length),
-                ],
-              ),
+              ],
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildCalendarHeader(cs, tt, monthLabel, kugou, context),
+                const SizedBox(height: 16),
+                _buildWeekdayHeader(cs),
+                const SizedBox(height: 8),
+                _buildCalendarGrid(
+                  cs,
+                  curYear,
+                  curMonth,
+                  leading,
+                  daysInMonth,
+                  receivedDays,
+                  now,
+                ),
+                const SizedBox(height: 20),
+                _buildStatFooter(cs, tt, receivedDays.length),
+              ],
             ),
           ),
         ),
@@ -594,14 +529,14 @@ class _UserCenterPageState extends State<UserCenterPage> {
                 ),
                 onPressed: kugou.listenClaimRunning
                     ? null
-                    : () => _handleListenSongClaim(context, kugou),
+                    : () => _handleListenClaim(context, kugou),
                 icon: kugou.listenClaimRunning
                     ? MD3ELoadingIndicator(
                         size: 16,
                         color: cs.onSecondaryContainer,
                       )
                     : const Icon(Icons.headphones, size: 16),
-                label: Text(kugou.listenClaimRunning ? '领取中' : '听歌领'),
+                label: Text(kugou.listenClaimRunning ? '领取中' : '听歌领取'),
               ),
               const SizedBox(width: 8),
               FilledButton.tonalIcon(
@@ -615,14 +550,14 @@ class _UserCenterPageState extends State<UserCenterPage> {
                 ),
                 onPressed: kugou.adClaimRunning
                     ? null
-                    : () => _handleAdVipClaim(context, kugou),
+                    : () => _handleAdClaim(context, kugou),
                 icon: kugou.adClaimRunning
                     ? MD3ELoadingIndicator(
                         size: 16,
                         color: cs.onSecondaryContainer,
                       )
-                    : const Icon(Icons.play_circle_outline, size: 16),
-                label: Text(kugou.adClaimRunning ? '领取中' : '看广告领'),
+                    : const Icon(Icons.monetization_on_outlined, size: 16),
+                label: Text(kugou.adClaimRunning ? '领取中' : '广告领取'),
               ),
             ],
           ),
@@ -685,7 +620,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
     );
   }
 
-  Future<void> _handleListenSongClaim(
+  Future<void> _handleListenClaim(
     BuildContext context,
     KugouProvider kugou,
   ) async {
@@ -702,7 +637,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
     );
   }
 
-  Future<void> _handleAdVipClaim(
+  Future<void> _handleAdClaim(
     BuildContext context,
     KugouProvider kugou,
   ) async {
