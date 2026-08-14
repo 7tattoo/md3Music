@@ -346,7 +346,8 @@ class LyricsViewState extends State<LyricsView> {
           style: baseStyle.copyWith(
             fontSize: fontSize,
             height: 1.2,
-            fontWeight: FontWeight.w600,
+            // 用当前行字重测量（当前行字重 >= 非当前行，可保证所有行不截断）
+            fontWeight: _prefs.fontWeight,
             fontFamily: fontFamily,
           ),
         ),
@@ -448,8 +449,8 @@ class LyricsViewState extends State<LyricsView> {
                       style: DefaultTextStyle.of(context).style.copyWith(
                         fontSize: isCurrent ? fontSize : otherFontSize,
                         fontWeight: isCurrent
-                            ? FontWeight.w600
-                            : FontWeight.w400,
+                            ? prefs.fontWeight
+                            : prefs.otherFontWeight,
                         fontFamily: fontFamily,
                         color: isCurrent
                             ? colorScheme.primary
