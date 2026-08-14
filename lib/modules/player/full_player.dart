@@ -3356,11 +3356,15 @@ class _FullPlayerState extends State<FullPlayer>
     // 构造歌曲数据 — 酷狗API要求的格式：歌名|hash|albumId|albumAudioId
     final songData =
         '${song.title}|${song.id}|${song.albumId ?? 0}|${int.tryParse(song.albumAudioId ?? '') ?? 0}';
+    debugPrint(
+      '[AddToPlaylist] listid=$listid name=${playlist['name']} songData=$songData',
+    );
 
     // 后台同步，不阻塞 UI
     api
         .addPlaylistTracks(listid, songData)
         .then((result) {
+          debugPrint('[AddToPlaylist] result=$result');
           // 同步失败时提示用户（静默失败，不影响已显示的乐观更新）
           if (result == null) {
             if (context.mounted) {
