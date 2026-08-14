@@ -96,7 +96,15 @@ class _LaunchPadPageState extends State<LaunchPadPage> {
     final columns = MediaQuery.sizeOf(context).width >= 600 ? 4 : 2;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('LaunchPad')),
+      appBar: AppBar(
+        title: Text(
+          'LaunchPad',
+          // 与 ScrollAwareAppBar 等一级页面标题保持一致：加粗
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ),
       body: GridView.builder(
         padding: const EdgeInsets.all(16),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
