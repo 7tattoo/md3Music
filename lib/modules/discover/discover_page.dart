@@ -185,13 +185,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
       appBar: ScrollAwareAppBar(
         title: 'MD3Music',
         scrollController: _scrollController,
+        // 搜索入口固定在左上角，与标题同一水平线
+        leading: IconButton(
+          icon: const Icon(Icons.search),
+          onPressed: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
-          ),
           IconButton(
             icon: const Icon(Icons.mic_outlined),
             onPressed: () => Navigator.of(context).push(
