@@ -1902,10 +1902,19 @@ class KugouLongAudioAudio {
     final unionCover = transParam is Map<String, dynamic>
         ? transParam['union_cover']
         : null;
+    // 听书章节没有顶层 `hash`，可播放地址是分音质的 hash 字段
+    // （hash_128/hash_320/hash_flac/hash_high/hash_super）。
+    // 优先取 hash_128（标准音质，章节必带），否则回退其他音质 hash，
+    // 最后才用 album_audio_id 等数值 id 兜底（不可直接作 /song/url 的 hash）。
     return KugouLongAudioAudio(
       id: _str(
         json['hash'] ??
             json['play_hash'] ??
+            json['hash_128'] ??
+            json['hash_320'] ??
+            json['hash_flac'] ??
+            json['hash_high'] ??
+            json['hash_super'] ??
             json['album_audio_id'] ??
             json['audio_id'] ??
             json['mixsongid'] ??
