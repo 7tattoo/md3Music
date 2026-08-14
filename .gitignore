@@ -78,3 +78,5 @@ PRODUCT.md
 docs/superpowers/
 trace.html
 音乐频谱显示功能参考推荐与实现计划.md
+third_party/just_audio/android/.gradle/
+android/.kotlin/sessions/
