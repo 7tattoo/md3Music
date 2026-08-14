@@ -6,7 +6,7 @@ import '../../lib/providers/tab_config_provider.dart';
 /// 主页 Tab 默认配置测试。
 ///
 /// 需求：主页 Tab 管理里「本地音乐」默认改为开启（显示），
-/// 其余可选 Tab（搜索/排行榜/听歌识曲）仍默认隐藏。
+/// 其余可选 Tab（封面流/我收藏/私人FM/搜索/排行榜/听歌识曲等）默认隐藏。
 void main() {
   testWidgets('全新安装：本地音乐默认显示，其余可选 Tab 默认隐藏', (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -18,6 +18,12 @@ void main() {
       provider.hiddenTabs.contains('library'),
       isFalse,
       reason: '本地音乐默认不应隐藏',
+    );
+    // 封面流 / 我收藏 / 私人FM 默认关闭
+    expect(
+      provider.hiddenTabs,
+      containsAll(['coverflow', 'favorites', 'fm']),
+      reason: '封面流/我收藏/私人FM 默认隐藏',
     );
     expect(
       provider.hiddenTabs,
@@ -46,6 +52,11 @@ void main() {
       provider.hiddenTabs.contains('library'),
       isFalse,
       reason: '重置后本地音乐应恢复默认显示',
+    );
+    expect(
+      provider.hiddenTabs,
+      containsAll(['coverflow', 'favorites', 'fm']),
+      reason: '重置后封面流/我收藏/私人FM 默认隐藏',
     );
     expect(
       provider.hiddenTabs,

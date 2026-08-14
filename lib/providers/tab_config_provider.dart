@@ -37,14 +37,14 @@ class TabItem {
 const List<TabItem> kDefaultTabs = [
   TabItem(id: 'launchpad', label: 'LaunchPad'),
   TabItem(id: 'discover', label: '发现'),
-  TabItem(id: 'coverflow', label: '封面流'),
-  TabItem(id: 'favorites', label: '我收藏'),
-  TabItem(id: 'fm', label: '私人FM'),
   TabItem(id: 'user', label: '我的', isRemovable: false),
 ];
 
 /// 可选 Tab（默认隐藏，需在设置页手动开启；本地音乐除外）。
 const List<TabItem> kOptionalTabs = [
+  TabItem(id: 'coverflow', label: '封面流'),
+  TabItem(id: 'favorites', label: '我收藏'),
+  TabItem(id: 'fm', label: '私人FM'),
   TabItem(id: 'library', label: '本地音乐'),
   TabItem(id: 'search', label: '搜索'),
   TabItem(id: 'charts', label: '排行榜'),
