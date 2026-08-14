@@ -2724,17 +2724,6 @@ class _FullPlayerState extends State<FullPlayer>
                     _showAddToPlaylistDialog(rootContext, song);
                   },
                 ),
-                ListTile(
-                  leading: const Icon(Icons.share),
-                  title: const Text('分享'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    // TODO: 实现分享功能
-                    ScaffoldMessenger.of(
-                      rootContext,
-                    ).showSnackBar(const SnackBar(content: Text('分享功能开发中')));
-                  },
-                ),
                 SwitchListTile(
                   title: const Text('歌手写真背景'),
                   value: context.read<ThemeProvider>().useArtistPhotoBackground,
