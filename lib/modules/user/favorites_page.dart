@@ -57,6 +57,15 @@ class _FavoritesPageState extends State<FavoritesPage>
   // KugouApiClient.networkReachable，这里只兜底"长时间没有任何 dio 调用"。
   Timer? _networkProbeTimer;
 
+  // 收藏变更通知器。initState 里捕获引用（避免 dispose 时用 context.read
+  // 在元素卸载窗口抛异常导致 removeListener 未执行、监听器泄漏到 defunct
+  // 元素上，进而 setState 抛 "Element defunct" 异常）。
+  PlaylistCollectionNotifier? _collectionNotifier;
+
+  // 标记已 dispose：notifyListeners 同步回调可能在 dispose 之后到达，
+  // 仅靠 mounted 挡不住"元素已 defunct 但 _element 尚未置空"的窗口。
+  bool _disposed = false;
+
   // 分组折叠状态
   bool _createdExpanded = true;
   bool _collectedExpanded = true;
@@ -77,6 +86,7 @@ class _FavoritesPageState extends State<FavoritesPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _collectionNotifier = context.read<PlaylistCollectionNotifier>();
     // 立即探测一次网络 + 每 30 秒兜底探测（dio 拦截器会同步更新
     // KugouApiClient.networkReachable，banner 自动跟随）。
     unawaited(_probeNetwork());
@@ -89,11 +99,9 @@ class _FavoritesPageState extends State<FavoritesPage>
       // 导致 banner 在 cache 显示后才被清掉，闪烁）。
       await _loadCachedData();
       await _loadAccessOrder();
-      if (!mounted) return;
+      if (!mounted || _disposed) return;
       _loadAllData();
-      context.read<PlaylistCollectionNotifier>().addListener(
-        _onCollectionChanged,
-      );
+      _collectionNotifier?.addListener(_onCollectionChanged);
     });
   }
 
@@ -109,9 +117,9 @@ class _FavoritesPageState extends State<FavoritesPage>
 
   @override
   void dispose() {
-    context.read<PlaylistCollectionNotifier>().removeListener(
-      _onCollectionChanged,
-    );
+    _disposed = true;
+    _collectionNotifier?.removeListener(_onCollectionChanged);
+    _collectionNotifier = null;
     _tabController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -151,7 +159,7 @@ class _FavoritesPageState extends State<FavoritesPage>
   }
 
   void _onCollectionChanged() {
-    if (!mounted) return;
+    if (_disposed || !mounted) return;
     _loadPlaylists(forceNoCache: true);
     _loadAlbums(noCache: true);
     // 歌单/专辑/歌手收藏变更都走这个 notifier，歌手列表也要一并刷新
