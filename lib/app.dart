@@ -22,6 +22,11 @@ import 'modules/coverflow/coverflow_page.dart';
 import 'modules/charts/charts_page.dart';
 import 'modules/user/user_center_page.dart';
 import 'modules/user/favorites_page.dart';
+import 'modules/launchpad/launchpad_page.dart';
+import 'modules/ip/ip_page.dart';
+import 'modules/audiobook/audiobook_page.dart';
+import 'modules/scene/scene_page.dart';
+import 'modules/channel/channel_page.dart';
 
 import 'modules/player/full_player.dart';
 import 'modules/player/full_player_route.dart';
@@ -432,6 +437,13 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     // 与外层 AnimatedSwitcher 的左右滑动叠加，形成"内容上浮 → 页面滑入"的层次感。
     Widget page;
     switch (tabId) {
+      case 'launchpad':
+        page = LaunchPadPage(
+          onTabSelected: _switchToTab,
+          onTabEnabled: _enableAndSwitchToTab,
+          onTabOpened: _openTabAsPage,
+        );
+        break;
       case 'discover':
         page = DiscoverPage(
           onAvatarTap: () {
@@ -468,6 +480,18 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
       case 'recognition':
         // Tab 模式：由 _MainLayout 统一提供全局 MiniPlayer，页面不自带
         page = const SongRecognitionPage();
+        break;
+      case 'ip':
+        page = const IpPage();
+        break;
+      case 'audiobook':
+        page = const AudiobookPage();
+        break;
+      case 'scene':
+        page = const ScenePage();
+        break;
+      case 'channel':
+        page = const ChannelPage();
         break;
       case 'settings':
         page = const SettingsPage();
@@ -960,6 +984,18 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
       case 'recognition':
         // 路由模式的 MiniPlayer 由本方法统一提供，关闭页面自带的以免重复
         page = const SongRecognitionPage();
+        break;
+      case 'ip':
+        page = const IpPage();
+        break;
+      case 'audiobook':
+        page = const AudiobookPage();
+        break;
+      case 'scene':
+        page = const ScenePage();
+        break;
+      case 'channel':
+        page = const ChannelPage();
         break;
       case 'settings':
         page = const SettingsPage();

@@ -35,6 +35,7 @@ class TabItem {
 
 /// 默认 Tab 定义（与 app.dart _MainLayout._pages 顺序对应）。
 const List<TabItem> kDefaultTabs = [
+  TabItem(id: 'launchpad', label: 'LaunchPad'),
   TabItem(id: 'discover', label: '发现'),
   TabItem(id: 'coverflow', label: '封面流'),
   TabItem(id: 'favorites', label: '我收藏'),
@@ -47,7 +48,11 @@ const List<TabItem> kOptionalTabs = [
   TabItem(id: 'library', label: '本地音乐'),
   TabItem(id: 'search', label: '搜索'),
   TabItem(id: 'charts', label: '排行榜'),
+  TabItem(id: 'ip', label: '编辑精选'),
   TabItem(id: 'recognition', label: '听歌识曲'),
+  TabItem(id: 'audiobook', label: '听书'),
+  TabItem(id: 'scene', label: '场景音乐'),
+  TabItem(id: 'channel', label: '频道'),
 ];
 
 /// 默认隐藏的可选 Tab id：本地音乐默认开启，其余可选 Tab 默认隐藏。
@@ -96,11 +101,16 @@ class TabConfigProvider extends ChangeNotifier {
           if (tab != null) ordered.add(tab);
         }
         // 补充新增的 tab（版本更新可能新增 tab）
-        // 新增的 tab 默认隐藏，避免老用户升级后突然多出 Tab
+        // 新增的 tab 默认隐藏，避免老用户升级后突然多出 Tab；
+        // 例外：launchpad 作为默认导航首页，升级后也保持默认显示。
+        // 若用户此前主动打开过（toggleTabVisibility 会写 order 使其
+        // 包含该 tab，从而不会走到这个分支），则保持可见。
         for (final tab in kAllAvailableTabs) {
           if (!ordered.any((t) => t.id == tab.id)) {
             ordered.add(tab);
-            _hiddenTabs.add(tab.id);
+            if (tab.id != 'launchpad') {
+              _hiddenTabs.add(tab.id);
+            }
           }
         }
         _allTabs = ordered;

@@ -20,7 +20,10 @@ enum _MvLoadState { loading, ready, noMv, error }
 class MvPlayerPage extends StatefulWidget {
   final Song song;
 
-  const MvPlayerPage({super.key, required this.song});
+  /// 直接播放地址（场景音乐视频等场景），非空时跳过 MV 查询链。
+  final String? directVideoUrl;
+
+  const MvPlayerPage({super.key, required this.song, this.directVideoUrl});
 
   @override
   State<MvPlayerPage> createState() => _MvPlayerPageState();
@@ -107,6 +110,13 @@ class _MvPlayerPageState extends State<MvPlayerPage> {
   }
 
   Future<void> _loadMv() async {
+    // 直接播放模式：已有播放地址（场景音乐视频等），无需 MV 查询链
+    final direct = widget.directVideoUrl;
+    if (direct != null && direct.isNotEmpty) {
+      await _initVideoController(direct, autoPlay: true);
+      return;
+    }
+
     final song = widget.song;
     final albumAudioId = song.albumAudioId;
     if (albumAudioId == null || albumAudioId.isEmpty) {
