@@ -40,7 +40,7 @@ md3Music/
 │   │   │   │                     #   get_server_port + Java_com_md3music_..._native*
 │   │   │   ├── server.rs         # tiny_http 服务器：CORS、cookie、body 解析、apicache、路由分发
 │   │   │   ├── modules/          # 按端点分组的 160+ 个 API 模块（search.rs、audio.rs、lyric.rs、
-│   │   │   │                     #   playlist.rs、user.rs、youth.rs、song_url.rs...）
+│   │   │   │                     #   playlist.rs、user.rs、youth.rs、pcm.rs、song_url.rs...）
 │   │   │   ├── crypto.rs         # MD5/SHA1/AES/RSA（与 JS CryptoJS 行为对齐）
 │   │   │   ├── request.rs        # 上游转发（ureq）、签名、响应组装
 │   │   │   ├── device.rs         # dfid/mid 设备信息持久化（device_info.json）
@@ -48,7 +48,7 @@ md3Music/
 │   │   │   └── ...
 │   │   ├── tests/smoke.rs        # 本地冒烟测试（不依赖外网）
 │   │   ├── .cargo/               # 可选的 Android 交叉编译 linker/CC 配置
-│   │   └── Cargo.toml            # crate-type = ["cdylib", "rlib"]
+│   │   └── Cargo.toml            # crate-type = ["cdylib", "rlib"]；jni 仅 Android target 依赖
 │   ├── module/                   # 旧 JS 模块（200+，已被 Rust 取代，仅作参考/对照）
 │   ├── util/                     # 旧 JS 工具（仅供 networkapi 参考）
 │   └── server.js / bundled_entry.js / server_bundle.js   # 旧 Node 方案遗留，不再打包
@@ -211,8 +211,8 @@ env CC_aarch64_linux_android=$BIN/aarch64-linux-android21-clang \
 
 ### 4.9 `kugou_server` crate 的 release 构建参数
 
-- `crate-type = ["cdylib", "rlib"]`，cdylib 用于导出 FFI/JNI 符号，rlib 用于测试
-- `[profile.release]`：`opt-level = "s"`（体积优先）、`lto = true`、`panic = "abort"`（Android 端 panic 即崩溃，务必避免在请求线程 panic——4.2 曾踩坑）
+- `crate-type = ["cdylib", "rlib"]`，cdylib 用于导出 FFI/JNI 符号，rlib 用于测试；`jni` 依赖仅在 Android target 下引入（桌面构建不编译 JNI 符号）
+- `[profile.release]`：`opt-level = 3`（性能优先，HTTP 服务器是 CPU 密集型）、`lto = true`、`panic = "abort"`（Android 端 panic 即崩溃，务必避免在请求线程 panic——4.2 曾踩坑）；**不要使用 `strip = true`**——cdylib 的动态导出符号（`start_server` / `Java_com_md3music_*` JNI 符号）可能被 strip 移除，导致 App 启动找不到符号崩溃
 
 ---
 
