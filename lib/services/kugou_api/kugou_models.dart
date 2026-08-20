@@ -413,6 +413,7 @@ class KugouSongDetail {
             json['Hash128'] ??
             json['SQFileHash'] ??
             json['HQFileHash'] ??
+            json['sd_hash'] ??
             json['trans_param']?['ogg_128_hash'] ??
             json['audio_info']?['hash'] ??
             '',
@@ -472,6 +473,15 @@ class KugouSongDetail {
                 if (tl != null) return (tl as int) ~/ 1000;
                 final ai = json['audio_info'] as Map<String, dynamic>?;
                 if (ai != null) {
+                  // 频道音乐故事接口：audio_info 内时长字段为 timelength（毫秒，
+                  // 可能为字符串类型）
+                  final atl =
+                      ai['timelength'] ??
+                      ai['timelength_128'] ??
+                      ai['timelength_320'] ??
+                      ai['timelength_flac'];
+                  final atlInt = _parseInt(atl);
+                  if (atlInt > 0) return atlInt ~/ 1000;
                   final d =
                       ai['duration_flac'] as int? ??
                       ai['duration_320'] as int? ??
@@ -507,7 +517,7 @@ class KugouSongDetail {
             json['Hash128'] ??
             json['trans_param']?['ogg_128_hash'],
       ),
-      lyrics: _strNull(json['lyrics'] ?? json['Lyrics']),
+      lyrics: _strNull(json['lyrics'] ?? json['Lyrics'] ?? json['Lyric']),
       albumAudioId: _strNull(
         json['album_audio_id'] ??
             json['AlbumAudioID'] ??
@@ -1375,7 +1385,7 @@ class KugouQuality {
   KugouQuality._();
 
   static const String standard = '128';
-  static const String high = '320';
+  static const String high = 'hq';
   static const String lossless = 'flac';
   static const String hires = 'high';
   static const String master = 'hi-res';
@@ -1492,6 +1502,62 @@ class KugouUserVipDetail {
       expireTime: expireTime,
       conceptExpireTime: conceptExpireTime,
       busiVipList: rawBusiList,
+    );
+  }
+}
+
+/// 听歌等级信息（/user/grade/info，v2/lite 协议）。
+class KugouGradeInfo {
+  /// 服务器当前累计听歌时长（秒）
+  final int? dSec;
+
+  /// 时长（秒，与 d_sec 近似，取其一展示）
+  final int? duration;
+
+  /// 当前等级（如 3）
+  final int? pGrade;
+
+  /// 当前成长值/积分
+  final int? pCurrentPoint;
+
+  /// 本级所需成长值（升到本级时）
+  final int? pGradePoint;
+
+  /// 下一等级
+  final int? pNextGrade;
+
+  /// 升到下一级所需成长值
+  final int? pNextGradePoint;
+
+  /// 服务器时间（字符串）
+  final String? serverTime;
+
+  const KugouGradeInfo({
+    this.dSec,
+    this.duration,
+    this.pGrade,
+    this.pCurrentPoint,
+    this.pGradePoint,
+    this.pNextGrade,
+    this.pNextGradePoint,
+    this.serverTime,
+  });
+
+  factory KugouGradeInfo.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>? ?? json;
+    return KugouGradeInfo(
+      dSec: _parseInt(data['d_sec'] ?? data['dSec']),
+      duration: _parseInt(data['duration']),
+      pGrade: _parseInt(data['p_grade'] ?? data['pGrade']),
+      pCurrentPoint: _parseInt(
+        data['p_current_point'] ?? data['pCurrentPoint'],
+      ),
+      pGradePoint: _parseInt(data['p_grade_point'] ?? data['pGradePoint']),
+      pNextGrade: _parseInt(data['p_next_grade'] ?? data['pNextGrade']),
+      pNextGradePoint: _parseInt(
+        data['p_next_grade_point'] ?? data['pNextGradePoint'],
+      ),
+      serverTime: _strNull(data['servertime'] ?? data['serverTime']),
     );
   }
 }
@@ -1867,9 +1933,7 @@ class KugouLongAudioAlbum {
             json['cover'],
       ),
       author: _strNull(json['author'] ?? json['author_name']),
-      audioCount: _parseInt(
-        json['audio_count'] ?? json['audiocount'] ?? json['audio_total'] ?? 0,
-      ),
+      audioCount: _parseInt(json['audio_count'] ?? json['audiocount'] ?? json['audio_total'] ?? 0),
       intro: _strNull(json['intro'] ?? json['mix_intro'] ?? json['full_intro']),
     );
   }
@@ -1902,19 +1966,10 @@ class KugouLongAudioAudio {
     final unionCover = transParam is Map<String, dynamic>
         ? transParam['union_cover']
         : null;
-    // 听书章节没有顶层 `hash`，可播放地址是分音质的 hash 字段
-    // （hash_128/hash_320/hash_flac/hash_high/hash_super）。
-    // 优先取 hash_128（标准音质，章节必带），否则回退其他音质 hash，
-    // 最后才用 album_audio_id 等数值 id 兜底（不可直接作 /song/url 的 hash）。
     return KugouLongAudioAudio(
       id: _str(
         json['hash'] ??
             json['play_hash'] ??
-            json['hash_128'] ??
-            json['hash_320'] ??
-            json['hash_flac'] ??
-            json['hash_high'] ??
-            json['hash_super'] ??
             json['album_audio_id'] ??
             json['audio_id'] ??
             json['mixsongid'] ??
@@ -1942,6 +1997,35 @@ class KugouLongAudioAudio {
       ),
       albumAudioId: _strNull(json['album_audio_id']),
       albumId: _strNull(json['album_id']),
+    );
+  }
+}
+
+/// 手机验证码登录的多账号候选（酷狗 `/v7/login_by_verifycode` 返回的
+/// `data.user_list` 条目）。一个手机号绑定多个账号时，需展示此列表让用户
+/// 选择，再携带选中账号的 [userid] 二次请求完成登录。
+class KugouLoginAccount {
+  final String userid;
+  final String? nickname;
+  final String? avatar;
+
+  const KugouLoginAccount({
+    required this.userid,
+    this.nickname,
+    this.avatar,
+  });
+
+  factory KugouLoginAccount.fromJson(Map<String, dynamic> json) {
+    return KugouLoginAccount(
+      userid: _str(
+        json['userid'] ?? json['userId'] ?? json['id'] ?? json['user_id'],
+      ),
+      nickname: _strNull(
+        json['nickname'] ?? json['user_name'] ?? json['name'],
+      ),
+      avatar: _resolveArtworkUri(
+        json['avatar'] ?? json['pic'] ?? json['img'] ?? json['imgurl'],
+      ),
     );
   }
 }

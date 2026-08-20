@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 import '../core/services/usb_audio_service.dart';
-import '../providers/player_provider.dart';
+import '../core/utils/app_toast.dart';
 
 /// USB 独占输出设置板块（设置页 / 歌曲信息页共用，保证信息与开关一致）。
 ///
@@ -23,12 +23,17 @@ class _UsbExclusiveSectionState extends State<UsbExclusiveSection> {
   bool _loading = false;
   bool _wasDeviceConnected = false;
 
+  /// USB 独占独立音量（0..1，独立记忆，仅独占生效）。本地副本用于 slider 拖动即时反馈。
+  double _usbVolume = 1.0;
+
   @override
   void initState() {
     super.initState();
     _status = UsbAudioService.instance.lastStatus;
     UsbAudioService.instance.statusStream.listen(_onStatus);
     _wasDeviceConnected = _status['deviceConnected'] == true;
+    // 从服务恢复已持久化的 USB 音量（服务启动时已从 SharedPreferences 读取）
+    _usbVolume = (UsbAudioService.instance.usbVolumePercent / 100).clamp(0.0, 1.0);
   }
 
   void _onStatus(Map<String, dynamic> s) {
@@ -40,52 +45,30 @@ class _UsbExclusiveSectionState extends State<UsbExclusiveSection> {
     if (enabled && _wasDeviceConnected && !nowConnected) {
       widget.onAutoPause?.call();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('USB DAC 已断开，独占输出已自动关闭'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        showToast('USB DAC 已断开，独占输出已自动关闭');
       }
     }
     _wasDeviceConnected = nowConnected;
   }
 
   Future<void> _toggle(bool value) async {
-    // 捕获 provider 再 await，避免跨异步使用 BuildContext
-    final player = context.read<PlayerProvider>();
     setState(() => _loading = true);
     try {
       if (value) {
-        // 先切到 DAC 音量记忆（默认 10%），再开独占，
-        // 避免开启瞬间以普通音量(100%)满功率爆音
-        await player.enterDacExclusive();
-        try {
-          await UsbAudioService.instance.enableExclusive();
-        } catch (e) {
-          // 开启失败：还原普通音量，避免停留在 DAC 音量
-          await player.exitDacExclusive();
-          rethrow;
-        }
+        await UsbAudioService.instance.enableExclusive();
       } else {
         await UsbAudioService.instance.disableExclusive();
-        // 独占关闭后还原普通音量记忆（默认 100%）
-        await player.exitDacExclusive();
       }
       // 立即拉一次最新状态刷新 UI
       final s = await UsbAudioService.instance.getStatus();
       if (mounted) setState(() => _status = s);
     } on UsbAudioException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('USB 独占开启失败：${e.message}')),
-        );
+        showToast('USB 独占开启失败：${e.message}', long: true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('USB 独占操作失败：$e')),
-        );
+        showToast('USB 独占操作失败：$e', long: true);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -112,6 +95,24 @@ class _UsbExclusiveSectionState extends State<UsbExclusiveSection> {
           subtitle: const Text('绕过 Android 混音器，PCM 直写 USB DAC（支持 44.1/48/96kHz 等）'),
           value: enabled,
           onChanged: _loading ? null : _toggle,
+        ),
+        // 播放 MV 时自动关闭独占（默认开启）：独占绕过 AudioFlinger，MV 无系统音频
+        FutureBuilder<bool>(
+          future: UsbAudioService.instance.getAutoDisableForMv(),
+          builder: (context, snapshot) {
+            final autoClose = snapshot.data ?? true;
+            return SwitchListTile(
+              secondary: Icon(Icons.movie_outlined, color: colorScheme.primary),
+              title: const Text('播放 MV 时自动关闭独占'),
+              subtitle: const Text('进入 MV 视频播放时自动关闭 USB 独占，恢复系统音频输出'),
+              value: autoClose,
+              onChanged: (v) async {
+                HapticFeedback.lightImpact();
+                await UsbAudioService.instance.setAutoDisableForMv(v);
+                if (mounted) setState(() {});
+              },
+            );
+          },
         ),
         // 状态卡
         Padding(
@@ -156,6 +157,66 @@ class _UsbExclusiveSectionState extends State<UsbExclusiveSection> {
                     _InfoItem('声道', _formatChannels(_status['channelCount'])),
                     _InfoItem('已写帧', '$frames'),
                   ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        // USB 独占独立音量（任何时候可调；独立记忆，仅对独占生效）
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _usbVolume <= 0
+                          ? Icons.volume_off
+                          : _usbVolume < 0.5
+                              ? Icons.volume_down
+                              : Icons.volume_up,
+                      size: 18,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'USB 音量',
+                        style: textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Text(
+                      '${(_usbVolume * 100).round()}%',
+                      style: textTheme.labelMedium
+                          ?.copyWith(color: colorScheme.primary),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: _usbVolume,
+                  // 实时生效：拖动即下发原生，无需松手
+                  onChanged: (v) {
+                    setState(() => _usbVolume = v);
+                    UsbAudioService.instance.setUsbVolume(v * 100);
+                  },
+                  onChangeStart: (_) => HapticFeedback.lightImpact(),
+                  onChangeEnd: (_) => HapticFeedback.selectionClick(),
+                ),
+                Text(
+                  enabled
+                      ? '已生效：DAC 音量 = 系统音量 × USB 音量'
+                      : '未开启独占时暂不生效，开启后即按此音量输出',
+                  style: textTheme.bodySmall
+                      ?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
               ],
             ),

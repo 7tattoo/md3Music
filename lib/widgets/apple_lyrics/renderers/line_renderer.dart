@@ -99,6 +99,19 @@ class LineRenderer {
   /// 与 _painter 分离避免污染主 painter 的 layout 缓存。
   final TextPainter _lineMeasurer = TextPainter(textDirection: TextDirection.ltr);
 
+  // ============== setLineState 输入缓存 ==============
+  //
+  // 播放稳态下（无用户交互、无 blurFade 变化），每帧都调用 setLineState 但
+  // isActive/scale/blurFade/blurActive 四个输入其实都没变，dynamicDark/dynamicBright
+  // 公式重算纯属浪费。缓存这四个输入，全相等时直接早退，跳过 ~5 次浮点运算 +
+  // target 比较 + _isConverged 重置判断。每帧 30 行 × 120Hz = 3600 次/秒无意义计算。
+
+  bool _lastIsActive = false;
+  double _lastScale = double.nan;
+  double _lastBlurFade = double.nan;
+  bool _lastBlurActive = false;
+  int? _lastActiveColorValue;
+
   // ============== 状态查询 ==============
 
   /// 当前 alpha（用于测试与外部协调）。
@@ -129,6 +142,20 @@ class LineRenderer {
   /// 之前 setLineState 修改 _targetAlpha 但不重置 _isConverged，
   /// 导致后续 tick 调用时 _isConverged=true（来自上次收敛）即便 target 已变也不会重新计算。
   void setLineState({required bool isActive, required double scale, double blurFade = 1.0, bool blurActive = true, int? activeColorValue}) {
+    // 输入缓存早退：稳态下 5 个输入全相等 → 跳过 dynamic 公式重算与 target 比较
+    if (isActive == _lastIsActive &&
+        scale == _lastScale &&
+        blurFade == _lastBlurFade &&
+        blurActive == _lastBlurActive &&
+        activeColorValue == _lastActiveColorValue) {
+      return;
+    }
+    _lastIsActive = isActive;
+    _lastScale = scale;
+    _lastBlurFade = blurFade;
+    _lastBlurActive = blurActive;
+    _lastActiveColorValue = activeColorValue;
+
     _isActive = isActive;
     _activeColorValue = activeColorValue;
     final double factor = ((scale - LyricLayout.inactiveScale) /
@@ -390,5 +417,11 @@ class LineRenderer {
     _boundLine = null;
     _activeColorValue = null;
     _lastAlignment = DuetAlignment.defaultAlign;
+    // 同步重置 setLineState 输入缓存，避免 reset 后下次 setLineState 误命中早退
+    _lastIsActive = false;
+    _lastScale = double.nan;
+    _lastBlurFade = double.nan;
+    _lastBlurActive = false;
+    _lastActiveColorValue = null;
   }
 }

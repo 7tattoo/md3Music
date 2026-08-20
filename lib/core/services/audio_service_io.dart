@@ -1,19 +1,16 @@
+import 'dart:async';
+
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 
 /// 音频焦点 / 音频会话管理。
 ///
 /// 关键设计：
-/// - [_pausedByInterruption]：标记"暂停是由音频焦点永久丢失 / 设备中断引起的"。
+/// - [_pausedByInterruption]：标记“暂停是由音频焦点丢失引起的”。
 ///   仅在这种情况下才在重新获得焦点时自动恢复播放，
 ///   避免覆盖用户主动的暂停。
-/// - 焦点处理策略：
-///   - 临时焦点丢失（[AudioInterruptionType.pause]，通知/导航/微信语音等
-///     其他软件短促发声）：**保持播放不被打断**（用户诉求"与其他软件同时发声"）
-///   - 永久焦点丢失（[AudioInterruptionType.unknown]，电话来电 / 其他媒体应用
-///     抢占）：暂停播放，焦点恢复后自动续播
-///   - 可降音量丢失（[AudioInterruptionType.duck]）：保持原音量继续播放
-///     （修复荣耀平板音量忽高忽低，不做 duck/unduck 音量调整）
+/// - 区分临时中断（pause / unknown → 之后会自动恢复）和永久丢失
+///   （如电话来电、强制中断），后者由 audio_session 标记 `dispose` 状态。
 class AudioService {
   static final AudioService _instance = AudioService._internal();
 
@@ -22,15 +19,14 @@ class AudioService {
   AudioService._internal();
 
   final AudioPlayer _player = AudioPlayer(
-    // ExoPlayer 缓冲配置。曾增大到 60s 以缓解国产安卓设备 CPU 降频导致的欠载，
-    // 但欠载后 bufferForPlaybackAfterRebufferDuration=10s 会把"冻结"拉长到秒级，
-    // 恢复时位置还会前跳。这里压缩缓冲上限与欠载恢复阈值，缩短卡顿时长。
-    // 保留 min==max 的固定 30s 缓冲窗口（与 ExoPlayer 默认 50s/50s 同构）。
+    // Media3 (just_audio 0.10.x) 下缓冲区默认值已较合理，
+    // 这里适度收紧：maxBuffer 从 60s 降到 30s（减少内存占用），
+    // rebuffer 从 10s 降到 3s（缩短欠载后恢复等待，用户体验更流畅）。
     audioLoadConfiguration: AudioLoadConfiguration(
       androidLoadControl: AndroidLoadControl(
-        minBufferDuration: Duration(seconds: 30),
+        minBufferDuration: Duration(seconds: 15),
         maxBufferDuration: Duration(seconds: 30),
-        bufferForPlaybackDuration: Duration(seconds: 3),
+        bufferForPlaybackDuration: Duration(seconds: 2),
         bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
       ),
     ),
@@ -48,6 +44,8 @@ class AudioService {
   Stream<bool> get playingStream => _player.playingStream;
 
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
+
+  ProcessingState get processingState => _player.processingState;
 
   Stream<SequenceState?> get sequenceStateStream => _player.sequenceStateStream;
 
@@ -71,31 +69,57 @@ class AudioService {
   bool _pausedByInterruption = false;
   bool get wasPausedByInterruption => _pausedByInterruption;
 
+  /// 恢复中的互斥锁：焦点事件流与就绪兜底流可能并发触发恢复，
+  /// 用该标志防止重复进入 [play]，避免恢复瞬间的状态抖动。
+  bool _resumeInProgress = false;
+
+  /// 是否响应 duck 压低音量（导航 / 游戏等会短暂压低背景音乐的场景）。
+  /// 默认关闭：荣耀平板 V8 Pro 在频繁 duck/unduck 时音量忽高忽低，
+  /// 开启后 duck 会把音量压到 [_duckVolume]，结束恢复 [1.0]。
+  bool _duckEnabled = false;
+  final double _duckVolume = 0.5;
+  void setDuckEnabled(bool value) => _duckEnabled = value;
+
+  /// 各事件流的订阅句柄，dispose 时统一取消，避免单例长期持有泄漏。
+  StreamSubscription<PlayerState>? _resumeSub;
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
+  StreamSubscription<void>? _noisySub;
+
   Future<void> init() async {
     await _player.setLoopMode(LoopMode.off);
     await _configureAudioSession();
+    _setupResumeOnReady();
+  }
+
+  /// 兜底恢复：当 [tryResumeAfterFocusLoss] 因播放器未 ready 跳过时，
+  /// 监听播放器状态变为 ready 后自动尝试恢复。
+  void _setupResumeOnReady() {
+    _resumeSub = _player.playerStateStream.listen((state) {
+      if (_pausedByInterruption &&
+          state.processingState == ProcessingState.ready) {
+        // ignore: discarded_futures
+        tryResumeAfterFocusLoss();
+      }
+    });
   }
 
   Future<void> _configureAudioSession() async {
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
-      session.interruptionEventStream.listen((event) {
+      _interruptionSub = session.interruptionEventStream.listen((event) {
         if (event.begin) {
           switch (event.type) {
             case AudioInterruptionType.duck:
-              // 修复荣耀平板 V8 Pro 音量忽高忽低问题
-              // 不再降低音量，而是保持原音量（避免频繁 duck/unduck 导致波动）
-              // _player.setVolume(0.5);  // 注释掉：会导致音量波动
+              if (_duckEnabled && _player.playing) {
+                // 仅在显式开启 duck 时压低音量；默认忽略以
+                // 避免荣耀平板 V8 Pro 频繁 duck/unduck 音量波动。
+                // ignore: discarded_futures
+                _player.setVolume(_duckVolume);
+              }
               break;
             case AudioInterruptionType.pause:
-              // 临时焦点丢失（通知、导航语音、微信语音、其他软件短促发声等）：
-              // 保持播放，不被打断（用户诉求"与其他软件同时发声"）。
-              // 不暂停、不降音量，避免音量波动与播放中断。
-              break;
             case AudioInterruptionType.unknown:
-              // 永久焦点丢失（电话来电、其他媒体应用抢占焦点）：
-              // 暂停播放，避免与其他持续发声的应用重叠。
               if (_player.playing) {
                 _pausedByInterruption = true;
                 pause();
@@ -105,21 +129,27 @@ class AudioService {
         } else {
           switch (event.type) {
             case AudioInterruptionType.duck:
-              // 恢复时也不再调整音量，保持 1.0
-              // _player.setVolume(1.0);  // 注释掉：避免音量波动
+              if (_duckEnabled) {
+                // ignore: discarded_futures
+                _player.setVolume(1.0);
+              }
               break;
             case AudioInterruptionType.pause:
               // 焦点恢复：仅在是被动暂停时尝试恢复（不覆盖用户主动暂停）
               tryResumeAfterFocusLoss();
               break;
             case AudioInterruptionType.unknown:
+              // 修复：unknown 型中断（部分游戏引擎 / 游戏内通话上报）结束时
+              // 也尝试恢复播放，否则音乐被动暂停后无法自动恢复。
+              // ignore: discarded_futures
+              tryResumeAfterFocusLoss();
               break;
           }
         }
       });
       // 拔耳机 / 蓝牙断开：通常伴随系统焦点变更，但 just_audio 也会收到
       // becomingNoisyEvent。统一标记为「中断暂停」以便外层恢复逻辑复用。
-      session.becomingNoisyEventStream.listen((_) {
+      _noisySub = session.becomingNoisyEventStream.listen((_) {
         if (_player.playing) {
           _pausedByInterruption = true;
           pause();
@@ -135,13 +165,19 @@ class AudioService {
   /// 2) 播放器已 ready（processingState == ready）
   /// 时才会调 play()，避免与用户主动暂停冲突。
   Future<void> tryResumeAfterFocusLoss() async {
+    if (_resumeInProgress) return; // 防并发恢复
     if (!_pausedByInterruption) return;
     if (_player.processingState != ProcessingState.ready) {
-      // 还没 ready，留着标志位等下次 playingStream 变化再试
+      // 还没 ready，留着标志位等下次状态变化再试
       return;
     }
-    _pausedByInterruption = false;
-    await play();
+    _resumeInProgress = true;
+    try {
+      _pausedByInterruption = false;
+      await play();
+    } finally {
+      _resumeInProgress = false;
+    }
   }
 
   Future<void> play() async {
@@ -220,7 +256,12 @@ class AudioService {
   }
 
   Future<void> dispose() async {
+    await _resumeSub?.cancel();
+    await _interruptionSub?.cancel();
+    await _noisySub?.cancel();
     await _player.dispose();
+    _pausedByInterruption = false;
+    _resumeInProgress = false;
   }
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/desktop_lyric_service.dart';
@@ -228,6 +229,13 @@ class _MiniPlayerState extends State<MiniPlayer>
 
   /// 松手判定展开：push 拖拽路由并让路由从当前进度继续展开。
   /// 此时手势已结束（up 已处理），push 不再影响事件流。
+  ///
+  /// 交接要点（避免松手闪烁）：
+  /// - 覆盖层在 Navigator 之上，路由渲染需要一帧；先 push 路由并停在当前
+  ///   进度（不立即动画），等路由渲染完成后再隐藏覆盖层并启动展开动画，
+  ///   保证「覆盖层 → 路由」无缝衔接
+  /// - 不重置 playerExpansion（覆盖层销毁后由路由 build 同步接管进度），
+  ///   避免 MiniPlayer 瞬间恢复全亮造成闪烁
   void _expandPlayerFromDrag() {
     final progress = playerExpansion.value;
     if (_miniTopY <= 0.0 || progress <= 0.0) {
@@ -235,20 +243,29 @@ class _MiniPlayerState extends State<MiniPlayer>
       playerExpansion.value = 0.0;
       return;
     }
-    // 先隐藏覆盖层，再由路由从相同进度接管显示（位置/透明度一致）
-    playerDragActive.value = false;
-    playerExpansion.value = 0.0;
     final route = fullPlayerRoute(
       context,
       dragOriginTop: _miniTopY,
       screenHeight: MediaQuery.sizeOf(context).height,
     );
-    // ignore: avoid_print
-    print('[MiniPlayer] expand from drag progress=$progress');
     Navigator.of(context).push(route);
     route.controller.stop();
-    route.controller.value = progress; // 从当前手指位置继续
-    route.settleToFull();
+    route.controller.value = progress; // 路由从当前手指位置开始显示
+    // 等待路由渲染（2 帧）后：隐藏覆盖层并启动展开动画
+    var frames = 0;
+    void tick() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        frames++;
+        if (frames >= 2) {
+          playerDragActive.value = false;
+          route.settleToFull();
+        } else {
+          tick();
+        }
+      });
+    }
+
+    tick();
   }
 
   @override
@@ -259,6 +276,7 @@ class _MiniPlayerState extends State<MiniPlayer>
     if (currentSong == null) return const SizedBox.shrink();
 
     final colorScheme = Theme.of(context).colorScheme;
+    final duration = playerProvider.duration ?? Duration.zero;
 
     return ValueListenableBuilder<double>(
       valueListenable: playerExpansion,
@@ -297,8 +315,18 @@ class _MiniPlayerState extends State<MiniPlayer>
                 swipeEnabled ? _onHorizontalDragUpdate : null,
             onHorizontalDragEnd: swipeEnabled ? _onHorizontalDragEnd : null,
             behavior: HitTestBehavior.opaque,
-            child: _buildContent(
-                context, playerProvider, currentSong, colorScheme),
+            // P0: 进度只订阅 positionNotifier（高频 200ms），
+            // 不再因 positionStream 触发整个 MiniPlayer 重建（封面/标题不变）
+            child: ValueListenableBuilder<Duration>(
+              valueListenable: playerProvider.positionNotifier,
+              builder: (context, position, _) {
+                final progress = duration.inMilliseconds > 0
+                    ? position.inMilliseconds / duration.inMilliseconds
+                    : 0.0;
+                return _buildContent(
+                    context, playerProvider, currentSong, colorScheme, progress);
+              },
+            ),
           ),
         ),
       ),
@@ -310,6 +338,7 @@ class _MiniPlayerState extends State<MiniPlayer>
     PlayerProvider playerProvider,
     dynamic currentSong,
     ColorScheme colorScheme,
+    double progress,
   ) {
     return Container(
       // Container 在外提供整体背景色：
@@ -326,19 +355,11 @@ class _MiniPlayerState extends State<MiniPlayer>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ValueListenableBuilder<Duration>(
-              valueListenable: playerProvider.positionNotifier,
-              builder: (context, pos, _) {
-                final d = playerProvider.duration ?? Duration.zero;
-                return LinearProgressIndicator(
-                  value: d.inMilliseconds > 0
-                      ? pos.inMilliseconds / d.inMilliseconds
-                      : 0.0,
-                  minHeight: 2,
-                  backgroundColor: colorScheme.surfaceContainerHighest,
-                  color: colorScheme.primary,
-                );
-              },
+            M3ELinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 2,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              color: colorScheme.primary,
             ),
             Padding(
               padding:
@@ -388,6 +409,7 @@ class _MiniPlayerState extends State<MiniPlayer>
                                     child: SmartArtworkImage(
                                       artworkUri: currentSong.artworkUri,
                                       fallbackFilePath: currentSong.localPath,
+                                      songId: currentSong.id,
                                       size: 44,
                                       borderRadius: 6,
                                     ),

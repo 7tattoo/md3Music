@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:palette_generator/palette_generator.dart';
 
 /// 动态流光背景效果。
@@ -26,8 +25,14 @@ class FlowingBackground extends StatefulWidget {
 }
 
 class _FlowingBackgroundState extends State<FlowingBackground>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
-  Ticker? _ticker;
+    with WidgetsBindingObserver {
+  /// 24fps 驱动定时器（替代 Ticker）。
+  ///
+  /// 原实现用 Ticker + 累积器把 painter 重绘节流到 24fps，但 Ticker 每帧都会
+  /// scheduleFrame() → 引擎每帧 composite/raster，120Hz 屏上即便背景内容不变
+  /// 仍保持 120fps 帧管线（与歌词省电模式相同的坑）。改用 42ms Timer 驱动后，
+  /// 帧生产被真正限制到 24fps。
+  Timer? _ticker;
   // 时间累积通过 ValueNotifier 驱动 CustomPainter 重绘，避免每帧 setState
   // 触发 widget 重建
   final ValueNotifier<double> _timeNotifier = ValueNotifier<double>(0);
@@ -37,7 +42,6 @@ class _FlowingBackgroundState extends State<FlowingBackground>
   // 24fps 是电影工业标准帧率，对人眼缓慢色彩流动足够流畅；
   // 相比 60fps 减少 60% 帧数，CPU/GPU 工作量同步下降。
   static const double _frameInterval = 1 / 24;
-  Duration _lastElapsed = Duration.zero;
   List<Color> _colors = const [Colors.deepPurple, Colors.indigo, Colors.teal];
   String? _lastArtworkUrl;
   // dispose 标志：用于取消 _extractColors 异步任务，
@@ -49,43 +53,40 @@ class _FlowingBackgroundState extends State<FlowingBackground>
   /// 同一封面反复进出播放器时，避免每次重新解码 + PaletteGenerator 分析；
   /// 仅缓存成功结果（失败不缓存，避免临时网络问题导致该封面永远用默认色）。
   static final Map<String, List<Color>> _paletteCache = {};
-  // Ticker 真实运行状态跟踪，用于幂等保护 start/stop 调用
-  // （Ticker.start() 在 Flutter 3.44+ 重复调用会断言失败）
+  // 定时器真实运行状态跟踪，用于幂等保护 start/stop 调用
   bool _isRunning = false;
 
-  /// 进入页面时延迟启动 Ticker 的定时器。
+  /// 进入页面时延迟启动定时器的 Timer。
   ///
   /// 打开播放器的瞬间不立即开始 24fps 全屏渐变绘制，
   /// 等路由入场动画（~300ms）结束后再流动，避免与入场动画、
   /// 模糊背景首帧叠加导致卡顿。
   Timer? _delayedStartTimer;
 
-  /// 幂等地启动/停止 Ticker。
+  /// 幂等地启动/停止 24fps 定时器。
   ///
-  /// Flutter 3.44 起 `Ticker.start()` 不允许重复调用，
-  /// 必须用单一状态变量跟踪当前运行状态：
+  /// 用单一状态变量跟踪运行状态，避免重复 start/stop：
   /// - 已运行时再 start → 直接 return
   /// - 已停止时再 stop → 直接 return
-  /// - 状态切换时才真正调用 start/stop
+  /// - 状态切换时才真正创建/取消定时器
   void _setRunning(bool running) {
     if (running == _isRunning) return;
     _isRunning = running;
     if (running) {
-      _lastElapsed = Duration.zero;
       _accumulatedDt = 0;
-      _ticker?.start();
+      _ticker = Timer.periodic(const Duration(milliseconds: 42), _onTick);
     } else {
-      _ticker?.stop();
+      _ticker?.cancel();
+      _ticker = null;
     }
   }
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker(_onTick);
-    // 注册生命周期监听：后台时停止 Ticker，前台时按 isPlaying 决定是否恢复
+    // 注册生命周期监听：后台时停止定时器，前台时按 isPlaying 决定是否恢复
     WidgetsBinding.instance.addObserver(this);
-    // 延迟到入场动画结束后再启动 Ticker：进入播放器瞬间避免 24fps
+    // 延迟到入场动画结束后再启动：进入播放器瞬间避免 24fps
     // 全屏渐变绘制与路由入场动画 / 模糊背景首帧叠加导致卡顿。
     // （暂停/恢复等后续状态切换仍由 didUpdateWidget 即时处理）
     _setRunning(false);
@@ -107,16 +108,16 @@ class _FlowingBackgroundState extends State<FlowingBackground>
     if (oldWidget.artworkUrl != widget.artworkUrl) {
       _extractColors();
     }
-    // 播放状态变化时切换 Ticker（_setRunning 内部做幂等保护）
+    // 播放状态变化时切换定时器（_setRunning 内部做幂等保护）
     if (oldWidget.isPlaying != widget.isPlaying) {
       _setRunning(widget.isPlaying);
     }
   }
 
-  /// 响应 App 生命周期：后台时停止 Ticker 节省功耗。
+  /// 响应 App 生命周期：后台时停止定时器节省功耗。
   ///
   /// 不依赖 Flutter TickerMode 的原因：部分 Android ROM 在后台仍触发 vsync，
-  /// 导致 Ticker 持续运行。显式停止 Ticker 可确保后台零功耗。
+  /// 导致 Ticker 持续运行。显式停止定时器可确保后台零功耗。
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
@@ -124,20 +125,19 @@ class _FlowingBackgroundState extends State<FlowingBackground>
         state == AppLifecycleState.detached) {
       _setRunning(false);
     } else if (state == AppLifecycleState.resumed) {
-      // 重置 _lastElapsed 避免 resumed 后 dt 跳变（累积后台时间）
-      _lastElapsed = Duration.zero;
+      // 重置累积器避免 resumed 后一次跳变（累积后台时间）
       _accumulatedDt = 0;
       _setRunning(widget.isPlaying);
     }
   }
 
-  /// widget 从树中移除时（如路由收起）立即停止 Ticker。
+  /// widget 从树中移除时（如路由收起）立即停止定时器。
   ///
   /// 关键修复：路由 dismiss 时 removeRoute 会触发子树 deactivate，
-  /// 若 Ticker 仍在持续触发 setState，子树会保持 dirty 状态，
+  /// 若仍在持续触发 setState，子树会保持 dirty 状态，
   /// 导致 InheritedElement.debugDeactivated 中的
   /// `_dependents.isEmpty` 断言失败（dependent 还未清理）。
-  /// 在 deactivate 中提前停止 Ticker 可避免此竞态。
+  /// 在 deactivate 中提前停止可避免此竞态。
   @override
   void deactivate() {
     _delayedStartTimer?.cancel();
@@ -145,18 +145,12 @@ class _FlowingBackgroundState extends State<FlowingBackground>
     super.deactivate();
   }
 
-  void _onTick(Duration elapsed) {
+  /// 24fps 定时器回调：以固定 42ms 步进推进流光时间并触发重绘。
+  void _onTick(Timer timer) {
     // 防御性检查：widget 已销毁或不活跃时跳过
     if (!mounted || _disposed) return;
-    // _lastElapsed 在 start/resume 时重置为 zero，首帧 dt 会被跳过
-    if (_lastElapsed == Duration.zero) {
-      _lastElapsed = elapsed;
-      return;
-    }
-    final dt = (elapsed - _lastElapsed).inMicroseconds / 1000000.0;
-    _lastElapsed = elapsed;
     // 累积时间，达到 _frameInterval 才推进 _time 并触发重绘
-    _accumulatedDt += dt;
+    _accumulatedDt += 42.0 / 1000.0;
     if (_accumulatedDt >= _frameInterval) {
       // 与原实现一致：_time += dt * 0.5（0.5 倍速，4秒一个周期）
       // 这里用累积的 dt 计算，保持视觉速度不变
@@ -194,25 +188,84 @@ class _FlowingBackgroundState extends State<FlowingBackground>
       );
       // 双重检查：mounted（widget 还在树中）+ _disposed（State 未销毁）
       if (!mounted || _disposed) return;
-      final normalized = palette.colors
-          .where((c) => HSLColor.fromColor(c).saturation >= 0.15 &&
-              HSLColor.fromColor(c).lightness > 0.1 &&
-              HSLColor.fromColor(c).lightness < 0.92)
-          .take(3)
+
+      // 有效候选色：palette.colors 按像素占比降序排列，
+      // 过滤掉近黑、近白、低饱和的灰色，避免稀释色彩层次
+      final candidates = palette.colors.where((c) {
+        final hsl = HSLColor.fromColor(c);
+        return hsl.saturation >= 0.15 &&
+            hsl.lightness > 0.1 &&
+            hsl.lightness < 0.92;
+      }).toList();
+
+      // 按色相多样性挑选 3 色：主色取占比最高的颜色，
+      // 其余尽量与已选色相拉开距离，保证冷暖对比、避免整体偏蓝绿
+      final picked = _pickDiverseColors(candidates);
+      if (picked.isEmpty) {
+        picked.add(Colors.deepPurple); // 极端情况兜底（封面近黑/近白）
+      }
+
+      // 候选不足 3 个时由主色派生补足（同色相、逐级压暗），不再回退固定色
+      while (picked.length < 3) {
+        final base = HSLColor.fromColor(picked.first);
+        picked.add(base
+            .withLightness(math.max(0.25, base.lightness - 0.3 * picked.length))
+            .toColor());
+      }
+      // 按亮度降序排列：[最亮主色, 中间强调色, 最深暗部]，
+      // 与三层径向渐变的绘制角色（主色/强调/深色）一一对应
+      picked.sort((a, b) =>
+          HSLColor.fromColor(b).lightness.compareTo(HSLColor.fromColor(a).lightness));
+      // 饱和度温和归一化：低饱和封面避免灰扑扑，过高则收敛避免刺眼
+      final normalized = picked
           .map((c) => HSLColor.fromColor(c)
-              .withSaturation(
-                  HSLColor.fromColor(c).saturation.clamp(0.55, 0.9).toDouble())
+              .withSaturation(HSLColor.fromColor(c).saturation.clamp(0.55, 0.9).toDouble())
               .toColor())
           .toList();
       // 缓存成功结果，供播放器往返时复用
       _paletteCache[url] = normalized;
-      // 兜底：封面未提取到合格色时保留当前默认色，避免流光背景清空
-      if (normalized.isNotEmpty) {
-        setState(() {
-          _colors = normalized;
-        });
-      }
+      setState(() {
+        _colors = normalized;
+      });
     } catch (_) {}
+  }
+
+  /// 按色相多样性贪心挑选流光背景色。
+  ///
+  /// 第一个取像素占比最高的颜色作为主色，之后每轮挑选与已选颜色
+  /// 最小色相距离最大的颜色，确保暖冷色共存，避免背景整体偏向
+  /// 单一色调（如原实现回退固定蓝绿色导致画面发青）。
+  List<Color> _pickDiverseColors(List<Color> candidates) {
+    if (candidates.isEmpty) return <Color>[];
+    final picked = <Color>[];
+    final pool = List<Color>.of(candidates);
+    picked.add(pool.removeAt(0));
+    while (picked.length < 3 && pool.isNotEmpty) {
+      Color best = pool.first;
+      var bestScore = -1.0;
+      for (final c in pool) {
+        final hslC = HSLColor.fromColor(c);
+        // 与所有已选颜色的最小色相距离（0~1，越大差异越明显）
+        var minDist = double.infinity;
+        for (final p in picked) {
+          final d = _hueDistance(hslC, HSLColor.fromColor(p));
+          if (d < minDist) minDist = d;
+        }
+        if (minDist > bestScore) {
+          bestScore = minDist;
+          best = c;
+        }
+      }
+      picked.add(best);
+      pool.remove(best);
+    }
+    return picked;
+  }
+
+  /// 两个 HSL 颜色的色相圆距（0~1，0 表示同色相，1 表示相差 180°）。
+  double _hueDistance(HSLColor a, HSLColor b) {
+    final diff = (a.hue - b.hue).abs() % 360;
+    return math.min(diff, 360 - diff) / 180;
   }
 
   @override
@@ -220,8 +273,7 @@ class _FlowingBackgroundState extends State<FlowingBackground>
     _disposed = true;
     _delayedStartTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    _setRunning(false); // 幂等停止（deactivate 已停过则直接 return）
-    _ticker?.dispose();
+    _setRunning(false); // 幂等停止（deactivate 已停过则直接 return，内部已 cancel）
     _timeNotifier.dispose();
     super.dispose();
   }

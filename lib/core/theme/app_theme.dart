@@ -1,35 +1,73 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../widgets/app_background.dart';
+
+/// 路由过渡：M3 FadeForwards 动效 + 页面自带背景。
+///
+/// 启用全局背景图时页面背景透明，路由过渡中新旧页面内容会叠加重叠。
+/// 本 builder 给每个 MaterialPageRoute 的过渡 child **内嵌 [AppBackground]**，
+/// 使背景图作为页面的一部分一起滑动入场（随画面位移，无跳变），且背景图
+/// 不透明盖住下层旧页面（无重叠）。对所有 MaterialPageRoute 全局生效。
+class _BgSafeFadeForwardsBuilder extends PageTransitionsBuilder {
+  const _BgSafeFadeForwardsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // 背景作为页面底层，随 FadeForwards 一起滑动/淡入
+    final withBg = Stack(
+      fit: StackFit.expand,
+      children: [
+        const AppBackground(),
+        child,
+      ],
+    );
+    // FadeForwards 基础动效：新页面右侧滑入 + 淡入（无白色屏障层）
+    return FadeForwardsPageTransitionsBuilder().buildTransitions(
+      route,
+      context,
+      animation,
+      secondaryAnimation,
+      withBg,
+    );
+  }
+}
+
 class AppTheme {
   AppTheme._();
 
   /// 8 个预设种子色，取自 Material 3 官方 Theme Builder 的 key tone 40。
-  /// 顺序：色环顺序（紫→蓝→青→绿→黄→橙→红→粉）。
-  /// 默认色为第 7 个（红），与 [defaultSeedColor] 保持一致。
+  /// 顺序：色环顺序（蓝→紫→青→绿→黄→橙→红→粉）。
+  /// 索引 0 是默认色，与 [defaultSeedColor] 保持一致。
   static const List<Color> presetSeedColors = [
-    Color(0xFF6750A4), // 紫
-    Color(0xFF0061A4), // 蓝
+    Color(0xFF0061A4), // 蓝（默认）
+    Color(0xFF6750A4), // 紫（M3 默认）
     Color(0xFF006A6A), // 青绿
     Color(0xFF386A20), // 绿
     Color(0xFF7E5700), // 黄
     Color(0xFF8C4A00), // 橙
-    Color(0xFFB3261E), // 红（默认）
+    Color(0xFFB3261E), // 红
     Color(0xFF984061), // 粉
   ];
 
-  /// 默认种子色（红，第 7 个预设），用于未启用系统主题色且未手动选择时的兜底。
+  /// 默认种子色（蓝色），用于未启用系统主题色且未手动选择时的兜底。
   /// 必须独立定义为 const，不能引用 [presetSeedColors] 的索引（非常量表达式）。
-  static const Color defaultSeedColor = Color(0xFFB3261E);
+  static const Color defaultSeedColor = Color(0xFF0061A4);
 
   // CJK 字体回退链 - 按平台优先级排序:
   // 1) Web 浏览器(Windows + Edge) 优先用系统自带的 "Microsoft YaHei" (无需下载)
   // 2) macOS / iOS: PingFang SC
   // 3) Linux: WenQuanYi Micro Hei
-  // 4) 通用 sans-serif（Android 上解析为系统默认字体，含系统 CJK 支持）
-  // 注意：打包的 SimHei 不放入全局回退链——否则「系统默认」模式下 CJK 也会
-  // 回退到打包 SimHei，导致与「内置 SimHei」选项显示一致（用户反馈过此问题）。
-  // SimHei 仅由「内置 SimHei」模式（fontFamily='SimHei'）作为主字体使用。
+  // 4) 打包的 SimHei (assets/fonts/simhei.ttf) 兜底
+  // 5) 通用 sans-serif
+  // 注意: fontFamilyFallback 在 Flutter Web 里会映射为 CSS font-family 链,
+  // 浏览器会按顺序查找已安装的字体, 命中即用. 所以系统字体优先能避免走 Google CDN.
   static const List<String> _cjkFontFallback = [
     'Microsoft YaHei',
     'Microsoft YaHei UI',
@@ -40,6 +78,7 @@ class AppTheme {
     'Source Han Sans SC',
     'Noto Sans CJK SC',
     'Noto Sans SC',
+    'SimHei',
     'sans-serif',
   ];
 
@@ -119,6 +158,14 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       brightness: brightness,
+      // 全局路由过渡：Android 用 FadeForwards（滑动 + 淡入）+ 过渡期间
+      // 背景遮罩（避免透明页面过渡重叠，完成后再露出背景图）。
+      // 其余平台（iOS/macOS）保留系统默认 Cupertino 过渡。
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _BgSafeFadeForwardsBuilder(),
+        },
+      ),
       // fontFamily 为 null 时，Flutter 会走系统字体链（Android 上是 Roboto +
       // Noto Sans CJK），符合"优先展示用户手机字体"需求。
       // fontFamilyFallback 兜底链保证 SimHei 在系统字体缺字符时仍能命中。
@@ -160,10 +207,14 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         height: 80,
         backgroundColor: colorScheme.surface,
-        indicatorColor: colorScheme.secondaryContainer,
+        // 关掉 Flutter 原生 NavigationIndicator：改由 _AnimatedTabIcon 自己画
+        // 带 M3E Expressive 风格的弹簧胶囊（单轴 X 拉伸 + 过冲）
+        indicatorColor: Colors.transparent,
         surfaceTintColor: colorScheme.surfaceTint,
         elevation: 0,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        // 只有选中 tab 显示文字：原生会自动上移 icon 让位 + 淡入 label
+        // （见 navigation_bar.dart _NavigationDestinationLayoutDelegate）
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return IconThemeData(color: colorScheme.onSecondaryContainer);

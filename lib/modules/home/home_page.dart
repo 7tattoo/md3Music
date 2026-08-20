@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:m3e_core/m3e_core.dart';
 
 import '../../core/layout/responsive_layout.dart';
 import '../../data/models/album.dart';
@@ -10,8 +11,6 @@ import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/album_card.dart';
-import '../../widgets/md3e_loading_indicator.dart';
-import '../../widgets/md3e_refresh_indicator.dart';
 import '../../widgets/song_list_item.dart';
 import '../login/login_page.dart';
 
@@ -108,7 +107,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: MD3ERefreshIndicator(
+      body: M3EPullToRefreshIndicator(
         onRefresh: _loadData,
         child: CustomScrollView(
           slivers: [
@@ -138,7 +137,7 @@ class _HomePageState extends State<HomePage> {
                 child: Center(
                   child: Padding(
                     padding: EdgeInsets.all(64),
-                    child: MD3ELoadingIndicator(size: 64),
+                    child: M3ELoadingIndicator(constraints: BoxConstraints.tightFor(width: 64, height: 64)),
                   ),
                 ),
               )
@@ -199,6 +198,8 @@ class _HomePageState extends State<HomePage> {
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: avatarUrl,
+          memCacheWidth: 120,
+          memCacheHeight: 120,
           cacheKey: 'avatar_$userId',
           width: 40,
           height: 40,
@@ -463,6 +464,8 @@ class _PlaylistHorizontalCard extends StatelessWidget {
                   child: artworkUri != null
                       ? CachedNetworkImage(
                           imageUrl: artworkUri!,
+                          memCacheWidth: 480,
+                          memCacheHeight: 480,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           placeholder: (_, _) => Container(
@@ -546,7 +549,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
       body: Consumer<KugouProvider>(
         builder: (context, kugouProvider, child) {
           if (kugouProvider.isLoading) {
-            return const Center(child: MD3ELoadingIndicator());
+            return const Center(child: M3ELoadingIndicator());
           }
           final songs = kugouProvider.currentPlaylistSongs;
           if (songs.isEmpty) {
@@ -613,7 +616,7 @@ class _RankDetailPageState extends State<_RankDetailPage> {
       body: Consumer<KugouProvider>(
         builder: (context, kugouProvider, child) {
           if (kugouProvider.isLoading) {
-            return const Center(child: MD3ELoadingIndicator());
+            return const Center(child: M3ELoadingIndicator());
           }
           final songs = kugouProvider.rankSongs;
           if (songs.isEmpty) {

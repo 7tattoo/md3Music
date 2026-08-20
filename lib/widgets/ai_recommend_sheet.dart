@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:m3e_core/m3e_core.dart';
 
+import '../core/utils/app_toast.dart';
 import '../data/models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/kugou_api/kugou_api_client.dart';
 import '../services/kugou_api/kugou_models.dart';
-import 'md3e_loading_indicator.dart';
 import 'song_list_item.dart';
 
 /// 统一的 AI 推荐歌曲面板入口。
@@ -16,12 +17,7 @@ import 'song_list_item.dart';
 void showAiRecommendSheet(BuildContext context, Song song) {
   final albumAudioId = song.albumAudioId;
   if (albumAudioId == null || albumAudioId.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('该歌曲缺少专辑 ID，无法获取 AI 推荐'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    showToast('该歌曲缺少专辑 ID，无法获取 AI 推荐', long: true);
     return;
   }
   showModalBottomSheet(
@@ -72,27 +68,10 @@ class _AiRecommendSheetState extends State<_AiRecommendSheet> {
       });
       return;
     }
-    // 服务端返回 data 可能是歌曲数组，也可能是嵌套列表字段，防御性解析
-    final data = result['data'];
-    List<dynamic> list;
-    if (data is List) {
-      list = data;
-    } else if (data is Map<String, dynamic>) {
-      list = (data['song_list'] ??
-              data['songs'] ??
-              data['list'] ??
-              data['info'] ??
-              []) as List<dynamic>;
-    } else {
-      list = [];
-    }
-    final songs = list
-        .map((e) => KugouSongDetail.fromJson(e as Map<String, dynamic>))
-        .toList();
     setState(() {
       _isLoading = false;
-      _songs = songs;
-      if (songs.isEmpty) _error = '暂无推荐歌曲';
+      _songs = result;
+      if (result.isEmpty) _error = '暂无推荐歌曲';
     });
   }
 
@@ -147,7 +126,7 @@ class _AiRecommendSheetState extends State<_AiRecommendSheet> {
           const Divider(height: 1),
           Expanded(
             child: _isLoading
-                ? const Center(child: MD3ELoadingIndicator())
+                ? const Center(child: M3ELoadingIndicator())
                 : _error.isNotEmpty
                     ? Center(
                         child: Column(

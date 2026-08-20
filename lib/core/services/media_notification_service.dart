@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 class MediaNotificationService {
   static const MethodChannel _channel = MethodChannel(
-    'com.md3music.md3music/floating_lyric',
+    'com.md3music.premium/floating_lyric',
   );
 
   static void Function()? onPrevious;
@@ -173,6 +173,81 @@ class MediaNotificationService {
     try {
       await _channel.invokeMethod('setBluetoothLyricEnabled', {
         'enabled': enabled,
+      });
+    } catch (_) {}
+  }
+
+  // LyricInfo 歌词转发：把整首歌词（LRC/ELRC JSON）写入 MediaSession extras，
+  // 供 ColorOS 桌面歌词 / LyricInfo 模块等第三方系统读取。
+  // 传入空字符串表示移除 lyricInfo（切歌/功能关闭时调用）。
+  static Future<void> updateLyricInfo(String jsonString) async {
+    try {
+      await _channel.invokeMethod('updateLyricInfo', {
+        'lyricInfo': jsonString,
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> removeLyricInfo() async {
+    await updateLyricInfo('');
+  }
+
+  // ================= 锁屏歌词 =================
+  // 原生侧 LockScreenLyricActivity 覆盖在锁屏上方显示全屏逐字歌词。
+  // Dart 端 DesktopLyricService 每 250ms 推送当前行字级数据。
+
+  static Future<void> showLockScreenLyric() async {
+    try {
+      await _channel.invokeMethod('showLockScreenLyric');
+    } catch (_) {}
+  }
+
+  static Future<void> hideLockScreenLyric() async {
+    try {
+      await _channel.invokeMethod('hideLockScreenLyric');
+    } catch (_) {}
+  }
+
+  /// 推送当前行逐字数据到原生锁屏歌词界面。
+  ///
+  /// [words]/[wordStartTimes]/[wordDurations] 长度一致；
+  /// LRC/纯文本（无逐字）时传空列表，原生侧整行显示。
+  /// [artUrl]/[fallbackFilePath] 用于锁屏背景的模糊专辑封面；
+  /// [fontSize]/[fontWeight] 同步歌词字号与粗细（与 AM 歌词设置一致）。
+  static Future<void> updateLockScreenLyric({
+    required String lineText,
+    required String prevText,
+    required String nextText,
+    required List<String> words,
+    required List<int> wordStartTimes,
+    required List<int> wordDurations,
+    required int currentPositionMs,
+    required int durationMs,
+    required bool isPlaying,
+    required String title,
+    required String artist,
+    String? artUrl,
+    String? fallbackFilePath,
+    double fontSize = 22,
+    int fontWeight = 600,
+  }) async {
+    try {
+      await _channel.invokeMethod('updateLockScreenLyric', {
+        'lineText': lineText,
+        'prevText': prevText,
+        'nextText': nextText,
+        'words': words,
+        'wordStartTimes': wordStartTimes,
+        'wordDurations': wordDurations,
+        'currentPositionMs': currentPositionMs,
+        'durationMs': durationMs,
+        'isPlaying': isPlaying,
+        'title': title,
+        'artist': artist,
+        'artUrl': artUrl,
+        'fallbackFilePath': fallbackFilePath,
+        'fontSize': fontSize,
+        'fontWeight': fontWeight,
       });
     } catch (_) {}
   }

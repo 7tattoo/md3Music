@@ -6,17 +6,12 @@ class FadeInUp extends StatefulWidget {
   final Duration duration;
   final Offset offset;
 
-  /// 是否播放入场动画。列表条目设为 false 可直接显示，
-  /// 避免快速滚动时新条目从透明度 0 开始导致"滑动空白、停下才出现"。
-  final bool animate;
-
   const FadeInUp({
     super.key,
     required this.child,
     this.delayMs = 0,
     this.duration = const Duration(milliseconds: 400),
     this.offset = const Offset(0, 24),
-    this.animate = true,
   });
 
   @override
@@ -44,14 +39,9 @@ class _FadeInUpState extends State<FadeInUp>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
-    if (widget.animate) {
-      Future.delayed(Duration(milliseconds: widget.delayMs), () {
-        if (mounted) _controller.forward();
-      });
-    } else {
-      // 不播动画：直接置为完成态（透明度 1、无位移）
-      _controller.value = 1.0;
-    }
+    Future.delayed(Duration(milliseconds: widget.delayMs), () {
+      if (mounted) _controller.forward();
+    });
   }
 
   @override

@@ -1,12 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:m3e_core/m3e_core.dart';
 
-import '../../core/theme/ios_grouped_theme.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
-import '../../widgets/md3e_loading_indicator.dart';
 import '../player/full_player_route.dart';
 
 /// 封面流页横屏沉浸开关（用户请求语义）：
@@ -18,6 +17,12 @@ final ValueNotifier<bool> kCoverFlowImmersive = ValueNotifier<bool>(false);
 /// 封面流页横屏「实际生效」的沉浸状态：仅 coverflow tab + 横屏 + 用户请求时
 /// 为 true，由 _MainLayout 同步，_SystemUiUpdater 据此跳过系统栏模式覆盖。
 final ValueNotifier<bool> kCoverFlowImmersiveActive = ValueNotifier<bool>(false);
+
+/// 封面流当前居中歌曲的下标。
+/// 横竖屏切换时 _MainLayout 会在 ResponsiveScaffold 的 compact/medium 槽位间
+/// 切换，整棵子树会被卸载重建（State 丢失、回到第一张封面）。
+/// 用模块级变量在重建间保留当前位置，避免旋转后回到第一张。
+int kCoverFlowIndex = 0;
 
 /// 封面流 Tab 页：以 CoverFlow 3D 封面流展示每日推荐。
 ///
@@ -32,7 +37,8 @@ class CoverFlowPage extends StatefulWidget {
 
 class _CoverFlowPageState extends State<CoverFlowPage> {
   /// 当前居中的歌曲下标（横竖屏切换重建封面流时保留位置）。
-  int _currentIndex = 0;
+  /// 初始值取模块级 [kCoverFlowIndex]，重建后继续上次的位置。
+  int _currentIndex = kCoverFlowIndex;
 
   @override
   void initState() {
@@ -47,18 +53,16 @@ class _CoverFlowPageState extends State<CoverFlowPage> {
 
   @override
   Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
-    final scaffold = Scaffold(
-      backgroundColor: IosColors.bg(context),
+    return Scaffold(
       // 横屏沉浸模式：隐藏顶栏
       appBar: isLandscape ? null : AppBar(title: const Text('封面流')),
       body: Consumer<KugouProvider>(
         builder: (context, kugou, _) {
           final songs = kugou.recommendSongs;
           if (songs.isEmpty && kugou.isLoading) {
-            return const Center(child: MD3ELoadingIndicator());
+            return const Center(child: M3ELoadingIndicator());
           }
           if (songs.isEmpty) {
             return _buildEmpty();
@@ -69,8 +73,11 @@ class _CoverFlowPageState extends State<CoverFlowPage> {
                 child: _CoverFlowView(
                   songs: songs,
                   initialIndex: _currentIndex,
-                  onPageChanged: (index) =>
-                      setState(() => _currentIndex = index),
+                  onPageChanged: (index) {
+                    // 同步回模块级变量，供横竖屏切换重建页面时恢复位置
+                    kCoverFlowIndex = index;
+                    setState(() => _currentIndex = index);
+                  },
                   onRefresh: _refresh,
                 ),
               ),
@@ -78,18 +85,6 @@ class _CoverFlowPageState extends State<CoverFlowPage> {
           );
         },
       ),
-    );
-
-    return Theme(
-      data: baseTheme.copyWith(
-        colorScheme: IosColors.scheme(context),
-        scaffoldBackgroundColor: IosColors.bg(context),
-        appBarTheme: baseTheme.appBarTheme.copyWith(
-          backgroundColor: IosColors.bg(context),
-          surfaceTintColor: Colors.transparent,
-        ),
-      ),
-      child: scaffold,
     );
   }
 
@@ -126,7 +121,7 @@ class _CoverFlowPageState extends State<CoverFlowPage> {
 /// CoverFlow 3D 封面流控件（参考 iOS CoverFlow 视觉：中间正面、两侧绕 Y 轴旋转）。
 ///
 /// 自绘布局（非 PageView，修复两个固有缺陷）：
-/// - **z 顺序**：卡片按「离中心距离」升序绘制（远处在下、近处在上），
+/// - **z 顺序**：卡片按「离中心距离」降序绘制（远处在下、近处在上），
 ///   中央卡片永远最上层，两侧近者盖远者，避免 PageView 按 index 绘制导致
 ///   右侧卡片盖住中央卡片；
 /// - **超界消失**：外层 Stack 以视口为界裁剪，卡片部分滑出视口时仅被视口
@@ -311,11 +306,13 @@ class _CoverFlowViewState extends State<_CoverFlowView>
                   }
                   visible.add(i);
                 }
-                // z 顺序：离中心越远越先画（在下层），中心最后画（最上层）
+                // z 顺序：按「离中心距离」降序绘制——远处先画（在下层）、
+                // 中央最后画（最上层），保证当前专辑不被左右两侧卡片遮挡
+                // （横屏时两侧卡片绕 Y 轴旋转，会与中央区域视觉重叠）。
                 visible.sort((a, b) {
                   final da = (a - _page).abs();
                   final db = (b - _page).abs();
-                  return da.compareTo(db);
+                  return db.compareTo(da);
                 });
                 // 卡片定位：交叉轴居中、主轴中心对齐视口中心。
                 // 注意横屏时主轴=宽、交叉轴=高，left/top 需按方向取对应轴。
@@ -353,7 +350,7 @@ class _CoverFlowViewState extends State<_CoverFlowView>
                               width: 20,
                               height: 20,
                               child:
-                                  CircularProgressIndicator(strokeWidth: 2),
+                                  M3ECircularProgressIndicator(size: 20, strokeWidth: 2),
                             ),
                           ),
                         ),
@@ -558,6 +555,8 @@ class _CoverFlowViewState extends State<_CoverFlowView>
     final artwork = song.artworkUri != null && song.artworkUri!.isNotEmpty
         ? CachedNetworkImage(
             imageUrl: song.artworkUri!,
+            memCacheWidth: 750,
+            memCacheHeight: 750,
             width: cardWidth,
             height: cardWidth,
             fit: BoxFit.cover,

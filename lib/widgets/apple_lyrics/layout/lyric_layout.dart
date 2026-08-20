@@ -111,12 +111,7 @@ class LyricLayout {
           text: line.text,
           // 显式注入歌词 fontFamily，必须与 line_renderer 渲染路径一致，
           // 否则行高测量与实际渲染不匹配会导致跳动
-          style: TextStyle(
-            fontSize: fontSize,
-            height: lineHeight,
-            fontFamily: fontFamily,
-            fontWeight: fontWeight,
-          ),
+          style: TextStyle(fontSize: fontSize, height: lineHeight, fontFamily: fontFamily, fontWeight: fontWeight),
         ),
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: maxWidth);
@@ -134,12 +129,7 @@ class LyricLayout {
           text: TextSpan(
             text: word.text,
             // 显式注入歌词 fontFamily，必须与 word_renderer 测量路径一致
-            style: TextStyle(
-              fontSize: fontSize,
-              height: lineHeight,
-              fontFamily: fontFamily,
-              fontWeight: fontWeight,
-            ),
+            style: TextStyle(fontSize: fontSize, height: lineHeight, fontFamily: fontFamily, fontWeight: fontWeight),
           ),
           textDirection: TextDirection.ltr,
         )..layout();

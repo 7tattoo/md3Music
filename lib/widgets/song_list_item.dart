@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/utils/app_toast.dart';
 import '../data/models/song.dart';
 import '../modules/player/comments_view.dart';
 import '../modules/player/mv_player_page.dart';
@@ -56,12 +57,7 @@ class SongListItem extends StatelessWidget {
                 Navigator.pop(ctx);
                 final player = context.read<PlayerProvider>();
                 player.insertAfterCurrent([song]);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('已加入下一首'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                showToast('已加入下一首', long: true);
               },
             ),
             ListTile(
@@ -80,27 +76,15 @@ class SongListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 关键：用 context.select 只订阅本条目关心的字段，避免在播放进度等
-    // 高频 notifyListeners（PlayerProvider 每次 position 更新都会通知）下
-    // 整行重建——大量可见行同时重建会导致滚动空白、停一下才显示。
-    final isCurrentSong = context.select<PlayerProvider, bool>(
-      (p) => p.currentSong?.id == song.id,
-    );
-    final isPlaying =
-        context.select<PlayerProvider, bool>((p) => p.isPlaying);
+    final playerProvider = context.watch<PlayerProvider>();
+    final favoritesProvider = context.watch<FavoritesProvider>();
+    final localFavoritesProvider = context.watch<LocalFavoritesProvider>();
+    final isCurrentSong = playerProvider.currentSong?.id == song.id;
     final isFavorited = forceFavorited
         ? true
-        : song.isOnline
-            ? context.select<FavoritesProvider, bool>(
-                (f) => f.isFavorite(song.id),
-              )
-            : context.select<LocalFavoritesProvider, bool>(
-                (f) => f.isFavorite(song.id),
-              );
-    // 操作回调用 read，不建立订阅（避免跟随进度刷新）
-    final playerProvider = context.read<PlayerProvider>();
-    final favoritesProvider = context.read<FavoritesProvider>();
-    final localFavoritesProvider = context.read<LocalFavoritesProvider>();
+        : (song.isOnline
+            ? favoritesProvider.isFavorite(song.id)
+            : localFavoritesProvider.isFavorite(song.id));
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -124,6 +108,7 @@ class SongListItem extends StatelessWidget {
               SmartArtworkImage(
                 artworkUri: song.artworkUri,
                 fallbackFilePath: song.localPath,
+                songId: song.id,
                 size: imgSize,
                 borderRadius: 8,
               ),
@@ -174,7 +159,7 @@ class SongListItem extends StatelessWidget {
                       child: PlayingSpectrumIndicator(
                         color: colorScheme.primary,
                         size: 14,
-                        isPlaying: isPlaying,
+                        isPlaying: playerProvider.isPlaying,
                       ),
                     ),
                   if (showDuration)

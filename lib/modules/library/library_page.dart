@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/ios_grouped_theme.dart';
+import '../../core/utils/app_toast.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/local_favorites_provider.dart';
-import '../../widgets/md3e_loading_indicator.dart';
 import '../player/full_player_route.dart';
 import 'albums_page.dart';
 import 'artists_page.dart';
@@ -61,13 +61,12 @@ class _LibraryPageState extends State<LibraryPage>
   @override
   Widget build(BuildContext context) {
     final libraryProvider = context.watch<LibraryProvider>();
-    final baseTheme = Theme.of(context);
-    final colorScheme = IosColors.scheme(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final hasMusic = libraryProvider.hasMusic;
     final isScanning = libraryProvider.isScanning;
 
-    final scaffold = Scaffold(
+    return Scaffold(
       appBar: AppBar(
         centerTitle: true,
         title: Text(
@@ -152,36 +151,17 @@ class _LibraryPageState extends State<LibraryPage>
           ? _buildScanningState(colorScheme)
           : !hasMusic
           ? _buildEmptyState(colorScheme)
-          : Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Container(
-                decoration: IosColors.cardDecoration(context),
-                clipBehavior: Clip.antiAlias,
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    SongsPage(songs: libraryProvider.songs),
-                    AlbumsPage(albums: libraryProvider.albums),
-                    ArtistsPage(artists: libraryProvider.artists),
-                    FoldersPage(folders: libraryProvider.folders),
-                    const _LocalFavoritesTab(),
-                  ],
-                ),
-              ),
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                SongsPage(songs: libraryProvider.songs),
+                AlbumsPage(albums: libraryProvider.albums),
+                ArtistsPage(artists: libraryProvider.artists),
+                FoldersPage(folders: libraryProvider.folders),
+                const _LocalFavoritesTab(),
+              ],
             ),
       floatingActionButton: _buildScanFAB(context, colorScheme),
-    );
-
-    return Theme(
-      data: baseTheme.copyWith(
-        colorScheme: colorScheme,
-        scaffoldBackgroundColor: IosColors.bg(context),
-        appBarTheme: baseTheme.appBarTheme.copyWith(
-          backgroundColor: IosColors.bg(context),
-          surfaceTintColor: Colors.transparent,
-        ),
-      ),
-      child: scaffold,
     );
   }
 
@@ -227,9 +207,7 @@ class _LibraryPageState extends State<LibraryPage>
                   Navigator.pop(ctx);
                   final success = await provider.addScanFolder();
                   if (success && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已添加文件夹，点击扫描音乐')),
-                    );
+                    showToast('已添加文件夹，点击扫描音乐', long: true);
                   }
                 },
               ),
@@ -341,11 +319,7 @@ class _LibraryPageState extends State<LibraryPage>
                           if (success) {
                             setModalState(() {});
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('已添加排除文件夹，重新扫描后生效'),
-                                ),
-                              );
+                              showToast('已添加排除文件夹，重新扫描后生效', long: true);
                             }
                           }
                         },
@@ -369,7 +343,7 @@ class _LibraryPageState extends State<LibraryPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const MD3ELoadingIndicator(),
+          const M3ELoadingIndicator(),
           const SizedBox(height: 16),
           Text(
             '正在扫描本地音乐...',

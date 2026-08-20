@@ -3,8 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// USB 独占输出服务：封装原生 MethodChannel "com.md3music.md3music/usb_audio"。
+/// USB 独占输出服务：封装原生 MethodChannel "com.md3music.premium/usb_audio"。
 ///
 /// 提供：
 /// - 开关：enableExclusive / disableExclusive（原生负责授权、开设备、xHCI 时序）
@@ -18,9 +19,10 @@ class UsbAudioService {
   static final UsbAudioService instance = UsbAudioService._();
 
   static const MethodChannel _channel =
-      MethodChannel('com.md3music.md3music/usb_audio');
+      MethodChannel('com.md3music.premium/usb_audio');
 
   static const String _tag = 'UsbAudioService';
+  static const String _keyAutoDisableForMv = 'usb_auto_disable_for_mv';
 
   final StreamController<Map<String, dynamic>> _statusController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -29,6 +31,12 @@ class UsbAudioService {
   Map<String, dynamic> _lastStatus = const {};
   bool _inited = false;
   String _lastPollError = '';
+
+  /// USB 独占独立音量（0..100），独立持久化（key: usb_volume），仅独占生效。
+  double _usbVolumePercent = 100;
+
+  /// USB 音量（0..100），与应用内/系统音量分开记忆。
+  double get usbVolumePercent => _usbVolumePercent;
 
   /// 实时状态流（每秒一帧）。
   Stream<Map<String, dynamic>> get statusStream => _statusController.stream;
@@ -49,6 +57,51 @@ class UsbAudioService {
     _debug('init: start polling (1s)');
     _poll();
     _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _poll());
+    // 恢复 USB 独占独立音量（App 重启后保留）
+    initUsbVolume();
+  }
+
+  /// 从 SharedPreferences 恢复 USB 音量并下发到原生（幂等，可重复调用）。
+  Future<void> initUsbVolume() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _usbVolumePercent = (prefs.getDouble('usb_volume') ?? 100).clamp(0.0, 100.0);
+      await _channel.invokeMethod('setUsbVolume', {'percent': _usbVolumePercent});
+      _debug('initUsbVolume: restored $_usbVolumePercent%');
+    } catch (e) {
+      _debug('initUsbVolume failed: $e');
+    }
+  }
+
+  /// 设置 USB 独占独立音量（0..100），实时生效并持久化（重启保留）。
+  Future<void> setUsbVolume(double percent) async {
+    _usbVolumePercent = percent.clamp(0.0, 100.0);
+    try {
+      await _channel.invokeMethod('setUsbVolume', {'percent': _usbVolumePercent});
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('usb_volume', _usbVolumePercent);
+      _debug('setUsbVolume: $_usbVolumePercent% (persisted)');
+    } catch (e) {
+      _debug('setUsbVolume failed: $e');
+    }
+  }
+
+  /// 「播放 MV 时自动关闭独占」开关（默认开启）：
+  /// USB 独占绕过 AudioFlinger，MV 播放无系统音频，开启后进入 MV 页自动关闭独占。
+  Future<bool> getAutoDisableForMv() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyAutoDisableForMv) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> setAutoDisableForMv(bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyAutoDisableForMv, value);
+    } catch (_) {}
   }
 
   void dispose() {

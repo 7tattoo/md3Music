@@ -53,6 +53,8 @@ const List<TabItem> kOptionalTabs = [
   TabItem(id: 'audiobook', label: '听书'),
   TabItem(id: 'scene', label: '场景音乐'),
   TabItem(id: 'channel', label: '频道'),
+  TabItem(id: 'brush', label: '刷刷'),
+  TabItem(id: 'settings', label: '设置'),
 ];
 
 /// 默认隐藏的可选 Tab id：本地音乐默认开启，其余可选 Tab 默认隐藏。
@@ -143,6 +145,10 @@ class TabConfigProvider extends ChangeNotifier {
 
     if (_hiddenTabs.contains(tabId)) {
       _hiddenTabs.remove(tabId);
+      // 显示 tab 时同步持久化顺序：_load() 会把持久化 order 中缺失的
+      // tab 当作"新增 tab"重新加回隐藏列表，因此必须让 order 包含该 tab，
+      // 否则重启后开关状态被重置（如新增的 audiobook tab）。
+      await _repo.setTabOrder(_allTabs.map((t) => t.id).toList());
     } else {
       // 不允许隐藏所有可移除 tab（至少保留一个可见）
       final visibleCount =
