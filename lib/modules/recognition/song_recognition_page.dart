@@ -9,8 +9,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
+import '../../core/utils/app_toast.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../player/mini_player.dart';
+import 'floating_recognition_service.dart';
 import 'recognition_utils.dart';
 
 class SongRecognitionPage extends StatefulWidget {
@@ -50,6 +52,8 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
   @override
   void initState() {
     super.initState();
+    // 监听悬浮窗识曲状态变化（开启/关闭）刷新入口按钮
+    FloatingRecognitionService.instance.addListener(_onFloatingRecognitionChanged);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -59,8 +63,13 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
     );
   }
 
+  void _onFloatingRecognitionChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    FloatingRecognitionService.instance.removeListener(_onFloatingRecognitionChanged);
     _pulseController.dispose();
     _recorder.dispose();
     super.dispose();
@@ -308,6 +317,11 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
 
   @override
   Widget build(BuildContext context) {
+    // 悬浮窗运行中时同步最新主题色（跟随设置页莫奈/动态取色）
+    if (FloatingRecognitionService.instance.isActive) {
+      FloatingRecognitionService.instance
+          .pushThemeColors(Theme.of(context).colorScheme);
+    }
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -317,6 +331,7 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
       ),
       body: Column(
         children: [
+          _buildFloatingEntry(colorScheme, textTheme),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -351,7 +366,54 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
     );
   }
 
-  /// 悬浮窗识曲入口未移植（公开库不含该功能，Aug 13 范围外）。
+  /// 悬浮窗识曲入口按钮（顶部横幅）。
+  /// 点击开启/关闭悬浮窗式识曲；Android < 10 或权限缺失时给出提示。
+  Widget _buildFloatingEntry(ColorScheme colorScheme, TextTheme textTheme) {
+    final active = FloatingRecognitionService.instance.isActive;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.tonalIcon(
+          onPressed: _openFloatingRecognition,
+          icon: Icon(active ? Icons.stop : Icons.picture_in_picture_alt),
+          label: Text(active ? '关闭悬浮窗识曲' : '悬浮窗模式'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFloatingRecognition() async {
+    final svc = FloatingRecognitionService.instance;
+    if (svc.isActive) {
+      await svc.stop();
+      if (mounted) {
+        showToast('已关闭悬浮窗识曲', long: true);
+        setState(() {});
+      }
+      return;
+    }
+
+    final result = await svc.start();
+    if (!mounted) return;
+    switch (result) {
+      case FloatingStartResult.started:
+        // 开启后立即同步当前主题色到悬浮窗
+        await svc.pushThemeColors(Theme.of(context).colorScheme);
+        if (!mounted) return;
+        showToast('悬浮窗识曲已开启，可返回任意界面点击悬浮按钮识别', long: true);
+        Navigator.of(context).pop();
+      case FloatingStartResult.alreadyActive:
+        break;
+      case FloatingStartResult.unsupported:
+        showToast('仅支持 Android 10 及以上', long: true);
+      case FloatingStartResult.permissionDenied:
+        showToast('需要麦克风/悬浮窗权限，请在系统设置中开启后重试', long: true);
+      case FloatingStartResult.failed:
+        showToast('启动失败，请重试', long: true);
+    }
+  }
+
   Widget _buildPulseCircle(ColorScheme colorScheme) {
     return Center(
       child: GestureDetector(
