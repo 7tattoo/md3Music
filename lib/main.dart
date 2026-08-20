@@ -226,14 +226,6 @@ Future<void> _requestPermissions() async {
       print('Audio permission request failed: $e');
     }
   }
-  // Android 11+ 管理外部存储权限：修改公共目录文件元数据（封面/歌词）需要
-  if (await Permission.manageExternalStorage.isDenied) {
-    try {
-      await Permission.manageExternalStorage.request();
-    } catch (e) {
-      print('Manage external storage permission request failed: $e');
-    }
-  }
   // 忽略电池优化：只弹一次（不管用户选什么都标记为已弹）
   try {
     final prefs = await SharedPreferences.getInstance();
