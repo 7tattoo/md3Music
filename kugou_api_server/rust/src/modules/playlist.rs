@@ -68,9 +68,9 @@ fn aes_roundtrip(
     url: &str,
     data_obj: &Value,
     params: Value,
-    headers: &[(&str, &str)],
     clear_default_params: bool,
     not_signature: bool,
+    headers: &[(&str, &str)],
 ) -> Result<ModuleResponse, ModuleResponse> {
     let userid = param_or_cookie_str(q, "userid", "0")
         .trim()
@@ -107,6 +107,8 @@ fn aes_roundtrip(
         .encrypt_type("android")
         .cookie(q_cookie(q))
         .response_type("arraybuffer");
+    // 酷狗网关 gateway.kugou.com 靠 x-router 头把请求分发到后端服务，
+    // 缺失时网关无法路由直接回显 URL 拒绝（502）。与 playlist_del.js 对齐。
     for (k, v) in headers {
         opts = opts.header(k, v);
     }
@@ -190,12 +192,17 @@ pub fn handle_del(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, ModuleResponse
         "last_area": "gztx",
         "last_time": now_secs(),
     });
-    // delete_list 必须带 x-router 指向 cloudlist 服务，否则网关无法路由该接口
-    // （返回 {status:0, msg:<完整URL>}，表现为 502）。与 JS playlist_del.js 的
-    // `headers: { 'x-router': 'cloudlist.service.kugou.com' }` 对齐。
     aes_roundtrip(
-        q, ctx, None, "/v2/delete_list", &dm, params,
-        &[("x-router", "cloudlist.service.kugou.com")], false, false,
+        q,
+        ctx,
+        None,
+        "/v2/delete_list",
+        &dm,
+        params,
+        false,
+        false,
+        // 网关分发头：与 playlist_del.js 一致，缺失返回 502
+        &[("x-router", "cloudlist.service.kugou.com")],
     )
 }
 

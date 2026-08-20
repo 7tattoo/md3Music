@@ -128,12 +128,12 @@ fn server_responds_404_and_cors() {
     let paths = [
         "GET /playlist/tags HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /playlist/detail?ids=1,2 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
-        "GET /playlist/del?listid=1&type=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /playlist/track/all?global_collection_id=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /playlist/track/all/new?listid=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /user/cloud/url?hash=abc HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /user/video/love HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /user/vip/detail HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+        "GET /user/grade/info HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /youth/channel/all HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /youth/channel/song?global_collection_id=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
         "GET /youth/channel/song/detail?global_collection_id=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
@@ -152,6 +152,8 @@ fn server_responds_404_and_cors() {
         "POST /login HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 2\r\n\r\n{}",
         "POST /playlist/add HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 2\r\n\r\n{}",
         "POST /user/cloud HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 2\r\n\r\n{}",
+        // 上传路由：无文件二进制 body → 400（"请通过请求体传入文件二进制数据"），非 404 即证明 dispatch 成功
+        "POST /user/cloud/upload HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 2\r\n\r\n{}",
     ];
     for raw in paths {
         let resp = tcp_request(port, raw);

@@ -120,6 +120,8 @@ pub struct RequestOptions {
     pub ip: String,
     pub real_ip: String,
     pub response_type: Option<String>,
+    /// 使用标准版(非概念版)签名盐。刷刷(brush) feed 接口 appid=1005 需要标准盐。
+    pub standard_signature: bool,
 }
 
 impl RequestOptions {
@@ -140,6 +142,7 @@ impl RequestOptions {
             ip: String::new(),
             real_ip: String::new(),
             response_type: None,
+            standard_signature: false,
         }
     }
 
@@ -207,6 +210,11 @@ impl RequestOptions {
 
     pub fn response_type(mut self, v: &str) -> Self {
         self.response_type = Some(v.to_string());
+        self
+    }
+
+    pub fn standard_signature(mut self, v: bool) -> Self {
+        self.standard_signature = v;
         self
     }
 
@@ -491,7 +499,13 @@ pub fn create_request(opts: &RequestOptions) -> Result<ModuleResponse, ModuleRes
         let sig = match opts.encrypt_type.as_deref() {
             Some("register") => helper::signature_register_params(&params),
             Some("web") => helper::signature_web_params(&params),
-            _ => helper::signature_android_params(&params, &sig_data, is_buffer),
+            _ => {
+                if opts.standard_signature {
+                    helper::signature_android_params_standard(&params, &sig_data, is_buffer)
+                } else {
+                    helper::signature_android_params(&params, &sig_data, is_buffer)
+                }
+            }
         };
         params
             .as_object_mut()
@@ -657,7 +671,15 @@ pub fn raw_request(
         req = req.set(k, v);
     }
     let resp = match &data {
-        BodyData::None => req.call(),
+        BodyData::None => {
+            // 对齐 axios 行为：POST 无 body 时也发送 Content-Length: 0。
+            // ureq 对空 body 的 POST 默认不带 Content-Length，
+            // 部分上游（如云盘上传 bssulbig 的 multipart/complete）会因此返回 411 Length Required。
+            if method.eq_ignore_ascii_case("POST") {
+                req = req.set("Content-Length", "0");
+            }
+            req.call()
+        }
         BodyData::Json(v) => {
             let body = crate::util::json_stringify(v);
             req = req.set("Content-Type", "application/json;charset=utf-8");
