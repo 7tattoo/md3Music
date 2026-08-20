@@ -2309,7 +2309,7 @@ class _SettingsPageState extends State<SettingsPage>
   /// 打开原生 Miuix 发现页测试：通过 MethodChannel 启动 MiuixDiscoverActivity，
   /// 并把本地 Rust API 服务器当前端口传过去（原生页据此直连取数）。
   Future<void> _openMiuixDiscover() async {
-    const channel = MethodChannel('com.md3music.premium/miuix_discover');
+    const channel = MethodChannel('com.md3music.md3music/miuix_discover');
     try {
       await channel.invokeMethod('open', {'port': KugouApiServer.currentPort});
     } catch (e) {

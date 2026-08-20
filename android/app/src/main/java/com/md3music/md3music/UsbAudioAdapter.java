@@ -1,4 +1,4 @@
-package com.md3music.md3music.usb;
+package com.md3music.md3music;
 
 import com.ryanheise.just_audio.UsbAudioSink;
 

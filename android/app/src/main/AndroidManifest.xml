@@ -1,4 +1,9 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- SuperLyricApi 3.4 声明 minSdk 26，项目保持 minSdk 24（Android 7.0）。
+         overrideLibrary 强制放行以便构建；minSdk 由 build.gradle 提供（此处不重复声明）。
+         设置页已按 Android 版本（API 26+）禁用开关，低版本不会触发运行调用。 -->
+    <uses-sdk tools:overrideLibrary="com.hchen.superlyricapi" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -25,7 +30,7 @@
         android:label="md3music"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"
+        android:allowBackup="false"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
@@ -35,7 +40,8 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:supportsPictureInPicture="true">
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user
                  while the Flutter UI initializes. After that, this theme continues
@@ -77,6 +83,32 @@
             android:name=".FloatingLyricService"
             android:foregroundServiceType="specialUse"
             android:exported="false" />
+        <!-- 锁屏歌词：全屏覆盖在锁屏上方，显示逐字歌词 -->
+        <activity
+            android:name=".LockScreenLyricActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:showWhenLocked="true"
+            android:theme="@style/Theme.MD3Music.LockScreen" />
+        <receiver
+            android:name=".LockScreenLyricReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.SCREEN_ON" />
+                <action android:name="android.intent.action.SCREEN_OFF" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+            </intent-filter>
+        </receiver>
+        <!-- Miuix 风格发现页（原生 Compose + miuix 组件），由设置页经 MethodChannel 打开 -->
+        <activity
+            android:name=".MiuixDiscoverActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:windowSoftInputMode="adjustResize" />
         <!-- 桌面播放器小组件 -->
         <receiver
             android:name=".MusicWidgetProvider"
@@ -95,10 +127,6 @@
         <meta-data android:name="lyricon_module_author" android:value="𝒗𝒄𝒆𝒙𝒎𝒍 &amp; Little-White3110" />
         <meta-data android:name="lyricon_module_description" android:value="MD3Music Lyricon Provider" />
         <meta-data android:name="lyricon_module_tags" android:resource="@array/lyricon_module_tags" />
-        <!-- 静态 App Shortcuts：长按桌面图标显示快捷方式 -->
-        <meta-data
-            android:name="android.app.shortcuts"
-            android:resource="@xml/shortcuts" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
