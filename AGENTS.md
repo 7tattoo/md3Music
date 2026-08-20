@@ -333,3 +333,32 @@ flutter analyze                           # Dart 静态分析
 - **分叉点**：两分支基于 `c7ec59b` 并行分叉，后端架构（Rust vs Node.js）与前端功能各自演进；后续合流需手动处理 AGENTS.md、构建脚本、jniLibs 及歌词渲染代码的差异
 - **切换分支的坑**：两分支 jniLibs 下的 `.so` 不同（`libkugou_server.so` vs `libnode.so`）；切回旧架构分支时，残留的 `libnode.so` 会以 untracked 文件形式留在工作区，可手动删除
 - **其他分支**：`main`（旧主线，无 AGENTS.md，Node.js）；`feat-*` / `fix-*`（一次性功能/修复分支）；`pr/update-md3music-content`（内容更新 PR 分支）
+
+---
+
+## 8. 公开版（public）偏好约定（用户决策，勿违反）
+
+> 本节记录用户在「公开库 zzyoxml/md3Music / rust-local-two」上确认的长期偏好。
+> 任何同步/移植/开发都必须遵守；与私有库（premium）行为冲突时以本节为准。
+
+### 8.1 权限（敏感权限一律不弹窗、不声明）
+- ❌ **不请求「所有文件访问」权限**（`MANAGE_EXTERNAL_STORAGE`）：公开版不含下载/边听边存，无需修改公共目录文件元数据；Manifest 与 main.dart 均已移除
+- ❌ **不请求「忽略电池优化」（电量无限制）权限弹窗**（`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`）：启动流程不再请求
+- ✅ 仅保留必需权限：通知（POST_NOTIFICATIONS）、麦克风/媒体音频（RECORD_AUDIO / READ_MEDIA_AUDIO）、悬浮窗（SYSTEM_ALERT_WINDOW，浮窗识曲用）等
+
+### 8.2 包名与平台
+- ✅ 保持 `com.md3music.md3music`（applicationId/namespace/JNI 符号 `Java_com_md3music_md3music_*`/MethodChannel 名）
+- ❌ 不采用私有库的 `com.md3music.premium` 改名
+- ❌ 不支持 Windows（公开版仅 Android）；不移植 `windows/`、`just_audio_windows`、`video_player_win`、`build_windows.ps1` 等
+
+### 8.3 功能范围
+- ❌ **不移植「边听边存」与「下载」功能**：stream_cache_*、download_*、downloads_*、metadata_writer 及其在 player_provider/kugou_provider/settings/playlist/song_list_item 等的嵌入点
+- ✅ **浮窗识曲需要保留**（源自私有库 Aug 13 提交，用户明确要）
+- ✅ 歌词字重、锁屏歌词、SuperLyric、MV 画中画、刷刷、已购页、听歌等级、多账号等已移植功能均保留
+
+### 8.4 UI 决策
+- ✅ Tab 默认配置：`LaunchPad`/`发现`/`我的` 默认显示；**封面流/我收藏/私人FM 默认关闭**；本地音乐默认开启；其余可选 Tab（搜索/排行榜/编辑精选/听歌识曲/听书/场景音乐/频道/刷刷/设置）默认隐藏
+- ✅ 播放页右上角菜单**不显示分享入口**
+- ✅ 发现页搜索图标固定在**左上角**（leading，与标题同一水平线），标题为 `MD3Music`
+- ✅ LaunchPad 标题**加粗**（titleLarge + w600，与其他一级页面一致）
+- ✅ 首页默认 `LaunchPad`（保持）
