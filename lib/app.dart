@@ -422,11 +422,12 @@ class _AppViewState extends State<_AppView> {
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: Colors.transparent,
       ),
+      // 公开版偏好：背景模式下底部导航栏/侧栏用较高透明度，明显透出背景图
       navigationBarTheme: base.navigationBarTheme.copyWith(
-        backgroundColor: cs.surface.withValues(alpha: 0.82),
+        backgroundColor: cs.surface.withValues(alpha: 0.72),
       ),
       navigationRailTheme: base.navigationRailTheme.copyWith(
-        backgroundColor: cs.surface.withValues(alpha: 0.82),
+        backgroundColor: cs.surface.withValues(alpha: 0.72),
       ),
       drawerTheme: base.drawerTheme.copyWith(
         backgroundColor: cs.surface.withValues(alpha: 0.96),

@@ -107,7 +107,9 @@ class _ResponsiveScaffoldState extends State<ResponsiveScaffold> {
       bottomNavigationBar: widget.hideNavigation
           ? null
           : NavigationBar(
-              height: 56,
+              // 公开版偏好：底部导航栏下沉一点高度（更厚 + 底部留白），仅图标更突出
+              height: 68,
+              labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
               selectedIndex: widget.selectedIndex,
               onDestinationSelected: widget.onDestinationSelected,
               destinations: widget.destinations,
@@ -145,6 +147,8 @@ class _ResponsiveScaffoldState extends State<ResponsiveScaffold> {
                       leading: widget.floatingActionButton,
                       groupAlignment: 0.0,
                       labelType: NavigationRailLabelType.all,
+                      // 公开版偏好：侧栏宽度收窄（去文字后图标居中更紧凑）
+                      minWidth: 56,
                     ),
                   ),
                 );

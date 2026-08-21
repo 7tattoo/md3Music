@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/theme_provider.dart';
 
 /// 通用滚动感知 AppBar。
 ///
@@ -32,10 +35,11 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
   final double fadeRange;
   final Widget? leading;
 
-  /// 为 true 时背景恒为不透明 theme.surface（不做透明渐变）。
+  /// 为 true 时背景用半透明 surface（固定 alpha），不做滚动透明度渐变。
   ///
   /// 用于有全局背景图/滚动时内容透出会导致标题文字与背景重叠变色的页面
-  /// （如发现页顶部），保证标题/图标区域始终置于稳定的表面之上、不变色。
+  /// （如发现页顶部）：既透出底层自定义背景图，又保证标题/图标区域始终
+  /// 置于稳定的半透明表面之上、文字不变色。
   final bool opaque;
 
   const ScrollAwareAppBar({
@@ -92,13 +96,19 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final t = (_scrollOffset / widget.fadeRange).clamp(0.0, 1.0);
+    // 启用自定义背景时 opaque 用半透明 surface 透出背景图；
+    // 未启用背景时 opaque 恒为不透明 surface，保证文字区稳定不变色。
+    final useBackgroundImage =
+        context.watch<ThemeProvider>().useBackgroundImage;
 
     // 背景从透明渐变到 surface：仅插值 alpha（透明度），保持 surface 色相。
     // 不能用 Color.lerp(Colors.transparent, surface, t)：transparent 是
     // alpha=0 的黑色，逐通道插值会让中间态变成半透明灰（顶栏先变暗再变正常）。
-    // opaque 时恒为不透明 surface，避免滚动内容/全局背景图透出与标题重叠。
-    final backgroundColor =
-        widget.opaque ? colorScheme.surface : colorScheme.surface.withValues(alpha: t);
+    final backgroundColor = widget.opaque
+        ? (useBackgroundImage
+            ? colorScheme.surface.withValues(alpha: 0.85)
+            : colorScheme.surface)
+        : colorScheme.surface.withValues(alpha: t);
 
     return AppBar(
       backgroundColor: backgroundColor,
