@@ -370,6 +370,7 @@ flutter analyze                           # Dart 静态分析
 - ✅ 底部导航栏（NavigationBar）与平板侧栏（NavigationRail）**都只显示图标、不显示文字**
 
 ### 8.6 自定义背景 / 导航布局（公开版）
-- ✅ 启用自定义背景图时，**发现页顶部、MiniPlayer、底部导航栏、平板侧栏都透出模糊背景图**（表面 alpha 0.35~0.4，让背景图而非表面色成为主导）
-- ✅ 底部导航栏**高度较大下沉突出**（height 76 + 底部 padding）
-- ✅ 平板侧栏宽度**更窄**（NavigationRail minWidth=52）
+- ✅ 启用自定义背景图时，**发现页顶部、MiniPlayer、底部导航栏、平板侧栏都透出模糊背景图**（表面 alpha 0.2，背景图清晰主导）
+- ✅ 底部导航栏**高度减半、无浮动动画**（height 44，图标按钮静态切换，去掉悬浮 padding）
+- ✅ 平板侧栏宽度**大幅收窄到仅容纳图标**（minWidth 34），labelType none 使图标垂直居中
+
