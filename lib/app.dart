@@ -12,6 +12,7 @@ import 'core/services/lyricon_provider_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/motion_constants.dart';
 import 'core/utils/artwork_color_extractor.dart';
+import 'core/utils/app_toast.dart';
 import 'core/widgets/app_background.dart';
 import 'data/models/playlist.dart';
 import 'main.dart'
@@ -1460,21 +1461,9 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     );
   }
 
-  /// 显示「再按一次退出」提示（Toast，非弹窗）。
+  /// 显示「再按一次退出」提示（系统原生 Toast，非 SnackBar/弹窗）。
   void _showDoubleBackToast() {
-    // 复用全局 Toast（app_toast.dart）；若不可用则忽略。
-    try {
-      final messenger = ScaffoldMessenger.of(context);
-      messenger
-        ..removeCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('再按一次返回退出'),
-            duration: Duration(milliseconds: 2000),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    } catch (_) {}
+    showToast('再按一次返回退出');
   }
 
   /// 真正退出 App：

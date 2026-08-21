@@ -185,19 +185,20 @@ class _DiscoverPageState extends State<DiscoverPage> {
         // 公开版偏好：无壁纸时顶部恒为不透明 surface（文字区稳定）；
         // 有壁纸时顶栏完全透明，壁纸透出与页面主体透明度上下一致
         opaque: true,
-        // 搜索入口固定在左上角，与标题同一水平线
-        leading: IconButton(
-          icon: const Icon(Icons.search),
-          onPressed: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
-        ),
+        // 公开版偏好：搜索入口固定在右上角最右（发现已在最左，
+        // 搜索放最右拉开与标题距离）；识曲图标在其左侧
         actions: [
           IconButton(
             icon: const Icon(Icons.mic_outlined),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SongRecognitionPage()),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
           ),
         ],
       ),

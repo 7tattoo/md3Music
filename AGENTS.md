@@ -359,18 +359,20 @@ flutter analyze                           # Dart 静态分析
 ### 8.4 UI 决策
 - ✅ Tab 默认配置：`LaunchPad`/`发现`/`我的` 默认显示；**封面流/我收藏/私人FM 默认关闭**；本地音乐默认开启；其余可选 Tab（搜索/排行榜/编辑精选/听歌识曲/听书/场景音乐/频道/刷刷/设置）默认隐藏
 - ✅ 播放页右上角菜单**不显示分享入口**
-- ✅ 发现页搜索图标固定在**左上角**（leading，与标题同一水平线），标题为 `MD3Music`
+- ✅ 发现页搜索图标固定在**右上角最右**（actions 末位；识曲图标在其左侧）——发现 tab 已在最左，搜索放最右拉开与标题距离；标题为 `发现`
 - ✅ LaunchPad 标题**加粗**（titleLarge + w600，与其他一级页面一致）
 - ✅ 首页默认 `LaunchPad`（保持）
 
 ### 8.5 交互/UI 细节（公开版）
-- ✅ 退出 App：**「再按一次返回退出」**（3 秒窗口，Toast 提示），**不再弹确认对话框**
+- ✅ 退出 App：**「再按一次返回退出」**（3 秒窗口），**不再弹确认对话框**；提示用**系统原生 Toast**（`app_toast.dart` 的 `showToast`，fluttertoast，非 SnackBar）
 - ✅ 一首歌添加到歌单前**先查重**：已在目标歌单中则提示「已在歌单中」并跳过，不重复添加（MD3/AM 两套播放器均生效）
 - ✅ 发现页顶部**文字/图标区域置于顶层**（opaque）：无壁纸时背景恒为不透明 surface，不与滚动内容重叠变色
 - ✅ 底部导航栏（NavigationBar）与平板侧栏（NavigationRail）**都只显示图标、不显示文字**
+- ✅ 播放页随机/循环按钮激活时**有圆形底色**（primaryContainer 圆底 + onPrimaryContainer 图标，v5.2.1 同款），突出强调避免看不清；未激活为透明灰图标
 
 ### 8.6 自定义背景 / 导航布局（公开版）
 - ✅ 启用自定义背景图时，**发现页顶部完全透明**（`ScrollAwareAppBar` opaque 分支返回 `Colors.transparent`，与「我的收藏」等普通 AppBar 一致，壁纸透出透明度上下统一）；MiniPlayer、底部导航栏、平板侧栏透出模糊背景图（表面 alpha 0.2，背景图清晰主导）
 - ✅ 底部导航栏**高度减半、无浮动动画**（height 44，图标按钮静态切换，去掉悬浮 padding）
-- ✅ 平板侧栏宽度**大幅收窄到仅容纳图标**（minWidth 34），labelType none 使图标垂直居中
+- ✅ 横屏侧栏改用**自定义 `CompactNavigationRail`**（不再用 NavigationRail）：宽度 34 仅容纳图标、**图标间距 6dp（M3 内置 12dp 的一半）**、**图标组垂直居中**（原 SingleChildScrollView 包裹会破坏 NavigationRail 内部 Flexible+Align 居中，图标堆顶部）、tab 过多时可滚动；背景/指示器颜色读 NavigationRailTheme（壁纸模式自动半透明）
+- ✅ MiniPlayer **留白减半**：内边距 horizontal 8→4 / vertical 4→2、封面-文字间距 12→8、右侧按钮 `VisualDensity.compact`（48→40）
 

@@ -2153,13 +2153,19 @@ class _FullPlayerState extends State<FullPlayer>
       children: [
         // shuffle — 保留原 IconButton，不参与动画
         IconButton(
+          // 激活：填充 primaryContainer 圆底 + 深色图标，突出强调避免看不清
+          style: IconButton.styleFrom(
+            backgroundColor: playerProvider.shuffleEnabled
+                ? colorScheme.primaryContainer
+                : Colors.transparent,
+            foregroundColor: playerProvider.shuffleEnabled
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant,
+          ),
           icon: Icon(
             playerProvider.shuffleEnabled
                 ? Icons.shuffle
                 : Icons.shuffle_outlined,
-            color: playerProvider.shuffleEnabled
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant,
           ),
           onPressed: () => playerProvider.toggleShuffle(),
         ),
@@ -2183,11 +2189,17 @@ class _FullPlayerState extends State<FullPlayer>
         SizedBox(width: spacing),
         // loop — 保留原 IconButton，不参与动画
         IconButton(
+          // 激活：填充 primaryContainer 圆底 + 深色图标，突出强调避免看不清
+          style: IconButton.styleFrom(
+            backgroundColor: playerProvider.loopMode != AppLoopMode.off
+                ? colorScheme.primaryContainer
+                : Colors.transparent,
+            foregroundColor: playerProvider.loopMode != AppLoopMode.off
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant,
+          ),
           icon: Icon(
             _getLoopModeIcon(playerProvider.loopMode),
-            color: playerProvider.loopMode != AppLoopMode.off
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant,
           ),
           onPressed: () => playerProvider.toggleLoopMode(),
         ),

@@ -135,32 +135,11 @@ class _ResponsiveScaffoldState extends State<ResponsiveScaffold> {
           Visibility(
             visible: !widget.hideNavigation,
             maintainState: true,
-            // tab 项过多时 NavigationRail 内容超出高度，包一层可滚动容器：
-            // 内容少时 ConstrainedBox(minHeight) 撑满视口保持 groupAlignment 居中，
-            // 内容多时 SingleChildScrollView 支持上下滑动查看全部 tab。
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: NavigationRail(
-                      selectedIndex: widget.selectedIndex,
-                      onDestinationSelected: widget.onDestinationSelected,
-                      destinations: widget.railDestinations,
-                      leading: widget.floatingActionButton,
-                      // 公开版偏好：侧栏无文字（labelType none → 图标垂直居中），
-                      // 宽度大幅收窄（仅容纳图标）
-                      labelType: NavigationRailLabelType.none,
-                      minWidth: 34,
-                      minExtendedWidth: 34,
-                      groupAlignment: 0.0,
-                    ),
-                  ),
-                );
-              },
+            child: CompactNavigationRail(
+              selectedIndex: widget.selectedIndex,
+              onDestinationSelected: widget.onDestinationSelected,
+              destinations: widget.railDestinations,
+              leading: widget.floatingActionButton,
             ),
           ),
           Visibility(
@@ -174,6 +153,134 @@ class _ResponsiveScaffoldState extends State<ResponsiveScaffold> {
           ),
           Expanded(child: widget.mediumBody ?? widget.body),
         ],
+      ),
+    );
+  }
+}
+
+/// 紧凑侧边导航栏：仅图标（24dp），图标间距 6dp（M3 NavigationRail 内置
+/// 12dp 的一半），图标组整体垂直居中，tab 过多时可滚动。
+///
+/// 不直接用 NavigationRail 的原因：
+/// - 其 destination 间距（12dp）是私有常量，公开 API 无法调小；
+/// - 外包 SingleChildScrollView 会导致内部 Flexible+Align 收到无界高度，
+///   groupAlignment 垂直居中失效（图标堆在顶部、下方大片空白）。
+///
+/// 背景与指示器颜色读取 NavigationRailTheme（背景图模式下由
+/// app.dart 覆写为半透明 surface 透出壁纸）。
+class CompactNavigationRail extends StatelessWidget {
+  const CompactNavigationRail({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.destinations,
+    this.leading,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final List<NavigationRailDestination> destinations;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    final railTheme = NavigationRailTheme.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: railTheme.backgroundColor ?? colorScheme.surface,
+      // 左侧安全区（横屏刘海/挖孔），与原 NavigationRail 的 SafeArea 行为一致
+      child: SafeArea(
+        left: true,
+        top: false,
+        right: false,
+        bottom: false,
+        child: SizedBox(
+          width: 34,
+          child: Column(
+            children: [
+              if (leading != null) ...[leading!, const SizedBox(height: 8)],
+              Expanded(
+                // Center + SingleChildScrollView（内容小→收缩居中；内容多→撑满滚动）
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (int i = 0; i < destinations.length; i++)
+                          _CompactRailDestination(
+                            selected: selectedIndex == i,
+                            icon:
+                                selectedIndex == i
+                                ? destinations[i].selectedIcon
+                                : destinations[i].icon,
+                            indicatorColor:
+                                railTheme.indicatorColor ??
+                                colorScheme.secondaryContainer,
+                            selectedIconColor:
+                                railTheme.selectedIconTheme?.color ??
+                                colorScheme.onSecondaryContainer,
+                            unselectedIconColor:
+                                railTheme.unselectedIconTheme?.color ??
+                                colorScheme.onSurfaceVariant,
+                            onTap: () => onDestinationSelected(i),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactRailDestination extends StatelessWidget {
+  const _CompactRailDestination({
+    required this.selected,
+    required this.icon,
+    required this.indicatorColor,
+    required this.selectedIconColor,
+    required this.unselectedIconColor,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final Widget icon;
+  final Color indicatorColor;
+  final Color selectedIconColor;
+  final Color unselectedIconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(17),
+      child: Padding(
+        // 上下各 3 → 相邻图标间距 6dp（M3 默认 12dp 的一半）
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: selected
+              ? ShapeDecoration(
+                  color: indicatorColor,
+                  shape: const StadiumBorder(),
+                )
+              : null,
+          child: IconTheme.merge(
+            data: IconThemeData(
+              size: 24,
+              color: selected ? selectedIconColor : unselectedIconColor,
+            ),
+            child: icon,
+          ),
+        ),
       ),
     );
   }
