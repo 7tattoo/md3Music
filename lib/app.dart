@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -522,6 +523,10 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
   /// 词幕连接失败弹窗展示中标记，防止连发 connect_failed 时重复弹窗。
   bool _lyriconFailDialogShown = false;
 
+  /// 二次返回退出：首次返回后置位，3 秒内再次返回触发真正退出。
+  bool _exitPressed = false;
+  Timer? _exitResetTimer;
+
   /// 根据 tab id 构建对应页面 Widget。
   Widget _buildPageForTab(String tabId) {
     // 统一在 tab 页外层包 ContentEntrance：向上淡入滑动（400ms, easeOutCubic），
@@ -614,7 +619,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.grid_view_outlined,
             filledIcon: Icons.grid_view,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'discover':
         return NavigationDestination(
@@ -623,7 +629,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.explore_outlined,
             filledIcon: Icons.explore,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'coverflow':
         return NavigationDestination(
@@ -632,7 +639,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.album_outlined,
             filledIcon: Icons.album,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'library':
         return NavigationDestination(
@@ -641,7 +649,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.library_music_outlined,
             filledIcon: Icons.library_music,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'favorites':
         return NavigationDestination(
@@ -650,7 +659,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.favorite_outline,
             filledIcon: Icons.favorite,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'fm':
         return NavigationDestination(
@@ -659,7 +669,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.radio_outlined,
             filledIcon: Icons.radio,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'search':
         return NavigationDestination(
@@ -668,7 +679,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.search_outlined,
             filledIcon: Icons.search,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'charts':
         return NavigationDestination(
@@ -677,7 +689,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.leaderboard_outlined,
             filledIcon: Icons.leaderboard,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'ip':
         return NavigationDestination(
@@ -686,7 +699,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.edit_note_outlined,
             filledIcon: Icons.edit_note,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'recognition':
         return NavigationDestination(
@@ -695,7 +709,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.mic_none_outlined,
             filledIcon: Icons.mic,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'audiobook':
         return NavigationDestination(
@@ -704,7 +719,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.auto_stories_outlined,
             filledIcon: Icons.auto_stories,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'scene':
         return NavigationDestination(
@@ -713,7 +729,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.landscape_outlined,
             filledIcon: Icons.landscape,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'channel':
         return NavigationDestination(
@@ -722,7 +739,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.dynamic_feed_outlined,
             filledIcon: Icons.dynamic_feed,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'brush':
         return NavigationDestination(
@@ -731,7 +749,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.swipe_outlined,
             filledIcon: Icons.swipe,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'settings':
         return NavigationDestination(
@@ -740,7 +759,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.settings_outlined,
             filledIcon: Icons.settings,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       case 'user':
         return NavigationDestination(
@@ -749,7 +769,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.person_outlined,
             filledIcon: Icons.person,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
       default:
         return NavigationDestination(
@@ -758,7 +779,8 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.circle_outlined,
             filledIcon: Icons.circle,
           ),
-          label: tab.label,
+          // 公开版偏好：底部导航栏不显示文字，仅图标
+          label: '',
         );
     }
   }
@@ -1001,6 +1023,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _exitResetTimer?.cancel();
     LyriconProviderService.instance.removeListener(_onLyriconStateChanged);
     kCoverFlowImmersive.removeListener(_onCoverFlowImmersiveChanged);
     shortcutTabRequest.removeListener(_handleShortcutTabRequest);
@@ -1276,7 +1299,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
         if (immersive) {
           kCoverFlowImmersive.value = false;
         } else {
-          _showExitConfirmDialog();
+          _onBackPressedForExit();
         }
       },
       child: ResponsiveScaffold(
@@ -1404,52 +1427,66 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     );
   }
 
-  /// 显示"退出 App"确认对话框。
-  ///
-  /// 点击退出按钮会触发：
-  /// 1) `PlayerProvider.pause()` — 停 just_audio + 同步通知栏
-  /// 2) `KugouApiServer.stop()` — 释放本地 API 服务器端口，停止服务器
-  /// 3) `SystemNavigator.pop()` — 通知系统 finish 当前 Activity，
-  ///    系统会随之销毁进程（等同 kill app）
-  void _showExitConfirmDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('退出 App'),
-        content: const Text('确定要退出 md3Music 吗？\n将停止播放并释放本地 API 服务器 服务器。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              // 关闭对话框（避免 SystemNavigator.pop 后 context 失效）
-              Navigator.of(ctx).pop();
-              // 1) 暂停播放（just_audio 内部会停音频 + 通知栏可同步清空）
-              // ignore: discarded_futures
-              context.read<PlayerProvider>().pause();
-              // 2) 关停 API 服务器（释放端口）
-              // 必须等待完成，否则端口未释放，下次冷启动会冲突导致闪退
-              try {
-                await KugouApiServer.stop();
-                // nativeStopNode() 在独立线程执行，MethodChannel 返回只代表调用已发出，
-                // 需要给 native 线程一点时间完成 服务器线程退出
-                await Future.delayed(const Duration(milliseconds: 300));
-              } catch (_) {}
-              // 3) 杀进程：exit(0) 立即终止整个进程（含服务器线程），
-              //    确保端口一定被释放。SystemNavigator.pop() 只 finish Activity，
-              //    进程可能残留，导致下次启动时端口冲突/服务器未启动。
-              // ignore: avoid_print
-              print('Exiting app...');
-              exit(0);
-            },
-            child: const Text('退出'),
-          ),
-        ],
-      ),
+  /// 二次返回退出：首次返回显示提示，3 秒内再次返回触发真正退出（不弹窗）。
+  void _onBackPressedForExit() {
+    if (_exitPressed) {
+      _exitResetTimer?.cancel();
+      _exitPressed = false;
+      _doExit();
+      return;
+    }
+    _exitPressed = true;
+    // ignore: avoid_print
+    print('再按一次返回退出 App');
+    _showDoubleBackToast();
+    _exitResetTimer?.cancel();
+    _exitResetTimer = Timer(
+      const Duration(seconds: 3),
+      () {
+        _exitPressed = false;
+        _exitResetTimer = null;
+      },
     );
   }
+
+  /// 显示「再按一次退出」提示（Toast，非弹窗）。
+  void _showDoubleBackToast() {
+    // 复用全局 Toast（app_toast.dart）；若不可用则忽略。
+    try {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger
+        ..removeCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('再按一次返回退出'),
+            duration: Duration(milliseconds: 2000),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (_) {}
+  }
+
+  /// 真正退出 App：
+  /// 1) `PlayerProvider.pause()` — 停 just_audio + 同步通知栏
+  /// 2) `KugouApiServer.stop()` — 释放本地 API 服务器端口，停止服务器
+  /// 3) `exit(0)` — 立即终止整个进程（保证端口释放）
+  Future<void> _doExit() async {
+    // ignore: discarded_futures
+    context.read<PlayerProvider>().pause();
+    try {
+      await KugouApiServer.stop();
+      // nativeStopNode() 在独立线程执行，MethodChannel 返回只代表调用已发出，
+      // 需要给 native 线程一点时间完成 服务器线程退出
+      await Future.delayed(const Duration(milliseconds: 300));
+    } catch (_) {}
+    // 杀进程：exit(0) 立即终止整个进程（含服务器线程），
+    // 确保端口一定被释放。SystemNavigator.pop() 只 finish Activity，
+    // 进程可能残留，导致下次启动时端口冲突/服务器未启动。
+    // ignore: avoid_print
+    print('Exiting app...');
+    exit(0);
+  }
+
 }
 
 /// 底部 NavigationBar 的 tab 图标 + 自定义 M3E Expressive 胶囊 indicator。

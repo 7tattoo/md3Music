@@ -3408,6 +3408,8 @@ class _FullPlayerState extends State<FullPlayer>
     final api = KugouApiClient();
     final listid =
         playlist['listid']?.toString() ?? playlist['list_id']?.toString() ?? '';
+    final globalCollectionId =
+        playlist['global_collection_id']?.toString() ?? playlist['gid']?.toString() ?? '';
 
     if (listid.isEmpty) {
       if (!context.mounted) return;
@@ -3415,9 +3417,30 @@ class _FullPlayerState extends State<FullPlayer>
       return;
     }
 
+    if (!context.mounted) return;
+    final name = (playlist['name'] ?? playlist['specialname'] ?? '未知歌单').toString();
+
+    // 公开版偏好：添加前先检查歌曲是否已在歌单中，存在则不执行。
+    // 用 global_collection_id 拉取歌单歌曲，按歌曲 hash（song.id）判断是否已存在。
+    try {
+      final gid = globalCollectionId.isNotEmpty ? globalCollectionId : listid;
+      final existing = await api.getPlaylistTrackAll(id: gid, page: 1, pagesize: 100);
+      if (existing != null) {
+        final songHash = song.id?.toString().toLowerCase() ?? '';
+        final already =
+            existing.any((s) => s.hash.toLowerCase() == songHash);
+        if (already) {
+          if (context.mounted) showToast('已在歌单「$name」中');
+          return;
+        }
+      }
+    } catch (_) {
+      // 查询失败不阻断添加，继续走原逻辑
+    }
+
     // 乐观更新：立即显示成功，后台同步到酷狗服务器
     if (!context.mounted) return;
-    showToast('已添加到「${playlist['name']}」');
+    showToast('已添加到「$name」');
 
     // 构造歌曲数据 — 酷狗API要求的格式：歌名|hash|albumId|albumAudioId
     final songData =

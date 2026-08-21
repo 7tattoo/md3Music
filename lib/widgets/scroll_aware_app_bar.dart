@@ -32,6 +32,12 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
   final double fadeRange;
   final Widget? leading;
 
+  /// 为 true 时背景恒为不透明 theme.surface（不做透明渐变）。
+  ///
+  /// 用于有全局背景图/滚动时内容透出会导致标题文字与背景重叠变色的页面
+  /// （如发现页顶部），保证标题/图标区域始终置于稳定的表面之上、不变色。
+  final bool opaque;
+
   const ScrollAwareAppBar({
     super.key,
     required this.title,
@@ -39,6 +45,7 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
     this.scrollController,
     this.fadeRange = 80,
     this.leading,
+    this.opaque = false,
   });
 
   @override
@@ -89,7 +96,9 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
     // 背景从透明渐变到 surface：仅插值 alpha（透明度），保持 surface 色相。
     // 不能用 Color.lerp(Colors.transparent, surface, t)：transparent 是
     // alpha=0 的黑色，逐通道插值会让中间态变成半透明灰（顶栏先变暗再变正常）。
-    final backgroundColor = colorScheme.surface.withValues(alpha: t);
+    // opaque 时恒为不透明 surface，避免滚动内容/全局背景图透出与标题重叠。
+    final backgroundColor =
+        widget.opaque ? colorScheme.surface : colorScheme.surface.withValues(alpha: t);
 
     return AppBar(
       backgroundColor: backgroundColor,

@@ -185,6 +185,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
       appBar: ScrollAwareAppBar(
         title: 'MD3Music',
         scrollController: _scrollController,
+        // 公开版偏好：顶部文字区域置于顶层、背景不透出（避免与滚动内容/全局背景图重叠变色）
+        opaque: true,
         // 搜索入口固定在左上角，与标题同一水平线
         leading: IconButton(
           icon: const Icon(Icons.search),
