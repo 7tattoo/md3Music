@@ -351,7 +351,7 @@ class _MiniPlayerState extends State<MiniPlayer>
       // 启用自定义背景时改用半透明 surface，透出底层背景图。
       decoration: BoxDecoration(
         color: useBackgroundImage
-            ? colorScheme.surface.withValues(alpha: 0.82)
+            ? colorScheme.surface.withValues(alpha: 0.35)
             : colorScheme.surfaceContainerHigh,
       ),
       child: SafeArea(

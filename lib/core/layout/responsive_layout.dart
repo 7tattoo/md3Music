@@ -106,13 +106,16 @@ class _ResponsiveScaffoldState extends State<ResponsiveScaffold> {
       floatingActionButton: widget.floatingActionButton,
       bottomNavigationBar: widget.hideNavigation
           ? null
-          : NavigationBar(
-              // 公开版偏好：底部导航栏下沉一点高度（更厚 + 底部留白），仅图标更突出
-              height: 68,
-              labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-              selectedIndex: widget.selectedIndex,
-              onDestinationSelected: widget.onDestinationSelected,
-              destinations: widget.destinations,
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: NavigationBar(
+                // 公开版偏好：底部导航栏深度更大（更厚，图标更下沉突出）
+                height: 76,
+                labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+                selectedIndex: widget.selectedIndex,
+                onDestinationSelected: widget.onDestinationSelected,
+                destinations: widget.destinations,
+              ),
             ),
     );
   }
@@ -147,8 +150,8 @@ class _ResponsiveScaffoldState extends State<ResponsiveScaffold> {
                       leading: widget.floatingActionButton,
                       groupAlignment: 0.0,
                       labelType: NavigationRailLabelType.all,
-                      // 公开版偏好：侧栏宽度收窄（去文字后图标居中更紧凑）
-                      minWidth: 56,
+                      // 公开版偏好：侧栏宽度进一步收窄（去文字后图标居中更紧凑）
+                      minWidth: 52,
                     ),
                   ),
                 );

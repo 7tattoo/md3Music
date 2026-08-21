@@ -104,9 +104,11 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
     // 背景从透明渐变到 surface：仅插值 alpha（透明度），保持 surface 色相。
     // 不能用 Color.lerp(Colors.transparent, surface, t)：transparent 是
     // alpha=0 的黑色，逐通道插值会让中间态变成半透明灰（顶栏先变暗再变正常）。
+    // opaque 语义：未启用背景时恒为不透明 surface（文字区稳定不变色）；
+    // 启用背景时用低 alpha 半透明 surface，让模糊背景图透出（与主体一致）。
     final backgroundColor = widget.opaque
         ? (useBackgroundImage
-            ? colorScheme.surface.withValues(alpha: 0.85)
+            ? colorScheme.surface.withValues(alpha: 0.4)
             : colorScheme.surface)
         : colorScheme.surface.withValues(alpha: t);
 
