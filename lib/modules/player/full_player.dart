@@ -2153,13 +2153,14 @@ class _FullPlayerState extends State<FullPlayer>
       children: [
         // shuffle — 保留原 IconButton，不参与动画
         IconButton(
-          // 激活：填充 primaryContainer 圆底 + 深色图标，突出强调避免看不清
+          // 激活：填充 secondaryContainer 圆底 + onSecondaryContainer 图标，
+          // 与底部导航栏选中态的 M3 指示器配色保持一致
           style: IconButton.styleFrom(
             backgroundColor: playerProvider.shuffleEnabled
-                ? colorScheme.primaryContainer
+                ? colorScheme.secondaryContainer
                 : Colors.transparent,
             foregroundColor: playerProvider.shuffleEnabled
-                ? colorScheme.onPrimaryContainer
+                ? colorScheme.onSecondaryContainer
                 : colorScheme.onSurfaceVariant,
           ),
           icon: Icon(
@@ -2189,13 +2190,14 @@ class _FullPlayerState extends State<FullPlayer>
         SizedBox(width: spacing),
         // loop — 保留原 IconButton，不参与动画
         IconButton(
-          // 激活：填充 primaryContainer 圆底 + 深色图标，突出强调避免看不清
+          // 激活：填充 secondaryContainer 圆底 + onSecondaryContainer 图标，
+          // 与底部导航栏选中态的 M3 指示器配色保持一致
           style: IconButton.styleFrom(
             backgroundColor: playerProvider.loopMode != AppLoopMode.off
-                ? colorScheme.primaryContainer
+                ? colorScheme.secondaryContainer
                 : Colors.transparent,
             foregroundColor: playerProvider.loopMode != AppLoopMode.off
-                ? colorScheme.onPrimaryContainer
+                ? colorScheme.onSecondaryContainer
                 : colorScheme.onSurfaceVariant,
           ),
           icon: Icon(

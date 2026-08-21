@@ -269,7 +269,10 @@ class _IpDetailPageState extends State<IpDetailPage>
       final songs = _songs;
       if (songs.isEmpty && _zoneHome == null) return _empty('暂无音乐');
       return ListView(
-        padding: const EdgeInsets.only(bottom: 24),
+        // 底部叠加系统手势条（小横条）高度，避免末项被压住
+        padding: EdgeInsets.only(
+          bottom: 24 + MediaQuery.paddingOf(context).bottom,
+        ),
         children: [
           if (_zoneHome != null) _buildZoneHeader(),
           ...List.generate(songs.length, (i) {
@@ -364,7 +367,9 @@ class _IpDetailPageState extends State<IpDetailPage>
       if (albums.isEmpty) return _empty('暂无专辑');
       final cs = Theme.of(context).colorScheme;
       return PinchableGridView(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.fromLTRB(
+          12, 12, 12, 12 + MediaQuery.paddingOf(context).bottom,
+        ),
         spacing: 12.0,
         childAspectRatio: 0.78,
         itemCount: albums.length,
@@ -423,7 +428,9 @@ class _IpDetailPageState extends State<IpDetailPage>
       if (videos.isEmpty) return _empty('暂无视频');
       final cs = Theme.of(context).colorScheme;
       return ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom,
+        ),
         itemCount: videos.length,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, i) {
@@ -515,7 +522,9 @@ class _IpDetailPageState extends State<IpDetailPage>
       final artists = _artists;
       if (artists.isEmpty) return _empty('暂无歌手');
       return ListView.separated(
-        padding: const EdgeInsets.all(8),
+        padding: EdgeInsets.fromLTRB(
+          8, 8, 8, 8 + MediaQuery.paddingOf(context).bottom,
+        ),
         itemCount: artists.length,
         separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
         itemBuilder: (context, i) {
@@ -584,7 +593,9 @@ class _IpDetailPageState extends State<IpDetailPage>
       if (playlists.isEmpty) return _empty('暂无歌单');
       final cs = Theme.of(context).colorScheme;
       return ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom,
+        ),
         itemCount: playlists.length,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, i) {

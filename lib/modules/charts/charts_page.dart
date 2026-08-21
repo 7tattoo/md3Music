@@ -432,7 +432,10 @@ class _RankSongPageState extends State<_RankSongPage> {
                   );
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  // 底部叠加系统手势条（小横条）高度，避免末项被压住
+                  padding: EdgeInsets.fromLTRB(
+                    16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   itemCount: songs.length,
                   itemBuilder: (context, i) {
                     final song = songs[i].toSong();

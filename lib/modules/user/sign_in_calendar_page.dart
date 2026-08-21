@@ -46,7 +46,10 @@ class _SignInCalendarPageState extends State<SignInCalendarPage> {
               await kugou.getVipMonthRecord();
             },
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+              // 底部叠加系统手势条（小横条）高度，避免末项被压住
+              padding: EdgeInsets.fromLTRB(
+                16, 16, 16, 80 + MediaQuery.paddingOf(context).bottom,
+              ),
               children: [_buildVipCalendar(cs, tt, kugou, context)],
             ),
           );

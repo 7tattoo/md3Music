@@ -355,7 +355,7 @@ class _LaunchPadPageState extends State<LaunchPadPage> {
   }
 }
 
-/// LaunchPad 网格卡片：图标 + 名称；隐藏的 tab 半透明显示。
+/// LaunchPad 网格卡片：图标 + 名称；固定与未固定的样式一致（均不透明）。
 ///
 /// 可见 tab 用 [InkWell] 点击切换；隐藏 tab 用 [GestureDetector] 注册
 /// onTap（跳二级页）+ onLongPress（启用），手势竞技场裁决点击/长按/滑动，
@@ -386,33 +386,31 @@ class _LaunchPadCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final content = Opacity(
-      opacity: hidden ? 0.45 : 1.0,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Material(
-          color: cs.surfaceContainerLow,
-          child: InkWell(
-            onTap: hidden ? null : onTap,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 36, color: cs.primary),
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
-                    ),
+    // 固定/未固定的卡片样式完全一致（均不透明），区分交给分区标题
+    final content = ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Material(
+        color: cs.surfaceContainerLow,
+        child: InkWell(
+          onTap: hidden ? null : onTap,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 36, color: cs.primary),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

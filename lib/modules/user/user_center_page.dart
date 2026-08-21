@@ -95,7 +95,12 @@ class _UserCenterPageState extends State<UserCenterPage> {
                 _buildActionGrid(cs),
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
                 _buildVipCard(cs, tt, kugou),
-                const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                // 80 之上叠加系统手势条（小横条）高度，避免末项被压住
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 80 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                ),
               ],
             ),
           );

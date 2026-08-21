@@ -180,7 +180,10 @@ class _EqualizerSettingsPageState extends State<EqualizerSettingsPage> {
 
   Widget _buildEqualizerContent(ColorScheme colorScheme) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      // 底部叠加系统手势条（小横条）高度，避免末项被压住
+      padding: EdgeInsets.fromLTRB(
+        16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         _buildStatusCard(colorScheme),
         const SizedBox(height: 16),

@@ -310,11 +310,12 @@ class _PersonalFmPageState extends State<PersonalFmPage>
       ),
       body: SingleChildScrollView(
         controller: _scrollController,
-        padding: const EdgeInsets.only(
+        // 底部叠加系统手势条（小横条）高度，避免末项被压住
+        padding: EdgeInsets.only(
           left: 16,
           right: 16,
           top: 16,
-          bottom: 16,
+          bottom: 16 + MediaQuery.paddingOf(context).bottom,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

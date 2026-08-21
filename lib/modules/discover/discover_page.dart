@@ -186,9 +186,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
         // 公开版偏好：无壁纸时顶部恒为不透明 surface（文字区稳定）；
         // 有壁纸时顶栏完全透明，壁纸透出与页面主体透明度上下一致
         opaque: true,
-        // 搜索入口改为页面顶部内嵌搜索框（见 _buildSearchField），
-        // 右上角仅保留识曲图标
+        // 搜索入口移到右上角图标按钮（左），识曲保持在最右
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
+          ),
           IconButton(
             icon: const Icon(Icons.mic_outlined),
             onPressed: () => Navigator.of(context).push(
@@ -206,9 +211,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
             : CustomScrollView(
                 controller: _scrollController,
                 slivers: [
-                  SliverToBoxAdapter(
-                    child: _buildSearchField(colorScheme),
-                  ),
                   _buildBannerSection(colorScheme),
                   _buildPersonalFmSection(colorScheme),
                   _buildDailySection(colorScheme),
@@ -219,49 +221,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   const SliverToBoxAdapter(child: SizedBox(height: 80)),
                 ],
               ),
-      ),
-    );
-  }
-
-  /// 顶部内嵌搜索框入口（样式对齐设置页总览页搜索框：
-  /// surfaceContainerHighest alpha 0.5、圆角 28）。
-  /// 只读外观，点击跳转搜索页。
-  Widget _buildSearchField(ColorScheme colorScheme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: GestureDetector(
-        onTap: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
-        child: Container(
-          height: 48,
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Row(
-            children: [
-              const SizedBox(width: 16),
-              Icon(
-                Icons.search,
-                size: 20,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '搜索歌曲、歌手、专辑',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -340,12 +299,26 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _getGreeting(),
-                      style: tt.displaySmall?.copyWith(
-                        color: cs.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    // 已登录时问候语后接昵称（"早上好，昵称"）；
+                    // 未登录/昵称为空则只显示问候语。单行 + 省略号，
+                    // 避免长昵称把卡片撑高或溢出。
+                    Selector<KugouProvider, String?>(
+                      selector: (_, kugou) =>
+                          kugou.isLoggedIn ? kugou.userInfo?.nickname : null,
+                      builder: (context, nickname, _) {
+                        final greeting = _getGreeting();
+                        return Text(
+                          nickname == null || nickname.isEmpty
+                              ? greeting
+                              : '$greeting，$nickname',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.displaySmall?.copyWith(
+                            color: cs.onPrimaryContainer,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -710,7 +683,10 @@ class _PlaylistBrowsePageState extends State<_PlaylistBrowsePage> {
                 // 使用 PinchableGridView：Pad 模式下双指捏合可动态调整列数，
                 // 非 Pad 模式内部固定 2 列；保持原 childAspectRatio=0.85、spacing=12、padding=16
                 return PinchableGridView(
-                  padding: const EdgeInsets.all(16),
+                  // 底部叠加系统手势条（小横条）高度，避免末项被压住
+                  padding: EdgeInsets.fromLTRB(
+                    16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   childAspectRatio: 0.85,
                   spacing: 12,
                   itemCount: list.length,
@@ -768,7 +744,9 @@ class _DailyRecommendDetailPageState extends State<_DailyRecommendDetailPage> {
                 final songs = recommendSongs.map((e) => e.toSong()).toList();
                 if (songs.isEmpty) return const Center(child: Text('暂无数据'));
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(
+                    16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   itemCount: songs.length,
                   itemBuilder: (context, index) {
                     final song = songs[index];
@@ -841,7 +819,9 @@ class _RankDetailPageState extends State<_RankDetailPage> {
                   );
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(
+                    16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   itemCount: songs.length,
                   itemBuilder: (context, i) {
                     final song = songs[i].toSong();
