@@ -35,11 +35,12 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
   final double fadeRange;
   final Widget? leading;
 
-  /// 为 true 时背景用半透明 surface（固定 alpha），不做滚动透明度渐变。
+  /// 为 true 时背景不做滚动透明度渐变：未启用自定义背景时恒为不透明
+  /// surface；启用自定义背景时完全透明（与主题 appBarTheme 一致），
+  /// 让顶部与页面主体的壁纸透出透明度上下一致（参照「我的收藏」页）。
   ///
   /// 用于有全局背景图/滚动时内容透出会导致标题文字与背景重叠变色的页面
-  /// （如发现页顶部）：既透出底层自定义背景图，又保证标题/图标区域始终
-  /// 置于稳定的半透明表面之上、文字不变色。
+  /// （如发现页顶部）。
   final bool opaque;
 
   const ScrollAwareAppBar({
@@ -96,8 +97,6 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final t = (_scrollOffset / widget.fadeRange).clamp(0.0, 1.0);
-    // 启用自定义背景时 opaque 用半透明 surface 透出背景图；
-    // 未启用背景时 opaque 恒为不透明 surface，保证文字区稳定不变色。
     final useBackgroundImage =
         context.watch<ThemeProvider>().useBackgroundImage;
 
@@ -105,10 +104,11 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
     // 不能用 Color.lerp(Colors.transparent, surface, t)：transparent 是
     // alpha=0 的黑色，逐通道插值会让中间态变成半透明灰（顶栏先变暗再变正常）。
     // opaque 语义：未启用背景时恒为不透明 surface（文字区稳定不变色）；
-    // 启用背景时用低 alpha 半透明 surface，让模糊背景图透出（与主体一致）。
+    // 启用背景时完全透明，壁纸透出与页面主体透明度上下一致
+    // （此前为 surface alpha 0.2 半透明色带，用户要求改为完全透明）。
     final backgroundColor = widget.opaque
         ? (useBackgroundImage
-            ? colorScheme.surface.withValues(alpha: 0.2)
+            ? Colors.transparent
             : colorScheme.surface)
         : colorScheme.surface.withValues(alpha: t);
 

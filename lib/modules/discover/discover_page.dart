@@ -182,7 +182,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
       appBar: ScrollAwareAppBar(
         title: '发现',
         scrollController: _scrollController,
-        // 公开版偏好：顶部文字区域置于顶层、背景不透出（避免与滚动内容/全局背景图重叠变色）
+        // 公开版偏好：无壁纸时顶部恒为不透明 surface（文字区稳定）；
+        // 有壁纸时顶栏完全透明，壁纸透出与页面主体透明度上下一致
         opaque: true,
         // 搜索入口固定在左上角，与标题同一水平线
         leading: IconButton(
