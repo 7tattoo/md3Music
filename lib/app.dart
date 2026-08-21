@@ -423,13 +423,13 @@ class _AppViewState extends State<_AppView> {
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
       ),
-      // 公开版偏好：背景模式下底部导航栏/侧栏用低透明度 surface，
-      // 让核心的模糊背景图清晰透出（而非被半透明表面遮成纯色）。
+      // 公开版偏好：背景模式下底部导航栏/侧栏用很低透明度 surface，
+      // 让核心的模糊背景图清晰透出（用户要求更透明）。
       navigationBarTheme: base.navigationBarTheme.copyWith(
-        backgroundColor: cs.surface.withValues(alpha: 0.35),
+        backgroundColor: cs.surface.withValues(alpha: 0.2),
       ),
       navigationRailTheme: base.navigationRailTheme.copyWith(
-        backgroundColor: cs.surface.withValues(alpha: 0.35),
+        backgroundColor: cs.surface.withValues(alpha: 0.2),
       ),
       drawerTheme: base.drawerTheme.copyWith(
         backgroundColor: cs.surface.withValues(alpha: 0.96),
@@ -1543,7 +1543,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 /// - 选中：label 淡入 + icon 上移让位（见 navigation_bar.dart 第 1103-1130 行）
 ///
 /// 不使用 NavigationDestination.selectedIcon（Flutter 原生内部是硬切）。
-class _AnimatedTabIcon extends StatefulWidget {
+class _AnimatedTabIcon extends StatelessWidget {
   final bool selected;
   final IconData outlinedIcon;
   final IconData filledIcon;
@@ -1555,91 +1555,9 @@ class _AnimatedTabIcon extends StatefulWidget {
   });
 
   @override
-  State<_AnimatedTabIcon> createState() => _AnimatedTabIconState();
-}
-
-class _AnimatedTabIconState extends State<_AnimatedTabIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  // 胶囊的弹簧进度（0 = 隐藏，1 = 完全展开）
-  // 用 easeOutBack 曲线产生轻微过冲，对齐 MD3E Expressive 风格
-  late final Animation<double> _progress;
-
-  // MD3E 胶囊尺寸（对齐 Flutter 原生 _kIndicatorWidth/Height）
-  static const double _indicatorWidth = 64.0;
-  static const double _indicatorHeight = 32.0;
-  static const double _indicatorRadius = 16.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: M3ExpressiveMotion.defaultDuration,
-      vsync: this,
-    );
-    // 初始状态：选中则胶囊已展开
-    _controller.value = widget.selected ? 1.0 : 0.0;
-    _progress = Tween<double>(begin: 0.0, end: 1.0)
-        .animate(CurveTween(curve: Curves.easeOutBack).animate(_controller));
-  }
-
-  @override
-  void didUpdateWidget(_AnimatedTabIcon oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selected != widget.selected) {
-      if (widget.selected) {
-        _controller.forward(from: 0);
-      } else {
-        _controller.reverse(from: 1);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return AnimatedBuilder(
-      animation: _progress,
-      builder: (context, child) {
-        // easeOutBack 在 [0,1] 内会有过冲（峰值约 1.1），clamp 到 [0, 1.1]
-        final t = _progress.value;
-        final tClamped = t.clamp(0.0, 1.1);
-        // 胶囊单轴 X 拉伸：从 0.4 → 1.0，带过冲
-        // 对齐 Flutter 原生 NavigationIndicator 的单轴形变方式
-        final scaleX = Tween<double>(begin: 0.4, end: 1.0).transform(tClamped);
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // 底层：自定义 expressive 胶囊 indicator（单轴拉伸 + 过冲）
-            Transform(
-              alignment: Alignment.center,
-              transform: Matrix4.diagonal3Values(scaleX, 1.0, 1.0),
-              child: Opacity(
-                opacity: t.clamp(0.0, 1.0),
-                child: Container(
-                  width: _indicatorWidth,
-                  height: _indicatorHeight,
-                  decoration: BoxDecoration(
-                    color: colorScheme.secondaryContainer,
-                    borderRadius:
-                        BorderRadius.circular(_indicatorRadius),
-                  ),
-                ),
-              ),
-            ),
-            // 上层：图标（选中用 filled，未选中用 outlined）
-            Icon(
-              widget.selected ? widget.filledIcon : widget.outlinedIcon,
-            ),
-          ],
-        );
-      },
-    );
+    // 公开版偏好：底部导航栏图标不做浮动/胶囊动画，直接静态切换，
+    // 简洁、不跳动。
+    return Icon(selected ? filledIcon : outlinedIcon);
   }
 }

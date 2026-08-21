@@ -108,7 +108,7 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
     // 启用背景时用低 alpha 半透明 surface，让模糊背景图透出（与主体一致）。
     final backgroundColor = widget.opaque
         ? (useBackgroundImage
-            ? colorScheme.surface.withValues(alpha: 0.4)
+            ? colorScheme.surface.withValues(alpha: 0.2)
             : colorScheme.surface)
         : colorScheme.surface.withValues(alpha: t);
 
