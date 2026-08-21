@@ -1325,7 +1325,9 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
       child: AbsorbPointer(
         absorbing: _isExiting,
         child: ColoredBox(
-          color: surfaceColor,
+          // 正常状态透明，让底层 AppBackgroundLayer 的壁纸透出；
+          // 仅退出淡出期间用 surface 打底，避免淡出过程透出不可控的窗口底色。
+          color: _isExiting ? surfaceColor : Colors.transparent,
           child: AnimatedOpacity(
             opacity: _isExiting ? 0.0 : 1.0,
             duration: const Duration(milliseconds: 300),
