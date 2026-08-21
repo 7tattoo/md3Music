@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/background_image_loader.dart';
+import '../../core/widgets/app_background.dart' show kDefaultWallpaperAsset;
 import '../../core/services/custom_font_loader.dart';
 import '../../core/utils/app_toast.dart';
 import '../../core/services/desktop_lyric_service.dart';
@@ -106,10 +107,10 @@ class _SettingsPageState extends State<SettingsPage>
   bool _sortCollectedByLatestClick = true;
   // 歌词双击跳转开关（默认关闭，开启后需双击歌词才能跳转位置）
   bool _lyricDoubleTapToJump = false;
-  // 自定义背景图片（全局界面背景）
-  bool _useBackgroundImage = false;
+  // 自定义背景图片（全局界面背景）；默认开启，未选择图片时回落到内置默认壁纸
+  bool _useBackgroundImage = true;
   String? _backgroundImagePath;
-  double _backgroundBlur = 12.0;
+  double _backgroundBlur = 0.0;
   double _backgroundOpacity = 0.7;
   // 按背景图莫奈取色（默认开启）
   bool _useBackgroundMonet = true;
@@ -1253,6 +1254,58 @@ class _SettingsPageState extends State<SettingsPage>
             ),
           ),
         ),
+        const Divider(height: 16),
+        // 底部导航栏文字显示行为：始终显示 / 仅当前页 / 始终不显示
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '底部导航栏文字',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: M3EToggleButtonGroup(
+            actions: const [
+              M3EToggleButtonGroupAction(
+                label: Text('始终显示'),
+                icon: Icon(Icons.label),
+              ),
+              M3EToggleButtonGroupAction(
+                label: Text('仅当前页'),
+                icon: Icon(Icons.tab_unselected),
+              ),
+              M3EToggleButtonGroupAction(
+                label: Text('始终不显示'),
+                icon: Icon(Icons.label_off),
+              ),
+            ],
+            selectedIndex: const [
+              NavigationDestinationLabelBehavior.alwaysShow,
+              NavigationDestinationLabelBehavior.onlyShowSelected,
+              NavigationDestinationLabelBehavior.alwaysHide,
+            ].indexOf(
+              context.watch<ThemeProvider>().navLabelBehavior,
+            ),
+            onSelectedIndexChanged: (index) {
+              if (index == null) return;
+              const behaviors = [
+                NavigationDestinationLabelBehavior.alwaysShow,
+                NavigationDestinationLabelBehavior.onlyShowSelected,
+                NavigationDestinationLabelBehavior.alwaysHide,
+              ];
+              context.read<ThemeProvider>().setNavLabelBehavior(
+                behaviors[index],
+              );
+            },
+          ),
+        ),
         const Divider(height: 32),
         // 界面背景：独立子区块（保留与外观其他条目分隔的独立包裹）
         Padding(
@@ -1284,7 +1337,8 @@ class _SettingsPageState extends State<SettingsPage>
     return Column(
       children: [
         SwitchListTile(
-          title: const Text('启用自定义背景图片（实验性）'),
+          title: const Text('启用自定义背景图片'),
+          subtitle: const Text('关闭后恢复纯色主题背景；开启且未选图时用内置默认壁纸'),
           value: _useBackgroundImage,
           onChanged: (v) {
             HapticFeedback.lightImpact();
@@ -1310,42 +1364,48 @@ class _SettingsPageState extends State<SettingsPage>
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: _pickBackgroundImage,
         ),
-        if (hasImage) ...[
-          // 实时预览：按当前模糊 / 透明度渲染
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                height: 120,
-                width: double.infinity,
-                child: Opacity(
-                  opacity: _backgroundOpacity,
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(
-                      sigmaX: _backgroundBlur,
-                      sigmaY: _backgroundBlur,
-                    ),
-                    child: Image.file(
-                      File(_backgroundImagePath!),
-                      fit: BoxFit.cover,
-                      // 限制解码宽度，避免选高分辨率照片时全尺寸解码导致内存峰值闪退
-                      cacheWidth: 800,
-                    ),
+        // 实时预览：按当前模糊 / 透明度渲染（无用户图片时显示内置默认壁纸）
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 120,
+              width: double.infinity,
+              child: Opacity(
+                opacity: _backgroundOpacity,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: _backgroundBlur,
+                    sigmaY: _backgroundBlur,
                   ),
+                  child: hasImage
+                      ? Image.file(
+                          File(_backgroundImagePath!),
+                          fit: BoxFit.cover,
+                          // 限制解码宽度，避免选高分辨率照片时全尺寸解码导致内存峰值闪退
+                          cacheWidth: 800,
+                        )
+                      : Image.asset(
+                          kDefaultWallpaperAsset,
+                          fit: BoxFit.cover,
+                          cacheWidth: 800,
+                        ),
                 ),
               ),
             ),
           ),
+        ),
+        if (hasImage)
           ListTile(
             leading: Icon(
               Icons.cleaning_services_outlined,
               color: colorScheme.error,
             ),
             title: const Text('清除背景图片'),
+            subtitle: const Text('清除后使用内置默认壁纸'),
             onTap: _clearBackgroundImage,
           ),
-        ],
         // 模糊程度滑块
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -1427,7 +1487,8 @@ class _SettingsPageState extends State<SettingsPage>
     showToast('背景图片已设置，已自动莫奈取色', long: true);
   }
 
-  /// 清除背景图片：删除本地文件并清空配置（同时关闭开关）。
+  /// 清除背景图片：删除本地文件并回到内置默认壁纸（开关保持开启，
+  /// 避免进入"无背景"状态导致浅色模式配色异常）。
   Future<void> _clearBackgroundImage() async {
     final path = _backgroundImagePath;
     if (path != null) {
@@ -1439,12 +1500,12 @@ class _SettingsPageState extends State<SettingsPage>
     if (!mounted) return;
     setState(() {
       _backgroundImagePath = null;
-      _useBackgroundImage = false;
+      _useBackgroundImage = true;
     });
     final themeProvider = context.read<ThemeProvider>();
     await themeProvider.setBackgroundImagePath(null);
-    await themeProvider.setUseBackgroundImage(false);
-    showToast('已清除背景图片', long: true);
+    await themeProvider.setUseBackgroundImage(true);
+    showToast('已清除背景图片，使用默认壁纸', long: true);
   }
 
   /// 播放页样式 section：播放器风格卡片选择 + 视觉特效开关。

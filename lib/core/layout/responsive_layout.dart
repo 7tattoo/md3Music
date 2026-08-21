@@ -99,6 +99,9 @@ class _ResponsiveScaffoldState extends State<ResponsiveScaffold> {
   }
 
   Widget _buildCompactLayout() {
+    // labelBehavior 由主题设置控制（NavigationBarThemeData.labelBehavior，
+    // 跟随设置页「底部导航栏文字」三档切换）。
+    final labelBehavior = Theme.of(context).navigationBarTheme.labelBehavior;
     return Scaffold(
       key: _scaffoldKey,
       appBar: widget.appBar,
@@ -107,10 +110,12 @@ class _ResponsiveScaffoldState extends State<ResponsiveScaffold> {
       bottomNavigationBar: widget.hideNavigation
           ? null
           : NavigationBar(
-              // 公开版偏好：底部导航栏高度减半、无浮动（无底部 padding 悬浮感），
-              // 图标按钮静态显示（动画已由 _AnimatedTabIcon 移除）
-              height: 44,
-              labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+              // 公开版偏好：仅图标（alwaysHide）时高度减半紧凑显示；一旦显示文字
+              // 用默认高度容纳 icon + label，避免 label 被裁剪。
+              height:
+                  labelBehavior == NavigationDestinationLabelBehavior.alwaysHide
+                  ? 44
+                  : null,
               selectedIndex: widget.selectedIndex,
               onDestinationSelected: widget.onDestinationSelected,
               destinations: widget.destinations,

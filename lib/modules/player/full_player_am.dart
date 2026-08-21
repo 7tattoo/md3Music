@@ -2542,101 +2542,167 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                   ),
                 ),
               ),
-              // 2. 播放列表 — 切换到播放列表面板（长按进 Zen 模式）
+              // 2-5. 页面切换组：播放列表/封面/歌词/评论。
+              // 底部「高亮球」随 _tabController 动画值在 4 个按钮间平滑移动，
+              // 点击切换（animateTo）与 TabBarView 滑动都驱动该动画，因而同步跟随。
               Expanded(
-                child: InkWell(
-                  onTap: () {
-                    if (_tabController.index != 0) {
-                      _tabController.animateTo(0);
-                    }
+                flex: 4,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final switchWidth = constraints.maxWidth;
+                    final btnW = switchWidth / 4;
+                    const capsuleSize = 34.0;
+                    return Stack(
+                      children: [
+                        AnimatedBuilder(
+                          // 必须监听 animation 动画对象本身，而不是 TabController：
+                          // _changeIndex 只在动画开始/结束时 notify，动画期间的每帧进度
+                          // （点击 animateTo 的 Curves.ease 与手指拖拽的 offset）只在新
+                          // value 上体现，监听它才能在拖拽/切换时平滑连贯地跟随滑动。
+                          animation: _tabController.animation ??
+                              const AlwaysStoppedAnimation<double>(0),
+                          builder: (context, _) {
+                            final anim = (_tabController.animation?.value ??
+                                    _tabController.index.toDouble())
+                                .clamp(0.0, 3.0);
+                            return Positioned(
+                              left: anim * btnW + (btnW - capsuleSize) / 2,
+                              top: (48 - capsuleSize) / 2,
+                              width: capsuleSize,
+                              height: capsuleSize,
+                              child: IgnorePointer(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white.withValues(
+                                      alpha: 0.25,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        Row(
+                          children: [
+                            // 播放列表 — 切换到播放列表面板（长按进 Zen 模式）
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  if (_tabController.index != 0) {
+                                    _tabController.animateTo(0);
+                                  }
+                                },
+                                onLongPress: () {
+                                  HapticFeedback.lightImpact();
+                                  _enterZenMode();
+                                },
+                                child: Center(
+                                  child: Icon(
+                                    Icons.queue_music,
+                                    size: 22,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // 封面 — 短按跳转到封面 tab（公开库暂无下载功能，私有库此处长按下载音质）
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  if (_tabController.index != 1) {
+                                    _tabController.animateTo(1);
+                                  }
+                                },
+                                child: Center(
+                                  child: Icon(
+                                    Icons.album,
+                                    size: 22,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // 歌词 — 短按跳转到歌词 tab，长按开关桌面歌词
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  if (_tabController.index != 2) {
+                                    _tabController.animateTo(2);
+                                  }
+                                },
+                                onLongPress: () async {
+                                  HapticFeedback.lightImpact();
+                                  await DesktopLyricService.instance.toggle();
+                                  if (mounted) {
+                                    // 同步通知栏"桌面歌词"按钮状态
+                                    final player =
+                                        context.read<PlayerProvider>();
+                                    final curSong = player.currentSong;
+                                    // 收藏状态需实时查询，避免暂停时显示为未收藏
+                                    bool isFavorited = false;
+                                    if (curSong != null) {
+                                      try {
+                                        isFavorited = context
+                                            .read<FavoritesProvider>()
+                                            .isFavorite(curSong.id);
+                                      } catch (_) {}
+                                    }
+                                    await MediaNotificationService
+                                        .updateNotification(
+                                          // 用 displayName 剥离 .mp3 等后缀，避免标题显示文件名
+                                          title: curSong?.displayName ?? '',
+                                          artist: curSong?.artist ?? '',
+                                          artUrl: curSong?.artworkUri,
+                                          isPlaying: player.isPlaying,
+                                          position: player.position,
+                                          duration:
+                                              player.duration ?? Duration.zero,
+                                          desktopLyricEnabled:
+                                              DesktopLyricService
+                                                  .instance.enabled,
+                                          isFavorited: isFavorited,
+                                        );
+                                  }
+                                },
+                                child: Center(
+                                  child: Icon(
+                                    // 桌面歌词开启时用实心 icon + 纯白，与 mini_player 一致
+                                    DesktopLyricService.instance.enabled
+                                        ? Icons.lyrics
+                                        : Icons.lyrics_outlined,
+                                    size: 22,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // 评论 — 跳转到评论 tab
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  if (_tabController.index != 3) {
+                                    _tabController.animateTo(3);
+                                  }
+                                },
+                                child: Center(
+                                  child: Icon(
+                                    Icons.comment_outlined,
+                                    size: 22,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
                   },
-                  onLongPress: _enterZenMode,
-                  child: Center(
-                    child: Icon(
-                      Icons.queue_music,
-                      size: 22,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              // 3. 封面 — 短按跳转到封面 tab
-              Expanded(
-                child: InkWell(
-                  onTap: () {
-                    if (_tabController.index != 1) {
-                      _tabController.animateTo(1);
-                    }
-                  },
-                  child: Center(
-                    child: Icon(Icons.album, size: 22, color: Colors.white),
-                  ),
-                ),
-              ),
-              // 4. 歌词 — 短按跳转到歌词 tab，长按开关桌面歌词
-              Expanded(
-                child: InkWell(
-                  onTap: () {
-                    if (_tabController.index != 2) {
-                      _tabController.animateTo(2);
-                    }
-                  },
-                  onLongPress: () async {
-                    await DesktopLyricService.instance.toggle();
-                    if (mounted) {
-                      // 同步通知栏"桌面歌词"按钮状态
-                      final player = context.read<PlayerProvider>();
-                      final curSong = player.currentSong;
-                      // 收藏状态需实时查询，避免暂停时显示为未收藏
-                      bool isFavorited = false;
-                      if (curSong != null) {
-                        try {
-                          isFavorited = context
-                              .read<FavoritesProvider>()
-                              .isFavorite(curSong.id);
-                        } catch (_) {}
-                      }
-                      await MediaNotificationService.updateNotification(
-                        // 用 displayName 剥离 .mp3 等后缀，避免标题显示文件名
-                        title: curSong?.displayName ?? '',
-                        artist: curSong?.artist ?? '',
-                        artUrl: curSong?.artworkUri,
-                        isPlaying: player.isPlaying,
-                        position: player.position,
-                        duration: player.duration ?? Duration.zero,
-                        desktopLyricEnabled:
-                            DesktopLyricService.instance.enabled,
-                        isFavorited: isFavorited,
-                      );
-                    }
-                  },
-                  child: Center(
-                    child: Icon(
-                      // 桌面歌词开启时用实心 icon + 纯白，与 mini_player 一致
-                      DesktopLyricService.instance.enabled
-                          ? Icons.lyrics
-                          : Icons.lyrics_outlined,
-                      size: 22,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              // 5. 评论 — 跳转到评论 tab
-              Expanded(
-                child: InkWell(
-                  onTap: () {
-                    if (_tabController.index != 3) {
-                      _tabController.animateTo(3);
-                    }
-                  },
-                  child: Center(
-                    child: Icon(
-                      Icons.comment_outlined,
-                      size: 22,
-                      color: Colors.white,
-                    ),
-                  ),
                 ),
               ),
               // 6. 收藏

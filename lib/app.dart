@@ -310,6 +310,7 @@ class _AppViewState extends State<_AppView> {
         AppTheme.lightThemeFromSeed(
           themeProvider.effectiveSeedColor,
           fontFamily: fontFamily,
+          labelBehavior: themeProvider.navLabelBehavior,
         ),
         themeProvider,
       ),
@@ -318,6 +319,7 @@ class _AppViewState extends State<_AppView> {
           themeProvider.effectiveSeedColor,
           useOledBlack: themeProvider.useOledBlack,
           fontFamily: fontFamily,
+          labelBehavior: themeProvider.navLabelBehavior,
         ),
         themeProvider,
       ),
@@ -546,18 +548,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
         );
         break;
       case 'discover':
-        page = DiscoverPage(
-          onAvatarTap: () {
-            final tabConfig = context.read<TabConfigProvider>();
-            final userIdx = tabConfig.visibleIndexOf('user');
-            if (userIdx >= 0) {
-              setState(() {
-                _previousSelectedIndex = _selectedIndex;
-                _selectedIndex = userIdx;
-              });
-            }
-          },
-        );
+        page = const DiscoverPage();
         break;
       case 'coverflow':
         page = const CoverFlowPage();
@@ -622,8 +613,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.grid_view_outlined,
             filledIcon: Icons.grid_view,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'discover':
         return NavigationDestination(
@@ -632,8 +622,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.explore_outlined,
             filledIcon: Icons.explore,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'coverflow':
         return NavigationDestination(
@@ -642,8 +631,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.album_outlined,
             filledIcon: Icons.album,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'library':
         return NavigationDestination(
@@ -652,8 +640,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.library_music_outlined,
             filledIcon: Icons.library_music,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'favorites':
         return NavigationDestination(
@@ -662,8 +649,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.favorite_outline,
             filledIcon: Icons.favorite,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'fm':
         return NavigationDestination(
@@ -672,8 +658,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.radio_outlined,
             filledIcon: Icons.radio,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'search':
         return NavigationDestination(
@@ -682,8 +667,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.search_outlined,
             filledIcon: Icons.search,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'charts':
         return NavigationDestination(
@@ -692,8 +676,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.leaderboard_outlined,
             filledIcon: Icons.leaderboard,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'ip':
         return NavigationDestination(
@@ -702,8 +685,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.edit_note_outlined,
             filledIcon: Icons.edit_note,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'recognition':
         return NavigationDestination(
@@ -712,8 +694,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.mic_none_outlined,
             filledIcon: Icons.mic,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'audiobook':
         return NavigationDestination(
@@ -722,8 +703,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.auto_stories_outlined,
             filledIcon: Icons.auto_stories,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'scene':
         return NavigationDestination(
@@ -732,8 +712,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.landscape_outlined,
             filledIcon: Icons.landscape,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'channel':
         return NavigationDestination(
@@ -742,8 +721,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.dynamic_feed_outlined,
             filledIcon: Icons.dynamic_feed,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'brush':
         return NavigationDestination(
@@ -752,8 +730,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.swipe_outlined,
             filledIcon: Icons.swipe,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'settings':
         return NavigationDestination(
@@ -762,8 +739,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.settings_outlined,
             filledIcon: Icons.settings,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       case 'user':
         return NavigationDestination(
@@ -772,8 +748,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.person_outlined,
             filledIcon: Icons.person,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
       default:
         return NavigationDestination(
@@ -782,8 +757,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             outlinedIcon: Icons.circle_outlined,
             filledIcon: Icons.circle,
           ),
-          // 公开版偏好：底部导航栏不显示文字，仅图标
-          label: '',
+          label: tab.label,
         );
     }
   }
@@ -1537,10 +1511,10 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 /// - 胶囊做 **单轴 X 拉伸**（0.4 → 1.0），对齐 Flutter 原生 NavigationIndicator 的形变方式
 /// - 图标在胶囊弹起过程中完成 outlined → filled 切换，被弹跳掩盖
 ///
-/// **文字行为**：由 `NavigationBarThemeData.labelBehavior = onlyShowSelected` 控制，
-/// Flutter 原生 `_NavigationDestinationLayoutDelegate` 会自动处理：
-/// - 未选中：label 隐藏，icon 垂直居中
-/// - 选中：label 淡入 + icon 上移让位（见 navigation_bar.dart 第 1103-1130 行）
+/// **文字行为**：由 `NavigationBarThemeData.labelBehavior` 控制，跟随用户在
+/// 设置页「底部导航栏文字」的三档选择（始终显示 / 仅当前页 / 始终不显示，
+/// 默认不显示）；`NavigationDestination.label` 传真实标题，既用于显示也用于
+/// 无障碍朗读。
 ///
 /// 不使用 NavigationDestination.selectedIcon（Flutter 原生内部是硬切）。
 class _AnimatedTabIcon extends StatelessWidget {

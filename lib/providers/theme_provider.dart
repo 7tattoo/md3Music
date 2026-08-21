@@ -14,6 +14,8 @@ class ThemeProvider extends ChangeNotifier {
   static const String _manualSeedKey = 'manual_seed_color';
   static const String _oledBlackKey = 'use_oled_black';
   static const String _uiScaleKey = 'ui_scale';
+  // 底部导航栏文字显示行为：始终显示 / 仅当前页 / 始终不显示
+  static const String _navLabelBehaviorKey = 'nav_label_behavior';
   static const String _fontSourceKey = 'font_source';
   static const String _customFontPathKey = 'custom_font_path';
   static const String _artistPhotoBgKey = 'use_artist_photo_background';
@@ -39,6 +41,9 @@ class ThemeProvider extends ChangeNotifier {
   Color? _manualSeedColor;
   bool _useOledBlack = false;
   double _uiScale = 1.0;
+  // 底部导航栏文字显示行为（默认始终不显示）
+  NavigationDestinationLabelBehavior _navLabelBehavior =
+      NavigationDestinationLabelBehavior.alwaysHide;
   // 字体来源（system / bundled / custom）
   FontSource _fontSource = FontSource.system;
   // 用户选择的字体文件路径（原生端拷贝到 filesDir 后的真实路径）
@@ -50,10 +55,10 @@ class ThemeProvider extends ChangeNotifier {
   double _artistPhotoOpacity = 0.55;
   // AM 风格播放器歌词双击跳转开关（默认关闭，开启后需双击歌词才能跳转位置）
   bool _lyricDoubleTapToJump = false;
-  // 自定义背景图片（全局界面背景）
-  bool _useBackgroundImage = false;
+  // 自定义背景图片（全局界面背景）；默认开启，未选择图片时回落到内置默认壁纸
+  bool _useBackgroundImage = true;
   String? _backgroundImagePath;
-  double _backgroundBlur = 12.0;
+  double _backgroundBlur = 0.0;
   double _backgroundOpacity = 0.7;
   // 按背景图莫奈取色（默认开启；关闭后背景图仍显示但不参与主题色）
   bool _useBackgroundMonet = true;
@@ -69,6 +74,7 @@ class ThemeProvider extends ChangeNotifier {
   Color? get manualSeedColor => _manualSeedColor;
   bool get useOledBlack => _useOledBlack;
   double get uiScale => _uiScale;
+  NavigationDestinationLabelBehavior get navLabelBehavior => _navLabelBehavior;
   FontSource get fontSource => _fontSource;
   String? get customFontPath => _customFontPath;
   bool get useArtistPhotoBackground => _useArtistPhotoBackground;
@@ -128,6 +134,7 @@ class ThemeProvider extends ChangeNotifier {
     _loadManualSeedColor();
     _loadOledBlack();
     _loadUiScale();
+    _loadNavLabelBehavior();
     _loadFontSource();
     _loadArtistPhotoBackground();
     _loadLyricDoubleTapToJump();
@@ -379,6 +386,27 @@ class ThemeProvider extends ChangeNotifier {
     await prefs.setDouble(_uiScaleKey, clamped);
   }
 
+  /// 加载底部导航栏文字显示行为的持久化值，默认始终不显示。
+  Future<void> _loadNavLabelBehavior() async {
+    final prefs = await SharedPreferences.getInstance();
+    final index = prefs.getInt(_navLabelBehaviorKey);
+    if (index != null &&
+        index >= 0 &&
+        index < NavigationDestinationLabelBehavior.values.length) {
+      _navLabelBehavior = NavigationDestinationLabelBehavior.values[index];
+    }
+    notifyListeners();
+  }
+
+  /// 设置底部导航栏文字显示行为并持久化。
+  Future<void> setNavLabelBehavior(NavigationDestinationLabelBehavior value) async {
+    if (_navLabelBehavior == value) return;
+    _navLabelBehavior = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_navLabelBehaviorKey, value.index);
+  }
+
   void toggleTheme() {
     switch (_themeMode) {
       case ThemeMode.light:
@@ -464,12 +492,12 @@ class ThemeProvider extends ChangeNotifier {
   // ============== 自定义背景图片 ==============
 
   /// 加载背景图片相关持久化值（开关 / 路径 / 模糊 / 透明度 / 莫奈取色），
-  /// 默认关闭 / 莫奈取色默认开启。
+  /// 默认开启（无用户图片时用内置默认壁纸）/ 莫奈取色默认开启。
   Future<void> _loadBackgroundImage() async {
     final prefs = await SharedPreferences.getInstance();
-    _useBackgroundImage = prefs.getBool(_bgImageEnabledKey) ?? false;
+    _useBackgroundImage = prefs.getBool(_bgImageEnabledKey) ?? true;
     _backgroundImagePath = prefs.getString(_bgImagePathKey);
-    _backgroundBlur = prefs.getDouble(_bgBlurKey) ?? 12.0;
+    _backgroundBlur = prefs.getDouble(_bgBlurKey) ?? 0.0;
     _backgroundOpacity = prefs.getDouble(_bgOpacityKey) ?? 0.7;
     _useBackgroundMonet = prefs.getBool(_bgMonetKey) ?? true;
     notifyListeners();

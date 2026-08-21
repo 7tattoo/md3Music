@@ -19,10 +19,7 @@ import '../recognition/song_recognition_page.dart';
 import '../search/search_page.dart';
 
 class DiscoverPage extends StatefulWidget {
-  const DiscoverPage({super.key, this.onAvatarTap});
-
-  /// 点击头像时的回调（用于切换到"我的"tab）
-  final VoidCallback? onAvatarTap;
+  const DiscoverPage({super.key});
 
   @override
   State<DiscoverPage> createState() => _DiscoverPageState();
@@ -183,7 +180,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
     return Scaffold(
       appBar: ScrollAwareAppBar(
-        title: 'MD3Music',
+        title: '发现',
         scrollController: _scrollController,
         // 公开版偏好：顶部文字区域置于顶层、背景不透出（避免与滚动内容/全局背景图重叠变色）
         opaque: true,
@@ -200,28 +197,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SongRecognitionPage()),
             ),
-          ),
-          Selector<KugouProvider, (String?, String, bool)>(
-            selector: (_, kugou) => (
-              kugou.userInfo?.avatar,
-              kugou.userInfo?.userid ?? 'default',
-              kugou.isLoggedIn,
-            ),
-            builder: (context, data, _) {
-              final (avatarUrl, userId, isLoggedIn) = data;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () => widget.onAvatarTap?.call(),
-                  child: _buildAvatar(
-                    avatarUrl,
-                    userId,
-                    isLoggedIn,
-                    colorScheme,
-                  ),
-                ),
-              );
-            },
           ),
         ],
       ),
@@ -254,51 +229,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (h < 14) return '中午好';
     if (h < 18) return '下午好';
     return '晚上好';
-  }
-
-  Widget _buildAvatar(
-    String? avatarUrl,
-    String userId,
-    bool isLoggedIn,
-    ColorScheme colorScheme,
-  ) {
-    if (avatarUrl == null || avatarUrl.isEmpty) {
-      return CircleAvatar(
-        backgroundColor: colorScheme.primaryContainer,
-        radius: 16,
-        child: Icon(
-          isLoggedIn ? Icons.person : Icons.person_outline,
-          size: 18,
-          color: colorScheme.onPrimaryContainer,
-        ),
-      );
-    }
-
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: colorScheme.primaryContainer,
-      child: ClipOval(
-        child: CachedNetworkImage(
-          imageUrl: avatarUrl,
-          memCacheWidth: 96,
-          memCacheHeight: 96,
-          cacheKey: 'avatar_$userId',
-          width: 32,
-          height: 32,
-          fit: BoxFit.cover,
-          placeholder: (context, url) => Icon(
-            isLoggedIn ? Icons.person : Icons.person_outline,
-            size: 18,
-            color: colorScheme.onPrimaryContainer,
-          ),
-          errorWidget: (context, url, error) => Icon(
-            isLoggedIn ? Icons.person : Icons.person_outline,
-            size: 18,
-            color: colorScheme.onPrimaryContainer,
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildError(ColorScheme cs) {
@@ -404,7 +334,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
               currentlyExpanded: _isDailyExpanded,
               apply: (v) => _isDailyExpanded = v,
             ),
-            trailing: TextButton(
+            trailing: IconButton(
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -412,10 +342,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 );
               },
-              child: const Text('查看更多'),
+              icon: const Icon(Icons.chevron_right),
             ),
             child: SizedBox(
-              height: 72,
+              height: 76,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -424,17 +354,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   final s = songs[i];
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: ActionChip(
-                      avatar: CircleAvatar(
-                        backgroundColor: cs.primaryContainer,
-                        child: Text(
-                          '${i + 1}',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: cs.onPrimaryContainer),
-                        ),
-                      ),
-                      label: Text(s.songName),
-                      onPressed: () =>
+                    child: _DailySongCard(
+                      song: s,
+                      onTap: () =>
                           context.read<PlayerProvider>().playOnlinePlaylist(
                             songs.map((e) => e.toSong()).toList(),
                             i,
@@ -461,10 +383,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  '主题歌单',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                child: Text('主题歌单', style: _sectionTitleStyle(context)),
               ),
               SizedBox(
                 height: 180,
@@ -546,10 +465,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  '场景音乐',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                child: Text('场景音乐', style: _sectionTitleStyle(context)),
               ),
               SizedBox(
                 height: 110,
@@ -611,13 +527,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
               currentlyExpanded: _isPlaylistExpanded,
               apply: (v) => _isPlaylistExpanded = v,
             ),
-            trailing: TextButton(
+            trailing: IconButton(
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const _PlaylistBrowsePage(),
                 ),
               ),
-              child: const Text('查看更多'),
+              icon: const Icon(Icons.chevron_right),
             ),
             child: SizedBox(
               height: 200,
@@ -673,11 +589,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
               currentlyExpanded: _isRankExpanded,
               apply: (v) => _isRankExpanded = v,
             ),
-            trailing: TextButton(
+            trailing: IconButton(
               onPressed: () => Navigator.of(
                 context,
               ).push(MaterialPageRoute(builder: (_) => const ChartsPage())),
-              child: const Text('查看更多'),
+              icon: const Icon(Icons.chevron_right),
             ),
             child: SizedBox(
               height: 200,
@@ -923,7 +839,7 @@ class _CollapsibleSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
             children: [
               Expanded(
@@ -938,7 +854,9 @@ class _CollapsibleSection extends StatelessWidget {
                         Flexible(
                           child: Text(
                             title,
-                            style: tt.titleLarge,
+                            style: tt.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -971,6 +889,109 @@ class _CollapsibleSection extends StatelessWidget {
           secondChild: const SizedBox(width: double.infinity),
         ),
       ],
+    );
+  }
+}
+
+/// 页面内区块标题样式：比顶栏标题（22px）小一号，统一为 titleMedium + w600。
+TextStyle? _sectionTitleStyle(BuildContext context) =>
+    Theme.of(context).textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+
+/// 每日推荐横向卡片：专辑封面 + 歌名/歌手（替代原来的序号 chip）。
+class _DailySongCard extends StatelessWidget {
+  const _DailySongCard({required this.song, required this.onTap});
+
+  final KugouSongDetail song;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final cover = song.artworkUri;
+    return Material(
+      color: cs.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: cover == null || cover.isEmpty
+                      ? Container(
+                          color: cs.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.music_note,
+                            size: 22,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: cover,
+                          memCacheWidth: 156,
+                          memCacheHeight: 156,
+                          fit: BoxFit.cover,
+                          placeholder: (_, _) => Container(
+                            color: cs.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.music_note,
+                              size: 22,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          errorWidget: (_, _, _) => Container(
+                            color: cs.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.music_note,
+                              size: 22,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 130),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      song.songName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      song.artistName ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
