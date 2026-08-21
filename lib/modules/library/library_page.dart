@@ -114,7 +114,9 @@ class _LibraryPageState extends State<LibraryPage>
                             borderSide: BorderSide.none,
                           ),
                           filled: true,
-                          fillColor: colorScheme.surfaceContainerHigh,
+                          // 对齐设置页搜索框样式：半透明透出壁纸/背景
+                          fillColor: colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.5),
                         ),
                         onChanged: (value) {
                           libraryProvider.setSearchQuery(value);

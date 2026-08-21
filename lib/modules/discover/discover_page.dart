@@ -185,20 +185,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
         // 公开版偏好：无壁纸时顶部恒为不透明 surface（文字区稳定）；
         // 有壁纸时顶栏完全透明，壁纸透出与页面主体透明度上下一致
         opaque: true,
-        // 公开版偏好：搜索入口固定在右上角最右（发现已在最左，
-        // 搜索放最右拉开与标题距离）；识曲图标在其左侧
+        // 搜索入口改为页面顶部内嵌搜索框（见 _buildSearchField），
+        // 右上角仅保留识曲图标
         actions: [
           IconButton(
             icon: const Icon(Icons.mic_outlined),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SongRecognitionPage()),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
           ),
         ],
       ),
@@ -211,6 +205,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
             : CustomScrollView(
                 controller: _scrollController,
                 slivers: [
+                  SliverToBoxAdapter(
+                    child: _buildSearchField(colorScheme),
+                  ),
                   _buildBannerSection(colorScheme),
                   _buildDailySection(colorScheme),
                   _buildThemeMusicSection(colorScheme),
@@ -220,6 +217,49 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   const SliverToBoxAdapter(child: SizedBox(height: 80)),
                 ],
               ),
+      ),
+    );
+  }
+
+  /// 顶部内嵌搜索框入口（样式对齐设置页总览页搜索框：
+  /// surfaceContainerHighest alpha 0.5、圆角 28）。
+  /// 只读外观，点击跳转搜索页。
+  Widget _buildSearchField(ColorScheme colorScheme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: GestureDetector(
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
+        child: Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(width: 16),
+              Icon(
+                Icons.search,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '搜索歌曲、歌手、专辑',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
+          ),
+        ),
       ),
     );
   }

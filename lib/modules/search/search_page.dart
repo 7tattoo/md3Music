@@ -8,6 +8,7 @@ import '../../data/models/album.dart';
 import '../../data/models/song.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/kugou_api/cloud_song_mapper.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -143,6 +144,9 @@ class _SearchPageState extends State<SearchPage>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    // 公开版偏好：启用自定义背景图时顶部（搜索框/结果 Tab 栏）完全透明，
+    // 壁纸透出与页面主体透明度一致（此前写死 surface 遮挡壁纸）
+    final useBackgroundImage = context.watch<ThemeProvider>().useBackgroundImage;
 
     return Scaffold(
       body: Column(
@@ -154,8 +158,12 @@ class _SearchPageState extends State<SearchPage>
                   SliverAppBar(
                     floating: true,
                     pinned: true,
-                    // 不透明背景，避免滚动时透出下方搜索结果列表
-                    backgroundColor: colorScheme.surface,
+                    // 无壁纸时不透明，避免滚动时透出下方搜索结果列表；
+                    // 有壁纸时透明（主题 appBarTheme 已透明，此处原本显式
+                    // 写死 surface 覆盖了它，导致顶部不透出壁纸）
+                    backgroundColor: useBackgroundImage
+                        ? Colors.transparent
+                        : colorScheme.surface,
                     surfaceTintColor: Colors.transparent,
                     title: SizedBox(
                       height: 40,
@@ -187,7 +195,12 @@ class _SearchPageState extends State<SearchPage>
                                 )
                               : null,
                           filled: true,
-                          fillColor: colorScheme.surfaceContainerHighest,
+                          // 有壁纸时低透明度 surface 透出壁纸（与标签按钮/
+                          // MiniPlayer 的 alpha 0.2 偏好一致）；无壁纸时实心
+                          fillColor:
+                              useBackgroundImage
+                              ? colorScheme.surface.withValues(alpha: 0.2)
+                              : colorScheme.surfaceContainerHighest,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(20),
                             borderSide: BorderSide.none,
@@ -225,6 +238,10 @@ class _SearchPageState extends State<SearchPage>
                             Tab(text: '歌词'),
                           ],
                         ),
+                        // 有壁纸时容器透明，壁纸透出与页面主体一致
+                        backgroundColor: useBackgroundImage
+                            ? null
+                            : colorScheme.surface,
                       ),
                     ),
                 ];
@@ -1198,8 +1215,10 @@ class _LyricSearchResultItem extends StatelessWidget {
 
 class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
+  // null = 透明（壁纸模式），非 null = 无壁纸时的 surface
+  final Color? backgroundColor;
 
-  _TabBarDelegate(this.tabBar);
+  _TabBarDelegate(this.tabBar, {this.backgroundColor});
 
   @override
   double get minExtent => tabBar.preferredSize.height;
@@ -1209,7 +1228,8 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(covariant _TabBarDelegate oldDelegate) {
-    return tabBar != oldDelegate.tabBar;
+    return tabBar != oldDelegate.tabBar ||
+        backgroundColor != oldDelegate.backgroundColor;
   }
 
   @override
@@ -1219,7 +1239,7 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
     bool overlapsContent,
   ) {
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: backgroundColor,
       child: tabBar,
     );
   }
