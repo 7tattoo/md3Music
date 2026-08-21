@@ -196,20 +196,28 @@ env CC_aarch64_linux_android=$BIN/aarch64-linux-android21-clang \
 ### 4.6 登录已全部本地化，networkapi 已退役
 - Dart 端 `kugou_api_client.dart` 曾把登录路径硬编码到 `http://115.29.236.96:5621`（`_loginPaths`），已移除——全部请求统一走本地 `KugouEndpoints.baseUrl`。
 
-### 4.7 Android 构建配置
+### 4.7 桌面快捷方式图标与 shrinkResources（keep.xml 位置坑）
+
+**问题**：release 构建开启 `isShrinkResources = true`，桌面长按快捷方式图标（`ic_shortcut_*` drawable）只在 Dart 层以字符串资源名引用（`quick_actions` 的 `ShortcutItem.icon`，运行时 `getIdentifier` 查找），资源收缩器静态分析看不到 → 被当作未引用资源删除，快捷方式回退显示安卓机器人默认图标。
+
+**解决**：`android/app/src/main/res/raw/keep.xml`（**必须是 `res/raw/` 目录下的文件**）声明 `tools:keep="@drawable/ic_shortcut_*"`。
+
+**坑（已踩）**：2026-08-20 曾有人修复此问题却把内容直接写到了 `res/raw` **文件本身**（正确应是 `res/raw/keep.xml`），构建不报错但收缩器读不到规则，图标照样被删。任何 res 下的新资源配置前先确认目标路径是目录结构。另外通配符写法覆盖全部 13 个候选（逐个列举曾漏掉 `ic_shortcut_brush`）。
+
+### 4.8 Android 构建配置
 
 - `compileSdk = 36`，`targetSdk = 35`，`ndkVersion = "28.2.13676358"`
 - 已移除 CMake/`externalNativeBuild`（`cpp/` 目录删除）；JNI 符号直接来自 `libkugou_server.so`
 - Release 构建启用 R8 混淆（`isMinifyEnabled = true`），原生库不参与混淆；修改 JNI 后检查 `proguard-rules.pro`
 - 无 `keystore.properties` 时自动使用 debug 签名
 
-### 4.8 Dart 分析规则
+### 4.9 Dart 分析规则
 
 - 使用 `package:flutter_lints/flutter.yaml`
 - `avoid_print` 默认开启，但项目中大量使用 `print()` 做调试日志（如服务器启动日志），通过 `// ignore: avoid_print` 抑制
 - 部分 `discarded_futures` 也通过 ignore 注释处理
 
-### 4.9 `kugou_server` crate 的 release 构建参数
+### 4.10 `kugou_server` crate 的 release 构建参数
 
 - `crate-type = ["cdylib", "rlib"]`，cdylib 用于导出 FFI/JNI 符号，rlib 用于测试；`jni` 依赖仅在 Android target 下引入（桌面构建不编译 JNI 符号）
 - `[profile.release]`：`opt-level = 3`（性能优先，HTTP 服务器是 CPU 密集型）、`lto = true`、`panic = "abort"`（Android 端 panic 即崩溃，务必避免在请求线程 panic——4.2 曾踩坑）；**不要使用 `strip = true`**——cdylib 的动态导出符号（`start_server` / `Java_com_md3music_*` JNI 符号）可能被 strip 移除，导致 App 启动找不到符号崩溃
@@ -362,7 +370,7 @@ flutter analyze                           # Dart 静态分析
 - ✅ 发现页搜索入口为**页面顶部内嵌搜索框**（样式对齐设置页总览页搜索框：`surfaceContainerHighest` alpha 0.5、圆角 28、搜索图标 + 提示「搜索歌曲、歌手、专辑」，只读外观点击跳转搜索页）；右上角仅保留识曲图标；标题为 `发现`
 - ✅ **各页搜索框统一样式**（设置页/发现页/本地音乐页/搜索页）：`surfaceContainerHighest` alpha 0.5 半透明、圆角 28，勿用实心 `surfaceContainerHigh/Highest`
 - ✅ LaunchPad 标题**加粗**（titleLarge + w600，与其他一级页面一致）
-- ✅ 首页默认 `LaunchPad`（保持）
+- ✅ Tab 默认顺序：**`发现` 第一个（首页）、`LaunchPad` 第二个、`我的` 第三**（`kDefaultTabs`）；注意只影响新用户/重置配置，已有持久化 order 的设备不自动迁移
 
 ### 8.5 交互/UI 细节（公开版）
 - ✅ 退出 App：**「再按一次返回退出」**（3 秒窗口），**不再弹确认对话框**；提示用**系统原生 Toast**（`app_toast.dart` 的 `showToast`，fluttertoast，非 SnackBar）

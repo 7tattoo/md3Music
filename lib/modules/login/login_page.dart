@@ -633,13 +633,13 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '最近 KG 风控比较严重，如果出现以下问题那可能是触发风控了：',
+                '如果出现以下问题就是触发风控了：',
                 style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 4),
               Text(
-                '1. 播放音乐只能播放标准音质\n2. 播放音乐只能播放前一分钟，后续内容无声音\n3. 下载歌曲显示只有最低音质可以下载',
-                style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                '1.播放音乐只能播放前一分钟，后续内容无声音\n2.无法收藏 或删除 音乐 歌单 歌手',
+                               style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
               Text(
@@ -651,7 +651,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                '1. 等待几个小时有时候能恢复\n2. 重登有概率能恢复，但不建议频繁操作',
+                '1. 没会员去签到会员，风控等待几个小时有时候能恢复\n2. 重登有概率能恢复，但不建议频繁操作',
                 style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
@@ -664,7 +664,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                '• 不要频繁点击签到领取 VIP，及其容易风控\n• 登录账号必须已在酷狗注册过账号，否则无法登录\n• 如果一个手机号对应多个酷狗账号也无法登录，请换用扫码',
+                '• 不要频繁点击签到领取 VIP，及其容易风控\n• 登录账号必须已在酷狗注册过账号，否则无法登录\n• 如果一个手机号无法登录，请换用扫码',
                 style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
             ],

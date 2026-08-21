@@ -14,6 +14,7 @@ import '../../widgets/pinchable_grid_view.dart';
 import '../../widgets/scroll_aware_app_bar.dart';
 import '../../widgets/song_list_item.dart';
 import '../charts/charts_page.dart';
+import '../personal_fm/personal_fm_section.dart';
 import '../playlist/playlist_page.dart';
 import '../recognition/song_recognition_page.dart';
 import '../search/search_page.dart';
@@ -209,6 +210,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                     child: _buildSearchField(colorScheme),
                   ),
                   _buildBannerSection(colorScheme),
+                  _buildPersonalFmSection(colorScheme),
                   _buildDailySection(colorScheme),
                   _buildThemeMusicSection(colorScheme),
                   _buildSceneSection(colorScheme),
@@ -360,6 +362,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
         ),
       ),
     );
+  }
+
+  /// 私人 FM 区块：复制自私人 FM 页的推荐区（推荐方式工具栏 + 策略切换 +
+  /// 电台卡片 + 黑胶队列），位于 banner 与每日推荐之间。
+  Widget _buildPersonalFmSection(ColorScheme cs) {
+    return const SliverToBoxAdapter(child: PersonalFmSection());
   }
 
   Widget _buildDailySection(ColorScheme cs) {

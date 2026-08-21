@@ -533,6 +533,9 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
   bool _exitPressed = false;
   Timer? _exitResetTimer;
 
+  /// 退出中标记：置位后整页淡出并屏蔽交互，动画结束后 exit(0)。
+  bool _isExiting = false;
+
   /// 根据 tab id 构建对应页面 Widget。
   Widget _buildPageForTab(String tabId) {
     // 统一在 tab 页外层包 ContentEntrance：向上淡入滑动（400ms, easeOutCubic），
@@ -1298,6 +1301,11 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     // 1) PopScope 拦截系统返回手势 / 物理返回键，canPop=false → 触发 onPopInvoked
     // 2) 封面流沉浸中：返回键先恢复 tab 栏（退出沉浸），不弹退出确认
     // 3) 否则弹“退出 App”确认对话框
+    //
+    // 退出动画：_isExiting 置位后整页 300ms 淡出（emphasizedEasing），
+    // 底层以 surface 色打底，避免淡出过程透出不可控的窗口底色；
+    // AbsorbPointer 在淡出期间屏蔽一切触摸。
+    final surfaceColor = Theme.of(context).colorScheme.surface;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -1314,27 +1322,38 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
           _onBackPressedForExit();
         }
       },
-      child: ResponsiveScaffold(
-        destinations: destinations,
-        railDestinations: railDestinations,
-        drawerDestinations: drawerDestinations,
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          // 守卫：FullPlayer 在栈顶时（展开进度 > 0.5），忽略 tab 切换，
-          // 避免与 FullPlayer 动画叠加导致状态混乱。
-          if (isFullPlayerOnTop) {
-            return;
-          }
-          setState(() {
-            _previousSelectedIndex = _selectedIndex;
-            _selectedIndex = index;
-          });
-        },
-        hideNavigation: immersive,
-        body: _buildBody(context, visibleTabs, immersive),
-        compactBody: _buildBody(context, visibleTabs, immersive),
-        mediumBody: _buildBody(context, visibleTabs, immersive),
-        expandedBody: _buildBody(context, visibleTabs, immersive),
+      child: AbsorbPointer(
+        absorbing: _isExiting,
+        child: ColoredBox(
+          color: surfaceColor,
+          child: AnimatedOpacity(
+            opacity: _isExiting ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 300),
+            curve: M3ExpressiveMotion.emphasizedEasing,
+            child: ResponsiveScaffold(
+              destinations: destinations,
+              railDestinations: railDestinations,
+              drawerDestinations: drawerDestinations,
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) {
+                // 守卫：FullPlayer 在栈顶时（展开进度 > 0.5），忽略 tab 切换，
+                // 避免与 FullPlayer 动画叠加导致状态混乱。
+                if (isFullPlayerOnTop) {
+                  return;
+                }
+                setState(() {
+                  _previousSelectedIndex = _selectedIndex;
+                  _selectedIndex = index;
+                });
+              },
+              hideNavigation: immersive,
+              body: _buildBody(context, visibleTabs, immersive),
+              compactBody: _buildBody(context, visibleTabs, immersive),
+              mediumBody: _buildBody(context, visibleTabs, immersive),
+              expandedBody: _buildBody(context, visibleTabs, immersive),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1441,6 +1460,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
 
   /// 二次返回退出：首次返回显示提示，3 秒内再次返回触发真正退出（不弹窗）。
   void _onBackPressedForExit() {
+    if (_isExiting) return;
     if (_exitPressed) {
       _exitResetTimer?.cancel();
       _exitPressed = false;
@@ -1467,10 +1487,16 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
   }
 
   /// 真正退出 App：
-  /// 1) `PlayerProvider.pause()` — 停 just_audio + 同步通知栏
-  /// 2) `KugouApiServer.stop()` — 释放本地 API 服务器端口，停止服务器
-  /// 3) `exit(0)` — 立即终止整个进程（保证端口释放）
+  /// 1) 整页淡出动画（300ms）—— 第二次返回后先播动画再杀进程，
+  ///    避免界面瞬间消失的生硬感；淡出期间屏蔽触摸与返回键
+  /// 2) `PlayerProvider.pause()` — 停 just_audio + 同步通知栏
+  /// 3) `KugouApiServer.stop()` — 释放本地 API 服务器端口（与淡出并行，不增加总耗时）
+  /// 4) `exit(0)` — 淡出完成后立即终止整个进程（保证端口释放）
   Future<void> _doExit() async {
+    if (_isExiting) return;
+    setState(() => _isExiting = true);
+    // 淡出完成信号：略长于动画时长，确保最后一帧已渲染
+    final fadeDone = Future.delayed(const Duration(milliseconds: 340));
     // ignore: discarded_futures
     context.read<PlayerProvider>().pause();
     try {
@@ -1479,6 +1505,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
       // 需要给 native 线程一点时间完成 服务器线程退出
       await Future.delayed(const Duration(milliseconds: 300));
     } catch (_) {}
+    await fadeDone;
     // 杀进程：exit(0) 立即终止整个进程（含服务器线程），
     // 确保端口一定被释放。SystemNavigator.pop() 只 finish Activity，
     // 进程可能残留，导致下次启动时端口冲突/服务器未启动。

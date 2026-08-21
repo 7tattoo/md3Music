@@ -5,4 +5,4 @@
      无法感知，会被当作未引用资源删除，导致长按图标后快捷方式无图标。
      tools:keep 显式保留全部候选快捷方式图标。 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/ic_shortcut_favorite,@drawable/ic_shortcut_mic,@drawable/ic_shortcut_search,@drawable/ic_shortcut_discover,@drawable/ic_shortcut_library,@drawable/ic_shortcut_fm,@drawable/ic_shortcut_coverflow,@drawable/ic_shortcut_charts,@drawable/ic_shortcut_ip,@drawable/ic_shortcut_audiobook,@drawable/ic_shortcut_scene,@drawable/ic_shortcut_channel" />
+    tools:keep="@drawable/ic_shortcut_*" />

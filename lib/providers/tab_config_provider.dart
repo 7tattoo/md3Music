@@ -33,10 +33,11 @@ class TabItem {
   int get hashCode => id.hashCode;
 }
 
-/// 默认 Tab 定义（与 app.dart _MainLayout._pages 顺序对应）。
+/// 默认 Tab 定义（与 app.dart _MainLayout 按 tabId 动态构建对应）。
+/// 顺序即默认显示顺序：发现为首页，LaunchPad 第二。
 const List<TabItem> kDefaultTabs = [
-  TabItem(id: 'launchpad', label: 'LaunchPad'),
   TabItem(id: 'discover', label: '发现'),
+  TabItem(id: 'launchpad', label: 'LaunchPad'),
   TabItem(id: 'user', label: '我的', isRemovable: false),
 ];
 
