@@ -488,19 +488,25 @@ class _SystemUiUpdaterState extends State<_SystemUiUpdater>
     // 用「实际生效」标志：用户请求沉浸但切到其他 tab/竖屏时仍需恢复系统栏样式。
     if (kCoverFlowImmersiveActive.value) return;
     final brightness = Theme.of(context).brightness;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
     final isDark = brightness == Brightness.dark;
 
-    // 主界面使用非沉浸模式：状态栏和导航栏正常显示，不延伸到系统栏后面。
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: SystemUiOverlay.values,
-    );
+    // 主界面使用 edgeToEdge：状态栏与底部导航条（小横条）完全透明并悬浮在
+    // 内容之上，App 内容延伸到系统栏后面。底部留白由各自组件消费系统 inset：
+    // NavigationBar 内部自带 SafeArea(top:false)，MiniPlayer 用
+    // SafeArea(bottom:true)（无底栏时生效，Scaffold 有 bottomNavigationBar
+    // 时会先移除 body 的 bottom padding，两者不会重复留白）。
+    //
+    // 不再用 SystemUiMode.manual + systemNavigationBarColor：targetSdk 35 起
+    // Android 15+ 强制 edge-to-edge 并忽略该颜色，manual 只会造成新旧系统
+    // 表现不一致。
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
-        statusBarColor: surfaceColor,
+        statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        systemNavigationBarColor: surfaceColor,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
         systemNavigationBarIconBrightness: isDark
             ? Brightness.light
             : Brightness.dark,
@@ -1043,7 +1049,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     kCoverFlowImmersive.removeListener(_onCoverFlowImmersiveChanged);
     shortcutTabRequest.removeListener(_handleShortcutTabRequest);
     WidgetsBinding.instance.removeObserver(this);
-    // 若 App 销毁时仍处于封面流沉浸，恢复系统栏
+    // 若 App 销毁时仍处于封面流沉浸，恢复系统栏（edgeToEdge，与主界面一致）
     if (_immersiveSynced) {
       _immersiveSynced = false;
       kCoverFlowImmersiveActive.value = false;
@@ -1051,6 +1057,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
         SystemUiMode.manual,
         overlays: SystemUiOverlay.values,
       );
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
     super.dispose();
   }
@@ -1171,9 +1178,17 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     }
     // 设置页不挂 MiniPlayer，其余二级路由页统一挂载
     if (tabId == 'settings') return page;
+    // removeBottom：底部小横条的 inset 已由下方 MiniPlayer 的 SafeArea 消费，
+    // 若不去掉，page 内的滚动视图会按原 inset 再留一份，MiniPlayer 上方多出空白
     return Column(
       children: [
-        Expanded(child: page),
+        Expanded(
+          child: MediaQuery.removePadding(
+            context: context,
+            removeBottom: true,
+            child: page,
+          ),
+        ),
         const MiniPlayer(),
       ],
     );
@@ -1372,10 +1387,14 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
       if (immersive) {
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       } else {
+        // 退出沉浸回到主界面的 edgeToEdge（与 _SystemUiUpdater 一致），
+        // 先 manual 显式 show 一次：部分设备从 immersiveSticky 直接切
+        // edgeToEdge 时系统栏不会自动重新显示。
         SystemChrome.setEnabledSystemUIMode(
           SystemUiMode.manual,
           overlays: SystemUiOverlay.values,
         );
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       }
     });
   }

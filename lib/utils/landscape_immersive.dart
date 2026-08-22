@@ -14,6 +14,10 @@ const SystemUiOverlayStyle kPlayerOverlayStyle = SystemUiOverlayStyle(
   statusBarColor: Color(0x00000000),
   statusBarIconBrightness: Brightness.light,
   systemNavigationBarColor: Color(0x00000000),
+  systemNavigationBarDividerColor: Color(0x00000000),
+  // 关掉系统对比度增强，否则 Android 10+ 会给透明导航条铺一层半透明遮罩，
+  // 小横条区域无法真正透出播放器背景
+  systemNavigationBarContrastEnforced: false,
   systemNavigationBarIconBrightness: Brightness.light,
 );
 
@@ -64,17 +68,21 @@ void applyImmersiveForOrientation() {
 
 /// 退出全屏播放器时恢复系统栏显示。
 ///
-/// 恢复为 [SystemUiMode.manual]（状态栏 + 导航栏正常显示），
-/// 随后主界面的 [_SystemUiUpdater] 会立即设置正确的 surface 色。
+/// 先 [SystemUiMode.manual] 显式 show（确保从横屏 immersiveSticky 退出时
+/// 系统栏一定重新出现），再切回主界面的 [SystemUiMode.edgeToEdge]
+/// —— 状态栏与底部导航条透明悬浮，与 `_SystemUiUpdater` 保持一致。
 void restoreSystemUi({Color? navigationBarColor, Brightness? statusBarBrightness}) {
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
     overlays: SystemUiOverlay.values,
   );
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
     statusBarColor: const Color(0x00000000),
     statusBarIconBrightness: statusBarBrightness ?? Brightness.dark,
     systemNavigationBarColor: navigationBarColor ?? const Color(0x00000000),
+    systemNavigationBarDividerColor: const Color(0x00000000),
+    systemNavigationBarContrastEnforced: false,
     systemNavigationBarIconBrightness: statusBarBrightness ?? Brightness.dark,
   ));
 }

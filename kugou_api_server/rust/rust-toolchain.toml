@@ -1,0 +1,7 @@
+# 固定 Rust 工具链版本。
+# 原因：依赖树中的 hashbrown 0.17 要求 cargo 的 edition2024 特性（需 ≥ 1.85），
+# 而机器上的默认 stable 可能停留在旧版本（如 1.84.0），会让 build_android.sh
+# 在下载依赖阶段直接报 "feature `edition2024` is required" 失败。
+# rustup 会在本目录下自动切换到该版本（未安装时自动下载）。
+[toolchain]
+channel = "1.88.0"

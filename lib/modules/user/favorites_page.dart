@@ -747,7 +747,11 @@ class _FavoritesPageState extends State<FavoritesPage>
         },
         child: ListView(
           controller: _scrollController,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          // 底部叠加系统手势条（小横条）高度，避免末项被压住
+          padding: EdgeInsets.only(
+            top: 8,
+            bottom: 8 + MediaQuery.paddingOf(context).bottom,
+          ),
           children: [
             // 分组标题常驻（即使暂无自建歌单），保证右侧「+」新建入口始终可达
             _GroupSection(
@@ -964,7 +968,10 @@ class _FavoritesPageState extends State<FavoritesPage>
     return M3EPullToRefreshIndicator(
       onRefresh: () => _loadAlbums(),
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: EdgeInsets.only(
+          top: 8,
+          bottom: 8 + MediaQuery.paddingOf(context).bottom,
+        ),
         itemCount: _albums.length,
         itemBuilder: (context, index) {
           final album = _albums[index];
@@ -1109,7 +1116,10 @@ class _FavoritesPageState extends State<FavoritesPage>
     return M3EPullToRefreshIndicator(
       onRefresh: () => _loadArtists(),
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: EdgeInsets.only(
+          top: 8,
+          bottom: 8 + MediaQuery.paddingOf(context).bottom,
+        ),
         itemCount: _artists.length,
         itemBuilder: (context, index) {
           final artist = _artists[index];

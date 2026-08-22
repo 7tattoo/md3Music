@@ -248,6 +248,10 @@ class _LoginPageState extends State<LoginPage> {
       appBar: AppBar(title: const Text('登录酷狗音乐')),
       body: Center(
         child: SingleChildScrollView(
+          // 底部叠加系统手势条（小横条）高度，避免末项被压住
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.paddingOf(context).bottom,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
