@@ -1,95 +1,156 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
+import '../../widgets/sliding_segmented_control.dart';
 import '../login/login_page.dart';
+import '../player/full_player_route.dart';
+import 'personal_fm_page.dart';
 
-/// 发现页内嵌的私人 FM 区块：复制自 [PersonalFmPage] 的推荐区
-/// （推荐方式工具栏 + 策略切换 + 电台卡片 + 黑胶队列）。
+/// 一个具名电台：把 API 的 (mode, songPoolId) 这对裸参数包成用户看得懂的一档。
+///
+/// 接口本身是二维的（mode ∈ normal/small/peak × songPoolId ∈ 0/1/2，共 9 种），
+/// 但这两个维度对听众没有可解释的差别——发现页只需要「我现在想听哪种」。
+/// 所以这里挑出 3 组有意义的组合，每组给名字、图标和一句说明；
+/// 想要全部 9 种组合的走完整 FM 页（区块标题右侧的 `›`）。
+class _Station {
+  const _Station({
+    required this.label,
+    required this.icon,
+    required this.mode,
+    required this.songPoolId,
+    required this.description,
+  });
+
+  final String label;
+
+  /// 每段都显示，不是选中态才给：图标是「这一档是什么」的一部分。
+  final IconData icon;
+
+  final String mode;
+  final int songPoolId;
+
+  /// 选中后显示在分段控件下方的一行说明。这一行是本区块自引导的核心：
+  /// 换档时用户立刻知道这一档意味着什么，不必先试听一轮。
+  final String description;
+}
+
+const List<_Station> _kStations = [
+  _Station(
+    label: '红心',
+    icon: Icons.favorite,
+    mode: 'normal',
+    songPoolId: 0,
+    description: '贴着你标过红心的歌来',
+  ),
+  _Station(
+    label: '探索',
+    icon: Icons.explore,
+    mode: 'normal',
+    songPoolId: 2,
+    description: '跳出常听，找点没听过的',
+  ),
+  _Station(
+    label: '小众',
+    icon: Icons.diamond,
+    mode: 'small',
+    songPoolId: 1,
+    description: '冷门但对味的作品',
+  ),
+];
+
+/// 卡片圆角：与发现页 banner 的 20 对齐，两张卡上下相邻不能是两种圆角。
+const double _kCardRadius = 20.0;
+
+/// 卡内主封面圆角。
+const double _kCoverRadius = 16.0;
+
+/// 卡内主封面边长。
+///
+/// 档位组和档位说明移到卡外（见 [PersonalFmSection.build]）之后，卡片只剩
+/// 「正在播的一首歌」，腾出来的高度给了封面：84 → 112。总区块高度几乎没变，
+/// 但封面大了三分之一，第二屏终于有一个够重的视觉锚点。
+///
+/// 它同时是右侧内容列的高度预算：曲目信息和两个按钮顶对齐后，
+/// 112 减去那一簇的高度就是「即将播放」那一排能用的空间。
+const double _kCoverSize = 112.0;
+
+/// 主封面与右侧内容列之间的间距。
+const double _kCoverGap = 12.0;
+
+/// 即将播放封面的边长。
+///
+/// 48 不是随手取的：这些封面现在可点，48dp 正好是 MD3 的最小触达尺寸；
+/// 同时它加上一份间距后仍能塞进「112 减去信息+按钮那一簇」剩下的高度里。
+const double _kNextCoverSize = 48.0;
+
+/// 即将播放封面的圆角，比主封面小一档，主次关系靠尺寸和圆角同时表达。
+const double _kNextCoverRadius = 12.0;
+
+/// 即将播放封面之间（以及它与上方那一簇之间）的间距。
+const double _kNextCoverGap = 8.0;
+
+/// 区块所有容器的底色。
+///
+/// 用 surface 系而不是 primaryContainer：MD3 给 tonal container 只配了一个
+/// on 色（onPrimaryContainer），做「主文字 / 次要文字 / 占位」的层次就只能手调
+/// alpha；换到 surface 系后 onSurface、onSurfaceVariant、surfaceContainerHighest
+/// 三个现成角色刚好对上，一个 alpha 都不用写，暗色模式也自动成立。
+/// 取 surfaceContainerLow 还让这张卡与每日推荐卡、场景卡同底。
+Color _containerColor(ColorScheme cs) => cs.surfaceContainerLow;
+
+/// 发现页内嵌的私人 FM 区块。
 ///
 /// 与完整 FM 页的差异：
 /// - 加载后不自动开播（发现页仅展示，点播放才出声）
 /// - 不注册 onPlaylistEnd / 预取 / 同步逻辑（避免与 FM 页抢占回调）
+/// - 电台档位是 3 个具名预设而非 mode × songPoolId 两个三选一
+///
+/// 层级划分：档位组和档位说明是**区块级**的（它们决定卡片显示什么内容，
+/// 本身不是卡片的内容），所以放在卡外；卡片只承载「正在播的一首歌」。
+/// 这样卡片和发现页其他歌曲卡变成同一类对象，语言统一。
+///
+/// 卡内布局靠形状和尺寸而非文字说明角色：
+/// 左边一张大方封面 = 正在播；右边上半是曲目信息 + 收藏 / 播放，
+/// 这一簇顶对齐后腾出的下半排小方封面 = 接下来会放的几首。
+/// 封面都可点：大封面直接进播放详情页，小封面先把电台切到那一首再进详情页。
 class PersonalFmSection extends StatefulWidget {
-  const PersonalFmSection({super.key});
+  const PersonalFmSection({
+    super.key,
+    required this.isExpanded,
+    required this.onToggle,
+  });
+
+  /// 是否展开。折叠状态与持久化由发现页统一管理（六个区块同一套机制），
+  /// 本区块只负责渲染标题行的箭头和内容的折叠动画。
+  final bool isExpanded;
+
+  /// 点击标题行（标题 + 箭头）时的折叠/展开回调。
+  final VoidCallback onToggle;
 
   @override
   State<PersonalFmSection> createState() => _PersonalFmSectionState();
 }
 
-class _PersonalFmSectionState extends State<PersonalFmSection>
-    with TickerProviderStateMixin {
+class _PersonalFmSectionState extends State<PersonalFmSection> {
   bool _isLoading = false;
-  String _selectedMode = 'normal';
-  int _selectedSongPoolId = 0;
-  final int _visibleSideCount = 3;
-  late AnimationController _vinylRotationController;
-  late AnimationController _slideController;
+  int _stationIndex = 0;
 
-  final List<Map<String, dynamic>> _modeOptions = [
-    {'value': 'normal', 'label': '红心'},
-    {'value': 'small', 'label': '小众'},
-    {'value': 'peak', 'label': '速览'},
-  ];
-
-  final List<Map<String, dynamic>> _songPoolOptions = [
-    {'value': 0, 'label': '根据口味'},
-    {'value': 1, 'label': '根据风格'},
-    {'value': 2, 'label': '探索'},
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _vinylRotationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    );
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final player = Provider.of<PlayerProvider>(context, listen: false);
-      player.addListener(_onPlayerChanged);
-      _onPlayerChanged();
-    });
-  }
-
-  @override
-  void dispose() {
-    try {
-      Provider.of<PlayerProvider>(context, listen: false).removeListener(
-        _onPlayerChanged,
-      );
-    } catch (_) {}
-    _vinylRotationController.dispose();
-    _slideController.dispose();
-    super.dispose();
-  }
-
-  void _onPlayerChanged() {
-    if (!mounted) return;
-    final player = Provider.of<PlayerProvider>(context, listen: false);
-    final kugou = Provider.of<KugouProvider>(context, listen: false);
-    final fmPlaying =
-        player.isPlaying &&
-        kugou.personalFmSongs.isNotEmpty &&
-        player.currentSong?.id == kugou.personalFmSongs.first.hash;
-    _updateVinylAnimation(fmPlaying);
-  }
+  _Station get _station => _kStations[_stationIndex];
 
   Future<void> _loadPersonalFm() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
-      await Provider.of<KugouProvider>(
-        context,
-        listen: false,
-      ).getPersonalFm(mode: _selectedMode, songPoolId: _selectedSongPoolId);
+      await Provider.of<KugouProvider>(context, listen: false).getPersonalFm(
+        mode: _station.mode,
+        songPoolId: _station.songPoolId,
+      );
     } catch (_) {
     } finally {
       if (mounted) {
@@ -98,22 +159,47 @@ class _PersonalFmSectionState extends State<PersonalFmSection>
     }
   }
 
+  /// 换电台：更新档位并拉新歌单；点回当前档不做任何事。
+  void _selectStation(int index) {
+    if (index == _stationIndex) return;
+    setState(() => _stationIndex = index);
+    _loadPersonalFm();
+  }
+
   Future<void> _playSong(KugouSongDetail song) async {
     final kugou = Provider.of<KugouProvider>(context, listen: false);
     final player = Provider.of<PlayerProvider>(context, listen: false);
-    final songs = kugou.personalFmSongs;
+    if (!kugou.personalFmSongs.any((s) => s.hash == song.hash)) return;
 
-    final index = songs.indexWhere((s) => s.hash == song.hash);
-    if (index == -1) return;
-
-    await _slideController.forward(from: 0);
-    if (!mounted) return;
     kugou.moveToFirst(song);
-    _slideController.reset();
-
     await player.playOnlinePlaylist(kugou.personalFmAsSongs, 0);
-    if (!mounted) return;
-    _updateVinylAnimation(player.isPlaying);
+  }
+
+  /// 点封面：进播放详情页，必要时先把电台切到这一首。
+  ///
+  /// 「必要时」按播放器的当前曲目判断而不是按封面在列表里的位置：本区块加载后
+  /// 不自动开播，首屏大封面上已经有 `songs.first` 而播放器还是空的，
+  /// 这时点大封面同样得先起播，否则详情页开出来是上一首甚至空的。
+  ///
+  /// 不 await 起播：[PlayerProvider.playOnlinePlaylist] 在第一个 await 之前
+  /// 已经同步设好 currentSong 并 notifyListeners，详情页立刻就能显示这首歌，
+  /// 取 URL 期间的加载态由播放页自己表现。await 的话点一下要等一个网络往返才跳页。
+  void _openTrack(KugouSongDetail track) {
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+    if (player.currentSong?.id != track.hash) {
+      _playSong(track);
+    }
+    _openPlayerDetail();
+  }
+
+  /// 打开播放详情页。
+  ///
+  /// 走 [fullPlayerRoute] 而不是 `pushNamed('/player')`：前者是 MiniPlayer 点击
+  /// 展开用的同一条路由，带向下拖拽收起、与 MiniPlayer 的交叉淡入，
+  /// 以及 md / AM 两套播放页的选择。栈顶已经是播放器时不重复 push。
+  void _openPlayerDetail() {
+    if (activePlayerRoute?.isCurrent ?? false) return;
+    Navigator.of(context).push(fullPlayerRoute(context));
   }
 
   Future<void> _togglePlay() async {
@@ -122,31 +208,6 @@ class _PersonalFmSectionState extends State<PersonalFmSection>
       await player.pause();
     } else {
       await player.resume();
-    }
-    _updateVinylAnimation(player.isPlaying);
-  }
-
-  void _updateVinylAnimation(bool isPlaying) {
-    if (isPlaying) {
-      _vinylRotationController.repeat();
-    } else {
-      _vinylRotationController.stop();
-    }
-  }
-
-  Future<void> _handleDislike(KugouSongDetail track) async {
-    if (_isLoading) return;
-    setState(() => _isLoading = true);
-    try {
-      await Provider.of<KugouProvider>(context, listen: false).getPersonalFm(
-        mode: _selectedMode,
-        songPoolId: _selectedSongPoolId,
-      );
-    } catch (_) {
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
@@ -171,19 +232,6 @@ class _PersonalFmSectionState extends State<PersonalFmSection>
     }
   }
 
-  String _getModeLabel(String mode) {
-    switch (mode) {
-      case 'normal':
-        return '红心';
-      case 'small':
-        return '小众';
-      case 'peak':
-        return '速览';
-      default:
-        return '红心';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final kugou = Provider.of<KugouProvider>(context);
@@ -193,688 +241,536 @@ class _PersonalFmSectionState extends State<PersonalFmSection>
 
     final isLoggedIn = kugou.isLoggedIn;
     final songs = kugou.personalFmSongs;
-    final currentTrack = songs.isNotEmpty ? songs[0] : null;
+    final currentTrack = songs.isNotEmpty ? songs.first : null;
     final isPlaying =
-        player.currentSong?.id == currentTrack?.hash && player.isPlaying;
+        currentTrack != null &&
+        player.currentSong?.id == currentTrack.hash &&
+        player.isPlaying;
+    final nextTracks = songs.length > 1
+        ? songs.sublist(1)
+        : const <KugouSongDetail>[];
 
-    List<KugouSongDetail> sideTracks = [];
-    if (songs.length > 1) {
-      sideTracks = songs.sublist(1).take(_visibleSideCount).toList();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isLoggedIn) ...[
-            _buildToolbar(cs, textTheme),
-            const SizedBox(height: 18),
-            _buildRadioHero(cs, textTheme, currentTrack, isPlaying, sideTracks),
-          ] else
-            _buildLoginPrompt(cs, textTheme),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(cs, textTheme, showMore: isLoggedIn),
+        // 折叠动画与发现页其他区块同一套参数（200ms + easeInOut）。
+        // 底部间距放在折叠内容内部：折叠后本区块只剩标题行，
+        // 高度与其他区块的折叠态一致，不会多留一截空白。
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 200),
+          crossFadeState: widget.isExpanded
+              ? CrossFadeState.showFirst
+              : CrossFadeState.showSecond,
+          sizeCurve: Curves.easeInOut,
+          firstChild: Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isLoggedIn) ...[
+                  // 档位说明紧贴标题：它描述的是「这一档电台是什么」，
+                  // 属于区块的 supporting text，不属于某一首歌。
+                  // 放在顶部换档时视线不用下移就能看到这行字变了。
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: _buildStationDescription(cs, textTheme),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: _buildStationGroup(),
+                  ),
+                  _buildRadioCard(
+                    cs,
+                    textTheme,
+                    currentTrack,
+                    nextTracks,
+                    isPlaying,
+                  ),
+                ] else
+                  _buildLoginPrompt(cs, textTheme),
+              ],
+            ),
+          ),
+          secondChild: const SizedBox(width: double.infinity),
+        ),
+      ],
     );
   }
 
-  /// 未登录时的紧凑登录引导卡片
-  Widget _buildLoginPrompt(ColorScheme cs, TextTheme textTheme) {
-    return Material(
-      color: cs.primaryContainer,
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const LoginPage())),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: cs.onPrimaryContainer.withValues(alpha: 0.12),
-                ),
-                child: Icon(
-                  Icons.favorite,
-                  size: 22,
-                  color: cs.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  /// 区块标题行：与每日推荐/热门歌单/排行榜同一个骨架（titleMedium + w600 +
+  /// 可点击的折叠箭头），让私人 FM 不再是发现页里唯一没有标题、也是唯一
+  /// 不能折叠的内容块。右侧 `›` 进完整 FM 页，那里才有全部 9 种
+  /// mode × songPoolId 组合。
+  ///
+  /// 展开时底部只留 2dp（外层 0 + InkWell 内层 2）：紧接着的档位说明是这一行的
+  /// supporting text，两者要读成一组而不是两个独立的元素；折叠后下方内容整体
+  /// 隐去，改留 8dp 与其他区块的折叠态对齐。
+  Widget _buildSectionHeader(
+    ColorScheme cs,
+    TextTheme textTheme, {
+    required bool showMore,
+  }) {
+    final tight = showMore && widget.isExpanded;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 8, showMore ? 4 : 16, tight ? 0 : 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: widget.onToggle,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: EdgeInsets.only(top: 4, bottom: tight ? 2 : 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '私人 FM',
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onPrimaryContainer,
+                    Flexible(
+                      child: Text(
+                        '私人 FM',
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '登录后开启你的专属电台',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: cs.onPrimaryContainer.withValues(alpha: 0.7),
+                    const SizedBox(width: 4),
+                    AnimatedRotation(
+                      turns: widget.isExpanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.expand_more,
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                color: cs.onPrimaryContainer.withValues(alpha: 0.6),
-              ),
-            ],
+            ),
           ),
-        ),
+          if (showMore)
+            IconButton(
+              tooltip: '打开私人 FM',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PersonalFmPage()),
+              ),
+              icon: const Icon(Icons.chevron_right),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildToolbar(ColorScheme cs, TextTheme textTheme) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isSmallScreen = constraints.maxWidth < 375;
-
-        return Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: isSmallScreen ? 12 : 16,
-            vertical: isSmallScreen ? 10 : 14,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: cs.onSurfaceVariant.withValues(alpha: 0.06),
-            ),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                cs.onSurfaceVariant.withValues(alpha: 0.025),
-                Colors.transparent,
+  /// 未登录时的紧凑登录引导卡片。标题已由区块标题行承担，这里只留一句行动号召。
+  ///
+  /// 底色与电台卡片相同：登录前后是同一个区块，不该换一张颜色不同的卡。
+  /// 需要的强调放在左侧图标块上——中性卡里嵌一小块 primaryContainer，
+  /// 既点出这是要动作的状态，又让正文继续用 onSurface / onSurfaceVariant 这对
+  /// 现成的层次角色，不必手调 alpha。
+  Widget _buildLoginPrompt(ColorScheme cs, TextTheme textTheme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Material(
+        color: _containerColor(cs),
+        borderRadius: BorderRadius.circular(_kCardRadius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const LoginPage())),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: cs.primaryContainer,
+                  ),
+                  child: Icon(
+                    Icons.radio,
+                    size: 22,
+                    color: cs.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '登录后开启你的专属电台',
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '按你的口味不断续播',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
               ],
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '推荐方式',
-                    style: textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.08,
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.54),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '${_getModeLabel(_selectedMode)} · ${_songPoolOptions.firstWhere((o) => o['value'] == _selectedSongPoolId)['label']}',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.64),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: isSmallScreen ? 8 : 10),
-              _buildStrategySwitch(cs, isSmallScreen),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildStrategySwitch(ColorScheme cs, bool isSmallScreen) {
-    return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 3 : 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.onSurfaceVariant.withValues(alpha: 0.08)),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            cs.onSurfaceVariant.withValues(alpha: 0.018),
-            Colors.transparent,
-          ],
         ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.max,
-        children: _songPoolOptions.map((option) {
-          final isActive = _selectedSongPoolId == option['value'];
-          return Expanded(
-            child: InkWell(
-              onTap: () {
-                setState(() => _selectedSongPoolId = option['value']);
-                _loadPersonalFm();
-              },
-              borderRadius: BorderRadius.circular(999),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 10 : 14,
-                  vertical: isSmallScreen ? 6 : 8,
-                ),
-                decoration: isActive
-                    ? BoxDecoration(
-                        borderRadius: BorderRadius.circular(999),
-                        color: cs.primary,
-                      )
-                    : null,
-                child: Text(
-                  option['label'],
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontSize: isSmallScreen ? 12 : null,
-                    fontWeight: FontWeight.w700,
-                    color: isActive
-                        ? cs.onPrimary
-                        : cs.onSurfaceVariant.withValues(alpha: 0.62),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
     );
   }
 
-  Widget _buildRadioHero(
-    ColorScheme cs,
-    TextTheme textTheme,
-    KugouSongDetail? currentTrack,
-    bool isPlaying,
-    List<KugouSongDetail> sideTracks,
-  ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = constraints.maxWidth;
-        final isSmallScreen = screenWidth < 375;
-        final isMediumScreen = screenWidth >= 375 && screenWidth < 450;
-
-        final isLandscape =
-            MediaQuery.of(context).orientation == Orientation.landscape;
-
-        double cardWidth, vinylSize;
-        if (isLandscape) {
-          cardWidth = 140.0;
-          vinylSize = 120.0;
-        } else if (isSmallScreen) {
-          cardWidth = 120.0;
-          vinylSize = 110.0;
-        } else if (isMediumScreen) {
-          cardWidth = 140.0;
-          vinylSize = 125.0;
-        } else {
-          cardWidth = 160.0;
-          vinylSize = 140.0;
-        }
-
-        final cardHeight = cardWidth * 1.25;
-
-        final mainVinylLeftOffset = cardWidth * 0.55;
-        final mainVinylTopOffset = (cardHeight - vinylSize) / 2;
-        final sideVinylLeftPadding = cardWidth - vinylSize * 0.55;
-        final sideVinylSpacing = isSmallScreen
-            ? 8.0
-            : (isMediumScreen ? 10.0 : 14.0);
-
-        final maxSideVinyls = isLandscape
-            ? 2
-            : (isSmallScreen ? 2 : (isMediumScreen ? 3 : 4));
-        final displaySideTracks = sideTracks.take(maxSideVinyls).toList();
-
-        return SizedBox(
-          height: cardHeight,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: mainVinylLeftOffset,
-                top: mainVinylTopOffset,
-                child: SizedBox(
-                  width: vinylSize,
-                  height: vinylSize,
-                  child: _buildCurrentVinyl(
-                    cs,
-                    currentTrack,
-                    isPlaying,
-                    vinylSize,
-                  ),
-                ),
-              ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _buildRadioCard(
-                    cs,
-                    textTheme,
-                    currentTrack,
-                    isPlaying,
-                    cardWidth,
-                  ),
-                  Expanded(
-                    child: SizedBox(
-                      height: cardHeight,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: _buildVinyls(
-                          cs,
-                          displaySideTracks,
-                          vinylSize,
-                          sideVinylLeftPadding,
-                          sideVinylSpacing,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
+  /// 电台卡片：正在播的一首歌，加上接下来会放的几首的封面。
+  ///
+  /// 档位组和说明已经提到卡外（区块级），所以这里不再是一个塞了四种东西的
+  /// 复合容器，而是和 `_DailySongCard` 同构的一张歌曲卡。
   Widget _buildRadioCard(
     ColorScheme cs,
     TextTheme textTheme,
     KugouSongDetail? currentTrack,
+    List<KugouSongDetail> nextTracks,
     bool isPlaying,
-    double width,
   ) {
-    final height = width;
-    final isVerySmall = width < 130;
-    final isUltraSmall = width < 120;
-    final textSizeMultiplier = isUltraSmall ? 0.75 : (isVerySmall ? 0.85 : 1.0);
-
     return Container(
-      width: width,
-      height: height,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(_kCardRadius),
+        color: _containerColor(cs),
       ),
-      padding: EdgeInsets.fromLTRB(
-        isUltraSmall ? 6 : (isVerySmall ? 8 : 10),
-        isUltraSmall ? 5 : (isVerySmall ? 6 : 8),
-        isUltraSmall ? 6 : (isVerySmall ? 8 : 10),
-        isUltraSmall ? 5 : (isVerySmall ? 6 : 8),
+      child: _buildNowPlayingRow(
+        cs,
+        textTheme,
+        currentTrack,
+        nextTracks,
+        isPlaying,
       ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: width,
+    );
+  }
+
+  /// 电台档位：[SlidingSegmentedControl]，三段等宽，选中项由一个滑动的
+  /// primary 指示器承载。
+  ///
+  /// 相比原先的 M3E connected button group：段宽不再随选中项变化（换档时
+  /// 三段的宽度不重排），图标三段都在（不是只有当前档才有），选中态也不改字重。
+  /// 换档时动的只有指示器的位置和前景色。
+  Widget _buildStationGroup() {
+    return SlidingSegmentedControl(
+      segments: _kStations
+          .map(
+            (station) => SlidingSegment(
+              label: station.label,
+              icon: station.icon,
+              semanticLabel: '${station.label}电台',
+            ),
+          )
+          .toList(),
+      selectedIndex: _stationIndex,
+      onSelected: _selectStation,
+      semanticLabel: '电台档位',
+    );
+  }
+
+  /// 当前档位的一句说明。换档时淡入淡出，让人注意到这行字变了。
+  Widget _buildStationDescription(ColorScheme cs, TextTheme textTheme) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      child: Text(
+        _station.description,
+        key: ValueKey(_stationIndex),
+        style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  /// 正在播这一行：左边大封面，右边上半是曲目信息 + 收藏 / 播放，
+  /// 下半是接下来会放的几首的封面。
+  ///
+  /// 右侧那一簇顶对齐（[CrossAxisAlignment.start]）而不是像原来一样在 112dp 的
+  /// 行高里居中：居中时它上下各留一条谁也用不上的空白，顶上去之后那两条空白
+  /// 合成一块完整的区域，刚好排得下一行 48dp 的封面。卡片高度因此没变。
+  Widget _buildNowPlayingRow(
+    ColorScheme cs,
+    TextTheme textTheme,
+    KugouSongDetail? currentTrack,
+    List<KugouSongDetail> nextTracks,
+    bool isPlaying,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCurrentCover(cs, currentTrack),
+        const SizedBox(width: _kCoverGap),
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: _buildModeSwitch(
-                  cs,
-                  isSmall: isVerySmall,
-                  isUltraSmall: isUltraSmall,
-                ),
-              ),
-              SizedBox(height: isUltraSmall ? 2 : (isVerySmall ? 3 : 4)),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  _getModeLabel(_selectedMode),
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: cs.onPrimaryContainer,
-                    letterSpacing: -0.04,
-                    fontSize:
-                        (isUltraSmall
-                            ? 11
-                            : (isVerySmall ? 12 : (width < 180 ? 14 : 16))) *
-                        textSizeMultiplier,
-                  ),
-                ),
-              ),
-              SizedBox(height: isUltraSmall ? 0.5 : (isVerySmall ? 1 : 2)),
-              Text(
-                currentTrack != null ? currentTrack.songName : '暂无推荐',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: cs.onPrimaryContainer.withValues(alpha: 0.9),
-                  fontWeight: FontWeight.w600,
-                  fontSize:
-                      (isUltraSmall ? 11 : (isVerySmall ? 12 : 14)) *
-                      textSizeMultiplier,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              SizedBox(height: isUltraSmall ? 0.3 : (isVerySmall ? 0.5 : 1)),
-              Text(
-                currentTrack?.artistName ?? '',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: cs.onPrimaryContainer.withValues(alpha: 0.6),
-                  fontWeight: FontWeight.w500,
-                  fontSize:
-                      (isUltraSmall ? 9 : (isVerySmall ? 10 : 12)) *
-                      textSizeMultiplier,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              SizedBox(height: height * 0.08),
+              // 信息与按钮内部仍然互相居中：曲名一行还是两行都有可能，
+              // 让文字块与 48dp 的按钮对齐比让两者都贴顶稳。
               Row(
                 children: [
-                  _buildAudioBars(
-                    cs,
-                    isSmall: isVerySmall,
-                    isUltraSmall: isUltraSmall,
-                  ),
-                  const Spacer(),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: _buildRadioActions(
-                      cs,
-                      isPlaying,
-                      currentTrack,
-                      isSmall: isVerySmall,
-                      isUltraSmall: isUltraSmall,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          // 空态直接说下一步该做什么，不写「暂无推荐」——
+                          // 首次进入时列表本来就是空的，那不是错误状态。
+                          currentTrack?.songName ?? '点播放，开启你的电台',
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (currentTrack?.artistName?.isNotEmpty ?? false) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            currentTrack!.artistName!,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 4),
+                  _buildFavoriteButton(cs, currentTrack),
+                  _buildPlayButton(cs, currentTrack, isPlaying),
                 ],
               ),
+              if (nextTracks.isNotEmpty) ...[
+                const SizedBox(height: _kNextCoverGap),
+                _buildNextCoverRow(cs, nextTracks),
+              ],
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModeSwitch(
-    ColorScheme cs, {
-    bool isSmall = false,
-    bool isUltraSmall = false,
-  }) {
-    final padding = isUltraSmall
-        ? const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5)
-        : (isSmall
-              ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
-              : const EdgeInsets.symmetric(horizontal: 8, vertical: 4));
-    final fontSize = isUltraSmall ? 10.0 : (isSmall ? 11.0 : 12.0);
-
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Container(
-        padding: const EdgeInsets.all(1),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          color: cs.onPrimaryContainer.withValues(alpha: 0.14),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: _modeOptions.map((option) {
-            final isActive = _selectedMode == option['value'];
-            return InkWell(
-              onTap: () {
-                setState(() => _selectedMode = option['value']);
-                _loadPersonalFm();
-              },
-              borderRadius: BorderRadius.circular(999),
-              child: Container(
-                padding: padding,
-                decoration: isActive
-                    ? BoxDecoration(
-                        borderRadius: BorderRadius.circular(999),
-                        color: cs.onPrimaryContainer.withValues(alpha: 0.22),
-                      )
-                    : null,
-                child: Text(
-                  option['label'],
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.w700,
-                    color: isActive
-                        ? cs.onPrimaryContainer
-                        : cs.onPrimaryContainer.withValues(alpha: 0.74),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAudioBars(
-    ColorScheme cs, {
-    bool isSmall = false,
-    bool isUltraSmall = false,
-  }) {
-    final scale = isUltraSmall ? 0.6 : (isSmall ? 0.75 : 1.0);
-    final heights = [6, 9, 5, 11, 8].map((h) => h * scale).toList();
-    final width = isUltraSmall ? 1.2 : (isSmall ? 1.5 : 2.0);
-    final margin = isUltraSmall
-        ? const EdgeInsets.symmetric(horizontal: 0.8)
-        : (isSmall
-              ? const EdgeInsets.symmetric(horizontal: 1.0)
-              : const EdgeInsets.symmetric(horizontal: 1.5));
-
-    return Row(
-      children: List.generate(5, (index) {
-        return Container(
-          width: width,
-          height: heights[index].toDouble(),
-          margin: margin,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            color: cs.onPrimaryContainer.withValues(alpha: 0.4),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildRadioActions(
-    ColorScheme cs,
-    bool isPlaying,
-    KugouSongDetail? currentTrack, {
-    bool isSmall = false,
-    bool isUltraSmall = false,
-  }) {
-    final likeButtonSize = isUltraSmall ? 24.0 : (isSmall ? 26.0 : 30.0);
-    final playButtonSize = isUltraSmall ? 28.0 : (isSmall ? 32.0 : 36.0);
-    final likeIconSize = isUltraSmall ? 11.0 : (isSmall ? 12.0 : 14.0);
-    final playIconSize = isUltraSmall ? 14.0 : (isSmall ? 16.0 : 18.0);
-    final spacing = isUltraSmall ? 3.0 : (isSmall ? 4.0 : 6.0);
-
-    return Row(
-      children: [
-        InkWell(
-          onTap: currentTrack != null
-              ? () => _handleDislike(currentTrack)
-              : null,
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            width: likeButtonSize,
-            height: likeButtonSize,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              color: cs.onPrimaryContainer.withValues(alpha: 0.12),
-              border: Border.all(
-                color: cs.onPrimaryContainer.withValues(alpha: 0.06),
-              ),
-            ),
-            child: Icon(
-              Icons.favorite_border,
-              color: cs.onPrimaryContainer.withValues(alpha: 0.86),
-              size: likeIconSize,
-            ),
-          ),
-        ),
-        SizedBox(width: spacing),
-        InkWell(
-          onTap: () => _handlePlayPersonalFm(currentTrack, isPlaying),
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            width: playButtonSize,
-            height: playButtonSize,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              color: cs.primary,
-            ),
-            child: _isLoading
-                ? M3ELoadingIndicator(color: cs.onPrimary)
-                : Icon(
-                    isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: cs.onPrimary,
-                    size: playIconSize,
-                  ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildCurrentVinyl(
-    ColorScheme cs,
-    KugouSongDetail? track,
-    bool isPlaying,
-    double size,
-  ) {
-    final borderWidth = size * 0.05;
-    return InkWell(
-      onTap: () => _handlePlayPersonalFm(track, isPlaying),
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: cs.outlineVariant, width: borderWidth),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.32),
-              blurRadius: size * 0.12,
-              offset: Offset(0, size * 0.09),
-            ),
+  /// 正在播的大封面。点它进播放详情页。
+  ///
+  /// 空态（还没拉到歌）不挂点击：那时候没有「这一首」可以打开。
+  Widget _buildCurrentCover(ColorScheme cs, KugouSongDetail? currentTrack) {
+    final cover = ClipRRect(
+      borderRadius: BorderRadius.circular(_kCoverRadius),
+      child: SizedBox(
+        width: _kCoverSize,
+        height: _kCoverSize,
+        child: currentTrack == null
+            ? _buildCoverPlaceholder(cs, iconSize: 36)
+            : _buildCover(cs, currentTrack, cacheSize: 336, iconSize: 36),
+      ),
+    );
+    if (currentTrack == null) return cover;
+    return _buildTappableCover(
+      cover: cover,
+      radius: _kCoverRadius,
+      semanticLabel: '正在播放 ${currentTrack.songName}',
+      tooltip: '打开播放详情',
+      onTap: () => _openTrack(currentTrack),
+    );
+  }
+
+  /// 接下来会放的几首的封面排，坐在曲目信息和按钮下面腾出来的那块空间里。
+  ///
+  /// 数量按可用宽度算而不是写死：这一排在主封面右侧，能用的宽度是屏宽减掉
+  /// 页边距、卡片内边距、主封面和间距之后剩下的部分，写死三张在窄屏上会溢出。
+  Widget _buildNextCoverRow(ColorScheme cs, List<KugouSongDetail> nextTracks) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 最后一张右边不需要间距，所以先补一份间距再按「封面 + 间距」整除。
+        final slot = _kNextCoverSize + _kNextCoverGap;
+        final fits = ((constraints.maxWidth + _kNextCoverGap) / slot).floor();
+        final count = fits.clamp(0, nextTracks.length);
+        if (count <= 0) return const SizedBox.shrink();
+        return Row(
+          children: [
+            for (var i = 0; i < count; i++) ...[
+              if (i > 0) const SizedBox(width: _kNextCoverGap),
+              _buildNextCover(cs, nextTracks[i]),
+            ],
           ],
-        ),
-        child: AnimatedBuilder(
-          animation: _vinylRotationController,
-          builder: (context, child) {
-            return Transform.rotate(
-              angle: _vinylRotationController.value * 2 * 3.14159,
-              child: ClipOval(
-                child: track != null
-                    ? _buildVinylCover(track, cs)
-                    : Container(
-                        color: cs.surfaceContainerHighest,
-                        child: Icon(
-                          Icons.music_note,
-                          size: size * 0.4,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVinylCover(KugouSongDetail track, ColorScheme cs) {
-    return Image.network(
-      track.artworkUri ?? '',
-      width: double.infinity,
-      height: double.infinity,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Container(
-        color: cs.surfaceContainerHighest,
-        child: Icon(Icons.music_note, color: cs.onSurfaceVariant),
-      ),
-    );
-  }
-
-  Widget _buildVinyls(
-    ColorScheme cs,
-    List<KugouSongDetail> tracks,
-    double vinylSize,
-    double leftPadding,
-    double spacing,
-  ) {
-    return AnimatedBuilder(
-      animation: _slideController,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(
-            -(_slideController.value * vinylSize * 1.4) + leftPadding,
-            0,
-          ),
-          child: SizedBox(
-            height: vinylSize,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: tracks.asMap().entries.map((entry) {
-                final track = entry.value;
-                final index = entry.key;
-                return _buildSideVinyl(cs, track, index, vinylSize, spacing);
-              }).toList(),
-            ),
-          ),
         );
       },
     );
   }
 
-  Widget _buildSideVinyl(
-    ColorScheme cs,
-    KugouSongDetail track,
-    int index,
-    double size,
-    double spacing,
-  ) {
-    final borderWidth = size * 0.05;
-    return Padding(
-      padding: index == 0 ? EdgeInsets.zero : EdgeInsets.only(left: spacing),
-      child: InkWell(
-        onTap: () => _playSong(track),
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: cs.surfaceContainerHighest,
-              width: borderWidth,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: size * 0.13,
-                offset: Offset(0, size * 0.1),
+  /// 接下来会放的一张封面。点它把电台切到这一首并进播放详情页。
+  ///
+  /// 曲名通过语义标签和长按 tooltip 给出，不占版面。
+  Widget _buildNextCover(ColorScheme cs, KugouSongDetail track) {
+    return _buildTappableCover(
+      cover: ClipRRect(
+        borderRadius: BorderRadius.circular(_kNextCoverRadius),
+        child: SizedBox(
+          width: _kNextCoverSize,
+          height: _kNextCoverSize,
+          child: _buildCover(cs, track, cacheSize: 144, iconSize: 18),
+        ),
+      ),
+      radius: _kNextCoverRadius,
+      semanticLabel: '接下来播放 ${track.songName}',
+      tooltip: '播放：${track.songName}',
+      onTap: () => _openTrack(track),
+    );
+  }
+
+  /// 给封面套上可点击层。
+  ///
+  /// 用 Stack 把「透明 Material + InkWell」叠在封面**上面**，而不是让封面当
+  /// InkWell 的 child：水波纹画在它所属 Material 的表面上，Material 在下层时
+  /// 会被不透明的封面整个挡住，点了完全没反馈。
+  ///
+  /// [MergeSemantics] 把标签和 InkWell 自带的按钮节点并成一个：不并的话读屏
+  /// 会先念一遍曲名、再单独聚焦一个没名字的按钮。
+  Widget _buildTappableCover({
+    required Widget cover,
+    required double radius,
+    required String semanticLabel,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return MergeSemantics(
+      child: Semantics(
+        label: semanticLabel,
+        child: Tooltip(
+          message: tooltip,
+          child: Stack(
+            children: [
+              cover,
+              Positioned.fill(
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(radius),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(onTap: onTap),
+                ),
               ),
             ],
           ),
-          child: ClipOval(child: _buildVinylCover(track, cs)),
+        ),
+      ),
+    );
+  }
+
+  /// 收藏按钮：接 [FavoritesProvider]（`toggleFavorite` 走「我喜欢」歌单，
+  /// 已登录时同步到服务端）。只订阅当前曲目那一个布尔值，
+  /// 所以点收藏不会把带网络封面的整个区块重建一遍。
+  ///
+  /// 已收藏用 primary（与播放按钮同一个强调色，「这首被我挑出来了」），
+  /// 未收藏用 onSurfaceVariant（和歌手名同级的次要前景），
+  /// 两态的差别落在色相上而不是同一个颜色的两档透明度。
+  Widget _buildFavoriteButton(ColorScheme cs, KugouSongDetail? currentTrack) {
+    if (currentTrack == null) {
+      return IconButton(
+        tooltip: '收藏',
+        onPressed: null,
+        icon: const Icon(Icons.favorite_border),
+        color: cs.onSurfaceVariant,
+      );
+    }
+    return Selector<FavoritesProvider, bool>(
+      selector: (_, favorites) => favorites.isFavorite(currentTrack.hash),
+      builder: (context, isFavorite, _) {
+        return IconButton(
+          tooltip: isFavorite ? '取消收藏' : '收藏',
+          onPressed: () => context.read<FavoritesProvider>().toggleFavorite(
+            currentTrack.toSong(),
+          ),
+          icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
+          color: isFavorite ? cs.primary : cs.onSurfaceVariant,
+        );
+      },
+    );
+  }
+
+  /// 播放按钮：48dp，满足 MD3 最小触达（原先是 28–36dp）。
+  Widget _buildPlayButton(
+    ColorScheme cs,
+    KugouSongDetail? currentTrack,
+    bool isPlaying,
+  ) {
+    return Material(
+      color: cs.primary,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _handlePlayPersonalFm(currentTrack, isPlaying),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: _isLoading
+                ? SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: M3ELoadingIndicator(color: cs.onPrimary),
+                  )
+                : Icon(
+                    isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: cs.onPrimary,
+                    size: 24,
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 封面。改用 [CachedNetworkImage]（与发现页其他封面一致），
+  /// 原来这里是 Image.network，每次重建都重新走网络。
+  Widget _buildCover(
+    ColorScheme cs,
+    KugouSongDetail track, {
+    required int cacheSize,
+    required double iconSize,
+  }) {
+    final url = track.artworkUri;
+    if (url == null || url.isEmpty) {
+      return _buildCoverPlaceholder(cs, iconSize: iconSize);
+    }
+    return CachedNetworkImage(
+      imageUrl: url,
+      memCacheWidth: cacheSize,
+      memCacheHeight: cacheSize,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      placeholder: (_, _) => _buildCoverPlaceholder(cs, iconSize: iconSize),
+      errorWidget: (_, _, _) =>
+          _buildCoverPlaceholder(cs, iconSize: iconSize),
+    );
+  }
+
+  /// 封面占位。用 surfaceContainerHighest 而不是给前景色加透明度：
+  /// 它比卡底 surfaceContainerLow 高两档，本来就是「容器里最靠上的一层」，
+  /// 图没加载出来时是一块干净的浅色方块，不是一片脏掉的半透明。
+  Widget _buildCoverPlaceholder(ColorScheme cs, {required double iconSize}) {
+    return Container(
+      color: cs.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          Icons.music_note,
+          size: iconSize,
+          color: cs.onSurfaceVariant,
         ),
       ),
     );

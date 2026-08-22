@@ -29,6 +29,8 @@ class ThemeProvider extends ChangeNotifier {
   static const String _bgOpacityKey = 'background_opacity';
   // 按背景图莫奈取色开关（默认开启）
   static const String _bgMonetKey = 'use_background_monet';
+  // 文字阴影开关（默认开启，仅在启用自定义背景图片时生效）
+  static const String _textShadowKey = 'use_text_shadow';
 
   ThemeMode _themeMode = ThemeMode.system;
   bool _useDynamicColor = false;
@@ -62,6 +64,9 @@ class ThemeProvider extends ChangeNotifier {
   double _backgroundOpacity = 0.4;
   // 按背景图莫奈取色（默认开启；关闭后背景图仍显示但不参与主题色）
   bool _useBackgroundMonet = true;
+  // 文字阴影（默认开启）：给全局文字加轮廓阴影，改善背景图上的可读性。
+  // 仅在 _useBackgroundImage 为 true 时生效（见 [useTextShadowEffective]）。
+  bool _useTextShadow = true;
   // 从背景图片提取的主色（运行时，作为莫奈取色种子）
   Color? _backgroundSeedColor;
 
@@ -86,7 +91,12 @@ class ThemeProvider extends ChangeNotifier {
   double get backgroundBlur => _backgroundBlur;
   double get backgroundOpacity => _backgroundOpacity;
   bool get useBackgroundMonet => _useBackgroundMonet;
+  bool get useTextShadow => _useTextShadow;
   Color? get backgroundSeedColor => _backgroundSeedColor;
+
+  /// 文字阴影是否实际生效：开关本身开启 **且** 已启用自定义背景图片。
+  /// 未启用背景图时纯色主题自带足够对比度，阴影只会让文字发虚，故不生效。
+  bool get useTextShadowEffective => _useBackgroundImage && _useTextShadow;
 
   /// 当前生效的种子色优先级：
   /// 1. 启用封面动态取色且提取成功 → 歌曲封面主色（可叠加系统主题色，封面优先）
@@ -491,8 +501,8 @@ class ThemeProvider extends ChangeNotifier {
 
   // ============== 自定义背景图片 ==============
 
-  /// 加载背景图片相关持久化值（开关 / 路径 / 模糊 / 透明度 / 莫奈取色），
-  /// 默认开启（无用户图片时用内置默认壁纸）/ 莫奈取色默认开启。
+  /// 加载背景图片相关持久化值（开关 / 路径 / 模糊 / 透明度 / 莫奈取色 / 文字阴影），
+  /// 默认开启（无用户图片时用内置默认壁纸）/ 莫奈取色默认开启 / 文字阴影默认开启。
   Future<void> _loadBackgroundImage() async {
     final prefs = await SharedPreferences.getInstance();
     _useBackgroundImage = prefs.getBool(_bgImageEnabledKey) ?? true;
@@ -500,6 +510,7 @@ class ThemeProvider extends ChangeNotifier {
     _backgroundBlur = prefs.getDouble(_bgBlurKey) ?? 20.0;
     _backgroundOpacity = prefs.getDouble(_bgOpacityKey) ?? 0.4;
     _useBackgroundMonet = prefs.getBool(_bgMonetKey) ?? true;
+    _useTextShadow = prefs.getBool(_textShadowKey) ?? true;
     notifyListeners();
   }
 
@@ -520,6 +531,19 @@ class ThemeProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_bgMonetKey, enabled);
+  }
+
+  /// 切换「文字阴影」开关（默认开启）。
+  ///
+  /// 开关值独立持久化，但只在启用自定义背景图片时才实际影响渲染
+  /// （见 [useTextShadowEffective]）：关闭背景图时设置项保留用户选择，
+  /// 重新开启背景图后沿用。
+  Future<void> setUseTextShadow(bool enabled) async {
+    if (_useTextShadow == enabled) return;
+    _useTextShadow = enabled;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_textShadowKey, enabled);
   }
 
   /// 设置背景图片路径（原生端拷贝到 filesDir 后的真实路径）。

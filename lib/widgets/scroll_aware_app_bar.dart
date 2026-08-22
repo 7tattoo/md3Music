@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/layout/page_title_alignment.dart';
 import '../providers/theme_provider.dart';
 
 /// 通用滚动感知 AppBar。
@@ -43,6 +44,12 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
   /// （如发现页顶部）。
   final bool opaque;
 
+  /// 页面在底部导航栏中的 tab id（取值见 [kAllAvailableTabs]），用于按
+  /// [centerPageTitle] 判定标题对齐：tab 可直达的一级页面左对齐，二级页面居中。
+  ///
+  /// 从来不作为 tab 出现的页面（各类详情页/列表页）不传，标题自动居中。
+  final String? tabId;
+
   const ScrollAwareAppBar({
     super.key,
     required this.title,
@@ -51,6 +58,7 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
     this.fadeRange = 80,
     this.leading,
     this.opaque = false,
+    this.tabId,
   });
 
   @override
@@ -125,7 +133,8 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
         style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
       ),
       actions: widget.actions,
-      centerTitle: false,
+      // 统一对齐规则：底部导航栏可直达的一级页面左对齐，二级页面居中
+      centerTitle: centerPageTitle(context, tabId: widget.tabId),
     );
   }
 }

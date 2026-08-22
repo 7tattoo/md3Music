@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
+import '../../core/layout/page_title_alignment.dart';
 import '../../data/models/song.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
@@ -340,6 +341,8 @@ class _BrushPageState extends State<BrushPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('刷刷'),
+        // 统一对齐规则：作为底部导航栏一级页面时左对齐，被 push 成二级页面时居中
+        centerTitle: centerPageTitle(context, tabId: 'brush'),
         actions: [
           IconButton(
             onPressed: _openVertical,

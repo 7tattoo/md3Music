@@ -72,6 +72,7 @@ class _IpPageState extends State<IpPage> {
     return Scaffold(
       appBar: ScrollAwareAppBar(
         title: '编辑精选',
+        tabId: 'ip',
         scrollController: _scrollController,
       ),
       body: _isLoading

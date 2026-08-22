@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/layout/page_title_alignment.dart';
 import '../../core/utils/app_toast.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/local_favorites_provider.dart';
@@ -68,7 +69,8 @@ class _LibraryPageState extends State<LibraryPage>
 
     return Scaffold(
       appBar: AppBar(
-        centerTitle: true,
+        // 统一对齐规则：作为底部导航栏一级页面时左对齐，被 push 成二级页面时居中
+        centerTitle: centerPageTitle(context, tabId: 'library'),
         title: Text(
           '本地音乐',
           style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),

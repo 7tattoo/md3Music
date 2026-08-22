@@ -12,6 +12,7 @@ import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/album_card.dart';
 import '../../widgets/pinchable_grid_view.dart';
 import '../../widgets/scroll_aware_app_bar.dart';
+import '../../widgets/smart_artwork_image.dart';
 import '../../widgets/song_list_item.dart';
 import '../charts/charts_page.dart';
 import '../personal_fm/personal_fm_section.dart';
@@ -29,15 +30,26 @@ class DiscoverPage extends StatefulWidget {
 class _DiscoverPageState extends State<DiscoverPage> {
   static const String _kDiscoverLastDateKey = 'discover_last_date';
 
-  // 三个可折叠区块的折叠状态（true=折叠）。SharedPreferences 存"是否折叠"。
+  // 六个内容区块的折叠状态（true=折叠）。SharedPreferences 存"是否折叠"。
+  //
+  // 原来只有每日推荐/热门歌单/排行榜三个能折，主题歌单和场景音乐不能——
+  // 同一页里五个标题行有两种交互契约，用户无法预测哪个能点。现在补齐。
+  // 私人 FM 的标题行由区块自己渲染（见 [PersonalFmSection]），折叠状态同样
+  // 收在这里，六个区块一套机制。
+  static const String _kCollapsedPersonalFm = 'discover_collapsed_personal_fm';
   static const String _kCollapsedDaily = 'discover_collapsed_daily';
+  static const String _kCollapsedTheme = 'discover_collapsed_theme';
+  static const String _kCollapsedScene = 'discover_collapsed_scene';
   static const String _kCollapsedPlaylist = 'discover_collapsed_playlist';
   static const String _kCollapsedRank = 'discover_collapsed_rank';
 
   bool _isLoading = true;
   String? _error;
 
+  bool _isPersonalFmExpanded = true;
   bool _isDailyExpanded = true;
+  bool _isThemeExpanded = true;
+  bool _isSceneExpanded = true;
   bool _isPlaylistExpanded = true;
   bool _isRankExpanded = true;
 
@@ -59,12 +71,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
     });
   }
 
-  /// 从 SharedPreferences 恢复三个 section 的折叠状态
+  /// 从 SharedPreferences 恢复六个 section 的折叠状态
   Future<void> _loadCollapseStates() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
+      _isPersonalFmExpanded = !(prefs.getBool(_kCollapsedPersonalFm) ?? false);
       _isDailyExpanded = !(prefs.getBool(_kCollapsedDaily) ?? false);
+      _isThemeExpanded = !(prefs.getBool(_kCollapsedTheme) ?? false);
+      _isSceneExpanded = !(prefs.getBool(_kCollapsedScene) ?? false);
       _isPlaylistExpanded = !(prefs.getBool(_kCollapsedPlaylist) ?? false);
       _isRankExpanded = !(prefs.getBool(_kCollapsedRank) ?? false);
     });
@@ -129,6 +144,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (!mounted) return; // 页面已销毁则放弃，避免访问 context 触发 null check 崩溃
     final kugou = context.read<KugouProvider>();
     final hasExistingData = kugou.hasLoadedDiscoverData;
+    // 私人 FM 不跟着刷新走。它背后是流式接口（`action=play`，「给我下一批」），
+    // 每次请求返回的都是不同的一批歌，而发现页的 FM 卡片直接渲染列表第一首。
+    // 跟着下拉刷新就会静默换掉卡上显示的、甚至正在播的那首歌：卡片与播放器
+    // 脱钩（按钮翻回 ▶、收藏指向别的歌），而且刷新不传档位参数，服务端回落到
+    // normal/0，用户停在「探索」「小众」时内容还会被换成「红心」档的。
+    // 所以只在手上一首都没有时补一次，之后换歌只由用户自己触发
+    // （切档位 / 完整 FM 页）。
+    final needsPersonalFm = kugou.personalFmSongs.isEmpty;
     // 已有数据时直接展示，后台静默刷新
     if (!hasExistingData) {
       setState(() {
@@ -146,7 +169,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
         kugou.getThemeMusic(forceRefresh: hasExistingData),
         kugou.getThemePlaylist(forceRefresh: hasExistingData),
         kugou.getIpHome(forceRefresh: hasExistingData),
-        kugou.getPersonalFm(forceRefresh: hasExistingData),
+        // 这里 forceRefresh 恒为 true 不是笔误：列表为空才会走到这一句，而空列表
+        // 也会盖上新鲜时间戳（上一次请求成功但返回了空），不绕开 5 分钟 TTL 的话
+        // 卡片会空着却「新鲜」，下拉也补不回来。
+        if (needsPersonalFm) kugou.getPersonalFm(forceRefresh: true),
       ]);
 
       // 只有确实加载到数据时才标记为已加载
@@ -182,6 +208,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
     return Scaffold(
       appBar: ScrollAwareAppBar(
         title: '发现',
+        tabId: 'discover',
         scrollController: _scrollController,
         // 公开版偏好：无壁纸时顶部恒为不透明 surface（文字区稳定）；
         // 有壁纸时顶栏完全透明，壁纸透出与页面主体透明度上下一致
@@ -272,11 +299,20 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
+  /// 问候卡。
+  ///
+  /// 原来 140dp 高、24dp padding，只承载一句问候 + 一句「发现你喜欢的音乐」——
+  /// 后者不随任何状态变、不可点、不提供信息，是纯装饰文字，已删除。
+  /// 问候语从 displaySmall（36sp，全 app 最大字号）降到 headlineMedium：
+  /// 最大的字号不该给信息量最小的元素。
+  ///
+  /// 压到 96dp 之后，私人 FM 的封面和播放按钮能进首屏——首屏第一眼是可操作的
+  /// 内容而不是一句问候。
   Widget _buildBannerSection(ColorScheme cs) {
     final tt = Theme.of(context).textTheme;
     return SliverToBoxAdapter(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 140),
+        constraints: const BoxConstraints(minHeight: 96),
         child: Container(
           margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           decoration: BoxDecoration(
@@ -286,18 +322,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
           child: Stack(
             children: [
               Positioned(
-                right: -12,
-                top: -12,
+                right: -8,
+                top: -8,
                 child: Icon(
                   Icons.music_note,
-                  size: 80,
+                  size: 64,
                   color: cs.onPrimaryContainer.withValues(alpha: 0.1),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // 已登录时问候语后接昵称（"早上好，昵称"）；
                     // 未登录/昵称为空则只显示问候语。单行 + 省略号，
@@ -313,19 +350,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
                               : '$greeting，$nickname',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: tt.displaySmall?.copyWith(
+                          style: tt.headlineMedium?.copyWith(
                             color: cs.onPrimaryContainer,
                             fontWeight: FontWeight.bold,
                           ),
                         );
                       },
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '发现你喜欢的音乐',
-                      style: tt.bodyLarge?.copyWith(
-                        color: cs.onPrimaryContainer.withValues(alpha: 0.8),
-                      ),
                     ),
                   ],
                 ),
@@ -337,17 +367,39 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  /// 私人 FM 区块：复制自私人 FM 页的推荐区（推荐方式工具栏 + 策略切换 +
-  /// 电台卡片 + 黑胶队列），位于 banner 与每日推荐之间。
+  /// 私人 FM 区块：具名电台档位（红心/探索/小众）+ 电台卡片（正在播的封面右下角
+  /// 咬一张下一首的预告），位于 banner 与每日推荐之间。
+  /// 区块标题、折叠箭头与 `›`（进完整 FM 页）由区块自己承担，折叠状态与持久化
+  /// 仍由本页统一管理（与另外五个区块同一套 [_toggleCollapse]）。
   Widget _buildPersonalFmSection(ColorScheme cs) {
-    return const SliverToBoxAdapter(child: PersonalFmSection());
+    return SliverToBoxAdapter(
+      child: PersonalFmSection(
+        isExpanded: _isPersonalFmExpanded,
+        onToggle: () => _toggleCollapse(
+          prefKey: _kCollapsedPersonalFm,
+          currentlyExpanded: _isPersonalFmExpanded,
+          apply: (v) => _isPersonalFmExpanded = v,
+        ),
+      ),
+    );
   }
 
+  /// 每日推荐：竖排前三首。
+  ///
+  /// 原来是 76dp 高的横滑条，是全页最矮的区块——语义最重的内容拿到了最轻的
+  /// 视觉权重。而且卡内布局是「封面在左、文字在右」的列表项形态，被硬塞进横滑
+  /// 列表：横滑方向和卡内阅读方向一致，眼睛不知道该往哪走。
+  ///
+  /// 改成竖排后它同时打断了「五连横滑」的单一节奏，并且复用 [SongListItem]，
+  /// 顺带拿到「正在播」高亮、收藏、MV、更多菜单——原来的 _DailySongCard 一个都没有。
+  /// 全部 30 首仍在标题右侧的 `›` 里。
   Widget _buildDailySection(ColorScheme cs) {
     return Selector<KugouProvider, List<KugouSongDetail>>(
       selector: (_, kugou) => kugou.recommendSongs,
       builder: (context, songs, _) {
         if (songs.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
+        final all = songs.map((e) => e.toSong()).toList();
+        final top = all.take(3).toList();
         return SliverToBoxAdapter(
           child: _CollapsibleSection(
             title: '每日推荐',
@@ -367,26 +419,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
               },
               icon: const Icon(Icons.chevron_right),
             ),
-            child: SizedBox(
-              height: 76,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: songs.length > 5 ? 5 : songs.length,
-                itemBuilder: (context, i) {
-                  final s = songs[i];
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _DailySongCard(
-                      song: s,
-                      onTap: () =>
-                          context.read<PlayerProvider>().playOnlinePlaylist(
-                            songs.map((e) => e.toSong()).toList(),
-                            i,
-                          ),
+            child: Padding(
+              // SongListItem 自带 horizontal 10 的内边距，补 6 凑成
+              // 与其他区块一致的 16dp 页边距。
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Column(
+                children: [
+                  for (var i = 0; i < top.length; i++)
+                    SongListItem(
+                      song: top[i],
+                      showDuration: false,
+                      onTap: () => context
+                          .read<PlayerProvider>()
+                          .playOnlinePlaylist(all, i),
                     ),
-                  );
-                },
+                ],
               ),
             ),
           ),
@@ -395,67 +442,90 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
+  /// 主题歌单：横滑方卡。
+  ///
+  /// 两处修正：
+  /// - 补上 surfaceContainerLow 底板。原来是裸的 ClipRRect + Text，是全页
+  ///   唯一没有容器的卡，和左右邻居的容器策略不一致。
+  /// - 封面从 Expanded 改成 AspectRatio(1)。原来封面高度 = 180 - 文字块 ≈ 154、
+  ///   宽度 130，正方形封面被 BoxFit.cover 裁掉两边。
   Widget _buildThemeMusicSection(ColorScheme cs) {
     return Selector<KugouProvider, List<KugouThemeInfo>>(
       selector: (_, kugou) => kugou.themePlaylistData,
       builder: (context, themes, _) {
         if (themes.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
         return SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text('主题歌单', style: _sectionTitleStyle(context)),
-              ),
-              SizedBox(
-                height: 180,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: themes.length,
-                  itemBuilder: (context, i) => Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: SizedBox(
-                      width: 130,
+          child: _CollapsibleSection(
+            title: '主题歌单',
+            isExpanded: _isThemeExpanded,
+            onToggle: () => _toggleCollapse(
+              prefKey: _kCollapsedTheme,
+              currentlyExpanded: _isThemeExpanded,
+              apply: (v) => _isThemeExpanded = v,
+            ),
+            child: SizedBox(
+              // 130 封面 + 文字块（8 上 + 20 行高 + 8 下）
+              height: 166,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: themes.length,
+                itemBuilder: (context, i) => Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: SizedBox(
+                    width: 130,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: cs.surfaceContainerLow,
+                      ),
+                      clipBehavior: Clip.antiAlias,
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: CachedNetworkImage(
-                                imageUrl: themes[i].coverUrl ?? '',
-                                memCacheWidth: 450,
-                                memCacheHeight: 450,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                placeholder: (_, _) => Container(
-                                  color: cs.surfaceContainerHighest,
-                                  child: Icon(
-                                    Icons.music_note,
-                                    color: cs.onSurfaceVariant,
-                                  ),
+                          AspectRatio(
+                            aspectRatio: 1,
+                            child: CachedNetworkImage(
+                              imageUrl: themes[i].coverUrl ?? '',
+                              memCacheWidth: 390,
+                              memCacheHeight: 390,
+                              fit: BoxFit.cover,
+                              placeholder: (_, _) => Container(
+                                color: cs.surfaceContainerHighest,
+                                child: Icon(
+                                  Icons.music_note,
+                                  color: cs.onSurfaceVariant,
                                 ),
-                                errorWidget: (_, _, _) => Container(
-                                  color: cs.surfaceContainerHighest,
-                                  child: Icon(
-                                    Icons.music_note,
-                                    color: cs.onSurfaceVariant,
-                                  ),
+                              ),
+                              errorWidget: (_, _, _) => Container(
+                                color: cs.surfaceContainerHighest,
+                                child: Icon(
+                                  Icons.music_note,
+                                  color: cs.onSurfaceVariant,
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            themes[i].name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                  color: cs.onSurface,
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  themes[i].name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                        color: cs.onSurface,
+                                      ),
                                 ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -463,19 +533,29 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
+  /// 场景音乐：一行 chip 流。
+  ///
+  /// 原来是 90×110 的方卡，每张卡顶着一个 `Icons.headphones`——跑步、睡眠、
+  /// 专注、通勤全是同一个耳机图标，28dp 占了卡片大半却零信息量，已删除。
+  /// 图标一去，卡里只剩一行文字，那它本来就该是 chip 而不是 card；90dp 固定
+  /// 宽度截断长场景名的问题也随之消失（chip 宽度由文字决定）。
+  ///
+  /// 110 → 44dp 的高度落差顺便给首页当了个休止符，夹在主题歌单和热门歌单
+  /// 两个大区块之间。
   Widget _buildSceneSection(ColorScheme cs) {
     return Selector<KugouProvider, Map<String, dynamic>?>(
       selector: (_, kugou) => kugou.sceneData,
       builder: (context, sceneData, _) {
-        if (sceneData == null)
+        if (sceneData == null) {
           return const SliverToBoxAdapter(child: SizedBox());
+        }
         final data = sceneData['data'] as Map<String, dynamic>? ?? sceneData;
         final list = data['list'] ?? data['info'] ?? [];
         if (list is! List || list.isEmpty) {
@@ -483,53 +563,37 @@ class _DiscoverPageState extends State<DiscoverPage> {
         }
         final items = list;
         return SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text('场景音乐', style: _sectionTitleStyle(context)),
+          child: _CollapsibleSection(
+            title: '场景音乐',
+            isExpanded: _isSceneExpanded,
+            onToggle: () => _toggleCollapse(
+              prefKey: _kCollapsedScene,
+              currentlyExpanded: _isSceneExpanded,
+              apply: (v) => _isSceneExpanded = v,
+            ),
+            child: SizedBox(
+              height: 44,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: items.length,
+                itemBuilder: (context, i) {
+                  final item = items[i] as Map<String, dynamic>;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    // 用 Chip 而不是 ActionChip：这些场景目前没有点击目标，
+                    // 加 onTap 就是凭空造一个不存在的入口。
+                    child: Chip(
+                      label: Text(item['name']?.toString() ?? ''),
+                      labelStyle: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(color: cs.onSurfaceVariant),
+                      backgroundColor: cs.surfaceContainerLow,
+                      side: BorderSide(color: cs.outlineVariant),
+                    ),
+                  );
+                },
               ),
-              SizedBox(
-                height: 110,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final item = items[i] as Map<String, dynamic>;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Container(
-                        width: 90,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: cs.surfaceContainerLow,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.headphones,
-                              color: cs.primary,
-                              size: 28,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              item['name']?.toString() ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: cs.onSurface),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -559,7 +623,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
               icon: const Icon(Icons.chevron_right),
             ),
             child: SizedBox(
-              height: 200,
+              // 150 封面（正方）+ 40 文字块。原来是 200，多出的 10dp 让
+              // AlbumCard 把封面拉成 150×160 后裁掉了上下各 5dp。
+              height: 190,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -597,12 +663,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
+  /// 排行榜：竖排前三名，带名次。
+  ///
+  /// 原来是横滑 AlbumCard——排行榜本身是有序的，横滑方卡把「第几名」这个
+  /// 唯一区别于普通歌单的信息完全丢掉了。改成竖排后名次回来了，同时给首页
+  /// 补上第二个纵向断点。完整榜单在标题右侧的 `›` 里。
   Widget _buildRankSection(ColorScheme cs) {
     return Selector<KugouProvider, KugouRankList?>(
       selector: (_, kugou) => kugou.rankList,
       builder: (context, rankList, _) {
         final ranks = rankList?.ranks.map((e) => e.toAlbum()).toList() ?? [];
         if (ranks.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
+        final top = ranks.take(3).toList();
         return SliverToBoxAdapter(
           child: _CollapsibleSection(
             title: '排行榜',
@@ -618,32 +690,24 @@ class _DiscoverPageState extends State<DiscoverPage> {
               ).push(MaterialPageRoute(builder: (_) => const ChartsPage())),
               icon: const Icon(Icons.chevron_right),
             ),
-            child: SizedBox(
-              height: 200,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: ranks.length,
-                itemBuilder: (context, i) => Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: SizedBox(
-                    width: 150,
-                    child: AlbumCard(
-                      album: ranks[i],
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => _RankDetailPage(
-                              rankId: rankList!.ranks[i].id,
-                              rankName: ranks[i].name,
-                            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < top.length; i++)
+                  _RankRow(
+                    rank: i + 1,
+                    album: top[i],
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => _RankDetailPage(
+                            rankId: rankList!.ranks[i].id,
+                            rankName: top[i].name,
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   ),
-                ),
-              ),
+              ],
             ),
           ),
         );
@@ -687,7 +751,10 @@ class _PlaylistBrowsePageState extends State<_PlaylistBrowsePage> {
                   padding: EdgeInsets.fromLTRB(
                     16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom,
                   ),
-                  childAspectRatio: 0.85,
+                  // 0.8 而不是 0.85：cell 高度要容纳「正方形封面 + 40dp 文字块」，
+                  // 2 列 360dp 屏下每格 158 宽 → 高 198，比值 0.798。
+                  // AlbumCard 内部会自适应，Pad 捏合改列数时也不会溢出。
+                  childAspectRatio: 0.8,
                   spacing: 12,
                   itemCount: list.length,
                   itemBuilder: (context, i) => AlbumCard(
@@ -743,24 +810,46 @@ class _DailyRecommendDetailPageState extends State<_DailyRecommendDetailPage> {
               builder: (context, recommendSongs, _) {
                 final songs = recommendSongs.map((e) => e.toSong()).toList();
                 if (songs.isEmpty) return const Center(child: Text('暂无数据'));
-                return ListView.builder(
-                  padding: EdgeInsets.fromLTRB(
-                    16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom,
-                  ),
-                  itemCount: songs.length,
-                  itemBuilder: (context, index) {
-                    final song = songs[index];
-                    return SongListItem(
-                      song: song,
-                      onTap: () {
-                        context.read<PlayerProvider>().playOnlinePlaylist(
-                          songs,
-                          index,
-                        );
-                      },
-                      onMoreTap: () {},
-                    );
-                  },
+                return Column(
+                  children: [
+                    // 播放全部：把当日的 30 首当一张歌单从头连播。
+                    // 形态与专辑/歌单/听书详情页的主行动按钮一致
+                    // （FilledButton.icon + play_arrow）。
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () => context
+                              .read<PlayerProvider>()
+                              .playOnlinePlaylist(songs, 0),
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('播放全部'),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: EdgeInsets.fromLTRB(
+                          16, 8, 16, 16 + MediaQuery.paddingOf(context).bottom,
+                        ),
+                        itemCount: songs.length,
+                        itemBuilder: (context, index) {
+                          final song = songs[index];
+                          return SongListItem(
+                            song: song,
+                            onTap: () {
+                              context.read<PlayerProvider>().playOnlinePlaylist(
+                                songs,
+                                index,
+                              );
+                            },
+                            onMoreTap: () {},
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -923,103 +1012,63 @@ class _CollapsibleSection extends StatelessWidget {
   }
 }
 
-/// 页面内区块标题样式：比顶栏标题（22px）小一号，统一为 titleMedium + w600。
-TextStyle? _sectionTitleStyle(BuildContext context) =>
-    Theme.of(context).textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w600,
-    );
+/// 排行榜的一行：名次 + 封面 + 榜名。
+///
+/// 名次用 primary 色的数字而不是徽章：三行并列时数字本身就是最强的序列信号，
+/// 加个圆底反而和封面抢注意力。
+class _RankRow extends StatelessWidget {
+  const _RankRow({
+    required this.rank,
+    required this.album,
+    required this.onTap,
+  });
 
-/// 每日推荐横向卡片：专辑封面 + 歌名/歌手（替代原来的序号 chip）。
-class _DailySongCard extends StatelessWidget {
-  const _DailySongCard({required this.song, required this.onTap});
-
-  final KugouSongDetail song;
+  final int rank;
+  final Album album;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final cover = song.artworkUri;
-    return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: cover == null || cover.isEmpty
-                      ? Container(
-                          color: cs.surfaceContainerHighest,
-                          child: Icon(
-                            Icons.music_note,
-                            size: 22,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        )
-                      : CachedNetworkImage(
-                          imageUrl: cover,
-                          memCacheWidth: 156,
-                          memCacheHeight: 156,
-                          fit: BoxFit.cover,
-                          placeholder: (_, _) => Container(
-                            color: cs.surfaceContainerHighest,
-                            child: Icon(
-                              Icons.music_note,
-                              size: 22,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                          errorWidget: (_, _, _) => Container(
-                            color: cs.surfaceContainerHighest,
-                            child: Icon(
-                              Icons.music_note,
-                              size: 22,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              child: Text(
+                '$rank',
+                textAlign: TextAlign.center,
+                style: tt.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: cs.primary,
                 ),
               ),
-              const SizedBox(width: 10),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 130),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      song.songName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      song.artistName ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+            ),
+            const SizedBox(width: 8),
+            SmartArtworkImage(
+              artworkUri: album.artworkUri,
+              size: 52,
+              borderRadius: 10,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                album.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: cs.onSurface,
                 ),
               ),
-              const SizedBox(width: 4),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+          ],
         ),
       ),
     );

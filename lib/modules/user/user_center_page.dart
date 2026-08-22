@@ -56,6 +56,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
     return Scaffold(
       appBar: ScrollAwareAppBar(
         title: '我的',
+        tabId: 'user',
         scrollController: _scrollController,
         actions: [
           IconButton(

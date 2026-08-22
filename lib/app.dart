@@ -414,13 +414,22 @@ class _AppViewState extends State<_AppView> {
   ///
   /// 卡片（CardTheme）等保持不透明，保证内容可读性；导航栏/抽屉/底部弹层
   /// 保留高透明度背景以维持层级感。
+  ///
+  /// 「文字阴影」开关开启时，同时给全局 textTheme / AppBar 标题附加阴影
+  /// （见 [AppTheme.textShadowsFor]）；因为整个方法在未启用背景图时提前返回，
+  /// 阴影天然只在背景图模式下生效。
+  ///
+  /// 背景是实色的组件（对话框 / 菜单 / SnackBar / Tooltip）反过来要显式钉住
+  /// 不带阴影的文字样式：它们默认从 textTheme 兜底取样式，否则会连阴影一起
+  /// 继承过去，而壁纸根本透不到它们后面。页面自绘的实色容器用
+  /// `NoTextShadow` 包一层。
   ThemeData _applyBackgroundOverrides(
     ThemeData base,
     ThemeProvider themeProvider,
   ) {
     if (!themeProvider.useBackgroundImage) return base;
     final cs = base.colorScheme;
-    return base.copyWith(
+    final withTransparentSurfaces = base.copyWith(
       scaffoldBackgroundColor: Colors.transparent,
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: Colors.transparent,
@@ -439,6 +448,38 @@ class _AppViewState extends State<_AppView> {
       ),
       bottomSheetTheme: base.bottomSheetTheme.copyWith(
         backgroundColor: cs.surfaceContainerLow.withValues(alpha: 0.97),
+      ),
+    );
+    if (!themeProvider.useTextShadowEffective) return withTransparentSurfaces;
+
+    final shadows = AppTheme.textShadowsFor(base.brightness);
+    return withTransparentSurfaces.copyWith(
+      appBarTheme: withTransparentSurfaces.appBarTheme.copyWith(
+        titleTextStyle:
+            withTransparentSurfaces.appBarTheme.titleTextStyle?.copyWith(
+          shadows: shadows,
+        ),
+      ),
+      textTheme: AppTheme.applyTextShadows(base.textTheme, shadows),
+      primaryTextTheme: AppTheme.applyTextShadows(base.primaryTextTheme, shadows),
+      // 实色表面：把 Flutter 的 M3 默认值（都从 textTheme 兜底取）在这里钉死，
+      // 取的是 base 里还没加阴影的那份文字层级。
+      dialogTheme: base.dialogTheme.copyWith(
+        titleTextStyle:
+            base.dialogTheme.titleTextStyle ?? base.textTheme.headlineSmall,
+        contentTextStyle:
+            base.dialogTheme.contentTextStyle ?? base.textTheme.bodyMedium,
+      ),
+      popupMenuTheme: base.popupMenuTheme.copyWith(
+        textStyle: base.popupMenuTheme.textStyle ?? base.textTheme.labelLarge,
+      ),
+      snackBarTheme: base.snackBarTheme.copyWith(
+        contentTextStyle: base.snackBarTheme.contentTextStyle ??
+            base.textTheme.bodyMedium?.copyWith(color: cs.onInverseSurface),
+      ),
+      tooltipTheme: base.tooltipTheme.copyWith(
+        textStyle: base.tooltipTheme.textStyle ??
+            base.textTheme.bodySmall?.copyWith(color: cs.onInverseSurface),
       ),
     );
   }
