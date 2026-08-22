@@ -20,6 +20,20 @@ import '../playlist/playlist_page.dart';
 import '../recognition/song_recognition_page.dart';
 import '../search/search_page.dart';
 
+/// 顶栏两枚图标按钮（搜索 / 识曲）的宽度。
+///
+/// 36 而不是 MD3 默认的 48：这两个是同一组入口，48dp 的框会把两个图标之间撑出
+/// 24dp，看起来像分属两处；36dp 让图标间距落到 12dp，纵向仍保留 40dp 触达高度。
+/// 再往下压就是拿误触换紧凑——两枚按钮通向不同的页面。
+const double _kActionButtonWidth = 36.0;
+
+/// 图标按钮的高度（也就是它的纵向触达尺寸）。
+const double _kActionButtonHeight = 40.0;
+
+/// 识曲按钮右侧补回的间距：按钮比默认的 48dp 窄了 12dp，补 6dp 让最右那枚图标与
+/// 屏幕边缘的距离和默认尺寸时一致——收窄的是两枚按钮之间，不是最右侧的页边距。
+const double _kActionTrailingGap = 6.0;
+
 class DiscoverPage extends StatefulWidget {
   const DiscoverPage({super.key});
 
@@ -30,13 +44,12 @@ class DiscoverPage extends StatefulWidget {
 class _DiscoverPageState extends State<DiscoverPage> {
   static const String _kDiscoverLastDateKey = 'discover_last_date';
 
-  // 六个内容区块的折叠状态（true=折叠）。SharedPreferences 存"是否折叠"。
+  // 五个内容区块的折叠状态（true=折叠）。SharedPreferences 存"是否折叠"。
   //
   // 原来只有每日推荐/热门歌单/排行榜三个能折，主题歌单和场景音乐不能——
   // 同一页里五个标题行有两种交互契约，用户无法预测哪个能点。现在补齐。
-  // 私人 FM 的标题行由区块自己渲染（见 [PersonalFmSection]），折叠状态同样
-  // 收在这里，六个区块一套机制。
-  static const String _kCollapsedPersonalFm = 'discover_collapsed_personal_fm';
+  // 私人 FM 不在其中：它已经没有标题行（见 [PersonalFmSection]），也就没有
+  // 折叠的把手，卡片恒定展示。
   static const String _kCollapsedDaily = 'discover_collapsed_daily';
   static const String _kCollapsedTheme = 'discover_collapsed_theme';
   static const String _kCollapsedScene = 'discover_collapsed_scene';
@@ -46,7 +59,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
   bool _isLoading = true;
   String? _error;
 
-  bool _isPersonalFmExpanded = true;
   bool _isDailyExpanded = true;
   bool _isThemeExpanded = true;
   bool _isSceneExpanded = true;
@@ -71,12 +83,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
     });
   }
 
-  /// 从 SharedPreferences 恢复六个 section 的折叠状态
+  /// 从 SharedPreferences 恢复五个 section 的折叠状态
   Future<void> _loadCollapseStates() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _isPersonalFmExpanded = !(prefs.getBool(_kCollapsedPersonalFm) ?? false);
       _isDailyExpanded = !(prefs.getBool(_kCollapsedDaily) ?? false);
       _isThemeExpanded = !(prefs.getBool(_kCollapsedTheme) ?? false);
       _isSceneExpanded = !(prefs.getBool(_kCollapsedScene) ?? false);
@@ -213,18 +224,26 @@ class _DiscoverPageState extends State<DiscoverPage> {
         // 公开版偏好：无壁纸时顶部恒为不透明 surface（文字区稳定）；
         // 有壁纸时顶栏完全透明，壁纸透出与页面主体透明度上下一致
         opaque: true,
-        // 搜索入口移到右上角图标按钮（左），识曲保持在最右
+        // 问候胶囊跟着标题排（左对齐，紧贴「发现」右边），宽度随昵称长短变，
+        // 最多用到标题区剩下的宽度，碰不到搜索按钮——见
+        // [ScrollAwareAppBar.titleTrailing]。
+        titleTrailing: _buildGreetingPill(colorScheme),
+        // 搜索入口在右上角（左），识曲保持在最右；两枚按钮之间 12dp，
+        // 尺寸与各段间距见文件顶部的 _kActionButtonWidth 一组常量。
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
+          _buildActionIcon(
+            icon: Icons.search,
             onPressed: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
           ),
-          IconButton(
-            icon: const Icon(Icons.mic_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SongRecognitionPage()),
+          Padding(
+            padding: const EdgeInsets.only(right: _kActionTrailingGap),
+            child: _buildActionIcon(
+              icon: Icons.mic_outlined,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SongRecognitionPage()),
+              ),
             ),
           ),
         ],
@@ -238,8 +257,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             : CustomScrollView(
                 controller: _scrollController,
                 slivers: [
-                  _buildBannerSection(colorScheme),
-                  _buildPersonalFmSection(colorScheme),
+                  _buildPersonalFmSection(),
                   _buildDailySection(colorScheme),
                   _buildThemeMusicSection(colorScheme),
                   _buildSceneSection(colorScheme),
@@ -299,89 +317,89 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  /// 问候卡。
+  /// 顶栏的一枚图标按钮，按 [_kActionButtonWidth] × [_kActionButtonHeight] 收窄。
   ///
-  /// 原来 140dp 高、24dp padding，只承载一句问候 + 一句「发现你喜欢的音乐」——
-  /// 后者不随任何状态变、不可点、不提供信息，是纯装饰文字，已删除。
-  /// 问候语从 displaySmall（36sp，全 app 最大字号）降到 headlineMedium：
-  /// 最大的字号不该给信息量最小的元素。
+  /// 三个参数是一套的，少一个都收不动：`constraints` 定按钮自己的尺寸，
+  /// `padding` 把内边距压到 6（否则 24dp 的图标塞不进 36dp 的框），
+  /// `visualDensity` 改的是 MD3 垫在外面那层 48dp 见方的**布局**尺寸——不动它
+  /// 按钮画小了、占的位置照旧，两个图标之间还是 24dp。
+  Widget _buildActionIcon({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton(
+      visualDensity: const VisualDensity(horizontal: -3, vertical: -2),
+      constraints: const BoxConstraints.tightFor(
+        width: _kActionButtonWidth,
+        height: _kActionButtonHeight,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      icon: Icon(icon),
+      onPressed: onPressed,
+    );
+  }
+
+  /// 问候胶囊，紧跟在顶栏标题「发现」右边。
   ///
-  /// 压到 96dp 之后，私人 FM 的封面和播放按钮能进首屏——首屏第一眼是可操作的
-  /// 内容而不是一句问候。
-  Widget _buildBannerSection(ColorScheme cs) {
+  /// 它原来是页面顶部一张 96dp 高的 primaryContainer 卡片，整张卡只承载一句问候：
+  /// 不可点、不随内容变、不提供任何入口。收成顶栏里的一枚胶囊后，让出的高度全部
+  /// 归首屏的可操作内容；颜色角色沿用原卡片的 primaryContainer /
+  /// onPrimaryContainer——这是页面里唯一带用户身份的元素，换成中性色就和两个
+  /// 图标按钮混成一团了。
+  ///
+  /// 音符从原卡片保留下来但换了形态：原来是右上角一枚 64dp、alpha 0.1 的水印，
+  /// 胶囊只有 30dp 高，同样的水印裁进去只剩个看不出是什么的斑点，所以改成问候语
+  /// 前面一枚 16dp 的实色图标。
+  ///
+  /// 宽度不设固定上限，贴着文字长短变；能长到哪由标题区剩下的宽度决定
+  /// （[ScrollAwareAppBar.titleTrailing] 给的是松约束，而标题区够不到 actions），
+  /// 顶格时由 ellipsis 收尾。
+  Widget _buildGreetingPill(ColorScheme cs) {
     final tt = Theme.of(context).textTheme;
-    return SliverToBoxAdapter(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 96),
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: cs.primaryContainer,
+    return Container(
+      // 左边窄一点：图标不像文字那样需要两侧同宽的呼吸区。
+      padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+      decoration: ShapeDecoration(
+        color: cs.primaryContainer,
+        shape: const StadiumBorder(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.music_note, size: 16, color: cs.onPrimaryContainer),
+          const SizedBox(width: 4),
+          // Flexible：顶格时文字要能被压到 ellipsis，否则长昵称会从 Row 里溢出去。
+          Flexible(
+            // 已登录时问候语后接昵称（"早上好，昵称"）；
+            // 未登录/昵称为空则只显示问候语。
+            child: Selector<KugouProvider, String?>(
+              selector: (_, kugou) =>
+                  kugou.isLoggedIn ? kugou.userInfo?.nickname : null,
+              builder: (context, nickname, _) {
+                final greeting = _getGreeting();
+                return Text(
+                  nickname == null || nickname.isEmpty
+                      ? greeting
+                      : '$greeting，$nickname',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.labelLarge?.copyWith(
+                    color: cs.onPrimaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              },
+            ),
           ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: -8,
-                top: -8,
-                child: Icon(
-                  Icons.music_note,
-                  size: 64,
-                  color: cs.onPrimaryContainer.withValues(alpha: 0.1),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // 已登录时问候语后接昵称（"早上好，昵称"）；
-                    // 未登录/昵称为空则只显示问候语。单行 + 省略号，
-                    // 避免长昵称把卡片撑高或溢出。
-                    Selector<KugouProvider, String?>(
-                      selector: (_, kugou) =>
-                          kugou.isLoggedIn ? kugou.userInfo?.nickname : null,
-                      builder: (context, nickname, _) {
-                        final greeting = _getGreeting();
-                        return Text(
-                          nickname == null || nickname.isEmpty
-                              ? greeting
-                              : '$greeting，$nickname',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.headlineMedium?.copyWith(
-                            color: cs.onPrimaryContainer,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
 
-  /// 私人 FM 区块：具名电台档位（红心/探索/小众）+ 电台卡片（正在播的封面右下角
-  /// 咬一张下一首的预告），位于 banner 与每日推荐之间。
-  /// 区块标题、折叠箭头与 `›`（进完整 FM 页）由区块自己承担，折叠状态与持久化
-  /// 仍由本页统一管理（与另外五个区块同一套 [_toggleCollapse]）。
-  Widget _buildPersonalFmSection(ColorScheme cs) {
-    return SliverToBoxAdapter(
-      child: PersonalFmSection(
-        isExpanded: _isPersonalFmExpanded,
-        onToggle: () => _toggleCollapse(
-          prefKey: _kCollapsedPersonalFm,
-          currentlyExpanded: _isPersonalFmExpanded,
-          apply: (v) => _isPersonalFmExpanded = v,
-        ),
-      ),
-    );
+  /// 私人 FM 区块：电台卡片（正在播的封面右下角咬一张下一首的预告），
+  /// 位于顶栏与每日推荐之间。档位选择收在卡片右下角的按钮里。
+  Widget _buildPersonalFmSection() {
+    return const SliverToBoxAdapter(child: PersonalFmSection());
   }
 
   /// 每日推荐：竖排前三首。

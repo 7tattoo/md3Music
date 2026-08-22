@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import '../core/layout/page_title_alignment.dart';
 import '../providers/theme_provider.dart';
 
+/// 标题与 [ScrollAwareAppBar.titleTrailing] 之间的间距。
+const double _kTitleTrailingGap = 8.0;
+
 /// 通用滚动感知 AppBar。
 ///
 /// 顶栏背景色从透明渐变到 surface：
@@ -36,6 +39,14 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
   final double fadeRange;
   final Widget? leading;
 
+  /// 紧跟在标题右边的一枚组件（如发现页的问候胶囊）。
+  ///
+  /// 放这里而不是放进 [actions]：它属于标题那一簇，跟着标题左对齐。宽度由它自己
+  /// 的内容决定，但最多用到标题区剩下的宽度——[AppBar] 的标题区不含 actions
+  /// 那一段，中间还留着 [NavigationToolbar.kMiddleSpacing]，所以它再长也碰不到
+  /// 第一枚图标按钮。
+  final Widget? titleTrailing;
+
   /// 为 true 时背景不做滚动透明度渐变：未启用自定义背景时恒为不透明
   /// surface；启用自定义背景时完全透明（与主题 appBarTheme 一致），
   /// 让顶部与页面主体的壁纸透出透明度上下一致（参照「我的收藏」页）。
@@ -57,6 +68,7 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
     this.scrollController,
     this.fadeRange = 80,
     this.leading,
+    this.titleTrailing,
     this.opaque = false,
     this.tabId,
   });
@@ -128,13 +140,29 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
       foregroundColor: colorScheme.onSurface,
       leading: widget.leading,
       // 标题始终显示（用户反馈：初始就应可见，不依赖滚动）
-      title: Text(
-        widget.title,
-        style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-      ),
+      title: _buildTitle(textTheme),
       actions: widget.actions,
       // 统一对齐规则：底部导航栏可直达的一级页面左对齐，二级页面居中
       centerTitle: centerPageTitle(context, tabId: widget.tabId),
+    );
+  }
+
+  /// 标题：没有 [ScrollAwareAppBar.titleTrailing] 时就是一行文字；有的话在它
+  /// 右边排上那枚组件，两者一起构成标题那一簇。
+  Widget _buildTitle(TextTheme textTheme) {
+    final titleText = Text(
+      widget.title,
+      style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+    );
+    final trailing = widget.titleTrailing;
+    if (trailing == null) return titleText;
+    return Row(
+      children: [
+        titleText,
+        const SizedBox(width: _kTitleTrailingGap),
+        // Flexible 而不是 Expanded：组件按自己的内容取宽度，只是不许超过标题区。
+        Flexible(child: trailing),
+      ],
     );
   }
 }

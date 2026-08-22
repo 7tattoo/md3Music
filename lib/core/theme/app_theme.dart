@@ -361,18 +361,30 @@ class AppTheme {
   ///
   /// [blurRadius] 是用户在设置里调的「阴影磅数」，范围见
   /// [minTextShadowBlur] / [maxTextShadowBlur]。
+  ///
+  /// 高斯模糊会把同一份「墨水」摊到越来越大的面积上：只加大 blurRadius 的话，
+  /// 单层阴影的峰值不透明度反而随磅数下降，10 磅往上肉眼几乎看不出变化。
+  /// 所以磅数越高就同步补偿浓度：不透明度 0.6 → 0.95，并叠加同一层阴影
+  /// （n 层叠上去的覆盖率是 1-(1-a)^n），让整个滑块行程都有可见差别。
+  /// 默认磅数及以下仍是原来的单层 0.6，观感与绘制开销都不变。
   static List<Shadow> textShadowsFor(
     Brightness brightness, {
     double blurRadius = defaultTextShadowBlur,
   }) {
     final isLight = brightness == Brightness.light;
-    return [
-      Shadow(
-        color: (isLight ? Colors.white : Colors.black).withValues(alpha: 0.6),
-        blurRadius: blurRadius,
-        offset: const Offset(0, 1),
+    final blur = blurRadius.clamp(minTextShadowBlur, maxTextShadowBlur);
+    final t =
+        ((blur - defaultTextShadowBlur) /
+                (maxTextShadowBlur - defaultTextShadowBlur))
+            .clamp(0.0, 1.0);
+    final shadow = Shadow(
+      color: (isLight ? Colors.white : Colors.black).withValues(
+        alpha: 0.6 + 0.35 * t,
       ),
-    ];
+      blurRadius: blur,
+      offset: const Offset(0, 1),
+    );
+    return List<Shadow>.filled(1 + (3 * t).round(), shadow);
   }
 
   /// 给 [base] 的所有文字层级统一附加 [shadows]
