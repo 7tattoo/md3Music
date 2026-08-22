@@ -117,6 +117,8 @@ class _SettingsPageState extends State<SettingsPage>
   bool _useBackgroundMonet = true;
   // 文字阴影（默认开启，仅在启用自定义背景图片时生效）
   bool _useTextShadow = true;
+  // 文字阴影磅数（阴影模糊半径）
+  double _textShadowBlur = AppTheme.defaultTextShadowBlur;
   // 音乐频谱环绕显示开关（默认关闭，仅 Android 生效）
   bool _spectrumEnabled = false;
   // 频谱柱数量（20~80，默认 40）
@@ -262,6 +264,7 @@ class _SettingsPageState extends State<SettingsPage>
     final backgroundOpacity = context.read<ThemeProvider>().backgroundOpacity;
     final useBackgroundMonet = context.read<ThemeProvider>().useBackgroundMonet;
     final useTextShadow = context.read<ThemeProvider>().useTextShadow;
+    final textShadowBlur = context.read<ThemeProvider>().textShadowBlur;
     // 从 ThemeProvider 同步 UI 缩放
     final uiScale = context.read<ThemeProvider>().uiScale;
     // 读取蓝牙歌词开关
@@ -306,6 +309,7 @@ class _SettingsPageState extends State<SettingsPage>
       _backgroundOpacity = backgroundOpacity;
       _useBackgroundMonet = useBackgroundMonet;
       _useTextShadow = useTextShadow;
+      _textShadowBlur = textShadowBlur;
       _useGaussianBlur = LyricPreferences.instance.useGaussianBlur;
       _useGlowEffect = LyricPreferences.instance.useGlowEffect;
       _useFlowingBackground = LyricPreferences.instance.useFlowingBackground;
@@ -1371,7 +1375,7 @@ class _SettingsPageState extends State<SettingsPage>
           title: const Text('文字阴影'),
           subtitle: Text(
             _useBackgroundImage
-                ? '给全局文字加阴影，改善背景图上的可读性'
+                ? '给全局文字加阴影，改善背景图上的可读性；下方滑块调阴影磅数'
                 : '需先启用自定义背景图片',
           ),
           value: _useTextShadow,
@@ -1383,6 +1387,50 @@ class _SettingsPageState extends State<SettingsPage>
                   themeProvider.setUseTextShadow(v);
                 }
               : null,
+        ),
+        // 阴影磅数：阴影本身没生效时置灰（与「文字阴影」开关同一套约定，
+        // 保留用户已选的磅数）
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.text_fields,
+                color: (_useBackgroundImage && _useTextShadow)
+                    ? colorScheme.onSurfaceVariant
+                    : colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
+              ),
+              const SizedBox(width: 50),
+              Expanded(
+                child: M3ESlider(
+                  value: _textShadowBlur,
+                  min: AppTheme.minTextShadowBlur,
+                  max: AppTheme.maxTextShadowBlur,
+                  divisions:
+                      (AppTheme.maxTextShadowBlur - AppTheme.minTextShadowBlur)
+                          .round(),
+                  enabled: _useBackgroundImage && _useTextShadow,
+                  label: '${_textShadowBlur.round()}',
+                  // 拖动只动滑块，松手才提交：改磅数要整棵主题树重建
+                  onChanged: (v) => setState(() => _textShadowBlur = v),
+                  onChangeEnd: (v) => themeProvider.setTextShadowBlur(v),
+                ),
+              ),
+              SizedBox(
+                width: 34,
+                child: Text(
+                  '${_textShadowBlur.round()}',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: (_useBackgroundImage && _useTextShadow)
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         ListTile(
           leading: const Icon(Icons.image_outlined),

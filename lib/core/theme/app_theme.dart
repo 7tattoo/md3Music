@@ -347,17 +347,29 @@ class AppTheme {
     );
   }
 
+  /// 文字阴影磅数（阴影模糊半径）的默认值与可调范围：设置页滑块与
+  /// [textShadowsFor] 共用，0 表示不模糊（只剩 1dp 偏移的硬阴影）。
+  static const double defaultTextShadowBlur = 4.0;
+  static const double minTextShadowBlur = 0.0;
+  static const double maxTextShadowBlur = 50.0;
+
   /// 文字阴影：仅在启用自定义背景图片时使用（见 `_applyBackgroundOverrides`）。
   ///
   /// 取与文字色相反的柔和光晕，保证文字在模糊壁纸上仍有足够对比度：
   /// - 浅色主题（深色文字）→ 白色光晕
   /// - 深色主题（浅色文字）→ 黑色投影
-  static List<Shadow> textShadowsFor(Brightness brightness) {
+  ///
+  /// [blurRadius] 是用户在设置里调的「阴影磅数」，范围见
+  /// [minTextShadowBlur] / [maxTextShadowBlur]。
+  static List<Shadow> textShadowsFor(
+    Brightness brightness, {
+    double blurRadius = defaultTextShadowBlur,
+  }) {
     final isLight = brightness == Brightness.light;
     return [
       Shadow(
         color: (isLight ? Colors.white : Colors.black).withValues(alpha: 0.6),
-        blurRadius: 4,
+        blurRadius: blurRadius,
         offset: const Offset(0, 1),
       ),
     ];

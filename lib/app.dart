@@ -452,7 +452,10 @@ class _AppViewState extends State<_AppView> {
     );
     if (!themeProvider.useTextShadowEffective) return withTransparentSurfaces;
 
-    final shadows = AppTheme.textShadowsFor(base.brightness);
+    final shadows = AppTheme.textShadowsFor(
+      base.brightness,
+      blurRadius: themeProvider.textShadowBlur,
+    );
     return withTransparentSurfaces.copyWith(
       appBarTheme: withTransparentSurfaces.appBarTheme.copyWith(
         titleTextStyle:

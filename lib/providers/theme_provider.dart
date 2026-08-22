@@ -31,6 +31,7 @@ class ThemeProvider extends ChangeNotifier {
   static const String _bgMonetKey = 'use_background_monet';
   // 文字阴影开关（默认开启，仅在启用自定义背景图片时生效）
   static const String _textShadowKey = 'use_text_shadow';
+  static const String _textShadowBlurKey = 'text_shadow_blur';
 
   ThemeMode _themeMode = ThemeMode.system;
   bool _useDynamicColor = false;
@@ -67,6 +68,8 @@ class ThemeProvider extends ChangeNotifier {
   // 文字阴影（默认开启）：给全局文字加轮廓阴影，改善背景图上的可读性。
   // 仅在 _useBackgroundImage 为 true 时生效（见 [useTextShadowEffective]）。
   bool _useTextShadow = true;
+  // 文字阴影磅数（阴影模糊半径，用户可调）
+  double _textShadowBlur = AppTheme.defaultTextShadowBlur;
   // 从背景图片提取的主色（运行时，作为莫奈取色种子）
   Color? _backgroundSeedColor;
 
@@ -92,6 +95,7 @@ class ThemeProvider extends ChangeNotifier {
   double get backgroundOpacity => _backgroundOpacity;
   bool get useBackgroundMonet => _useBackgroundMonet;
   bool get useTextShadow => _useTextShadow;
+  double get textShadowBlur => _textShadowBlur;
   Color? get backgroundSeedColor => _backgroundSeedColor;
 
   /// 文字阴影是否实际生效：开关本身开启 **且** 已启用自定义背景图片。
@@ -511,6 +515,8 @@ class ThemeProvider extends ChangeNotifier {
     _backgroundOpacity = prefs.getDouble(_bgOpacityKey) ?? 0.4;
     _useBackgroundMonet = prefs.getBool(_bgMonetKey) ?? true;
     _useTextShadow = prefs.getBool(_textShadowKey) ?? true;
+    _textShadowBlur =
+        prefs.getDouble(_textShadowBlurKey) ?? AppTheme.defaultTextShadowBlur;
     notifyListeners();
   }
 
@@ -544,6 +550,21 @@ class ThemeProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_textShadowKey, enabled);
+  }
+
+  /// 设置文字阴影磅数（阴影模糊半径，见 [AppTheme.textShadowsFor]）。
+  ///
+  /// 与开关一样只在启用背景图 + 阴影时影响渲染，值本身独立持久化。
+  Future<void> setTextShadowBlur(double blur) async {
+    final clamped = blur.clamp(
+      AppTheme.minTextShadowBlur,
+      AppTheme.maxTextShadowBlur,
+    );
+    if (_textShadowBlur == clamped) return;
+    _textShadowBlur = clamped;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_textShadowBlurKey, clamped);
   }
 
   /// 设置背景图片路径（原生端拷贝到 filesDir 后的真实路径）。
