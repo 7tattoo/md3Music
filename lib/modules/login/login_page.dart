@@ -642,12 +642,12 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                '1.播放音乐只能播放前一分钟，后续内容无声音\n2.无法收藏 或删除 音乐 歌单 歌手',
+                '1.播放音乐只能播放前一分钟，后续内容无声音（一般是没签到成功触发验证签到成功无此问题）\n2.无法收藏 音乐 歌单 专辑\n（账号被限制写权限目前无解只能换正常号解决）',
                                style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
               Text(
-                '可能的解决办法：',
+                '解决办法：',
                 style: textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -655,7 +655,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                '1. 没会员去签到会员，风控等待几个小时有时候能恢复\n2. 重登有概率能恢复，但不建议频繁操作',
+                '1. 没会员手动点击签到，触发风控20028专属滑块验证解决\n2. 被限制写权限重登有概率能恢复，但不建议频繁操作，没有多余账号建议等待解除',
                 style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
@@ -668,7 +668,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                '• 不要频繁点击签到领取 VIP，及其容易风控\n• 登录账号必须已在酷狗注册过账号，否则无法登录\n• 如果一个手机号无法登录，请换用扫码',
+                '不要频繁手动点击签到领取VIP，每天会自动签到\n登录账号必须已在酷狗注册过，否则无法登录\n如果手机号无法登录，请换用扫码',
                 style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
             ],

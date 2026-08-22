@@ -17,7 +17,7 @@ use crate::util::{
 };
 use serde_json::{json, Map, Value};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tiny_http::{Header, Method, Request, Response, Server};
 
@@ -27,6 +27,10 @@ const CACHE_DURATION_MS: u64 = 120_000;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static PORT: AtomicU16 = AtomicU16::new(0);
+
+/// 当前 Server 实例（run_loop 持有）。stop() 时 unblock() 主动唤醒
+/// recv_timeout，立即释放端口，避免进程残留时新进程撞上未释放端口而等待。
+static SERVER: OnceLock<Mutex<Option<Server>>> = OnceLock::new();
 
 /// data_dir（持久化 device_info.json），start() 时写入。
 static DATA_DIR: OnceLock<String> = OnceLock::new();
@@ -93,7 +97,8 @@ pub fn start(port: u16, data_dir: String) -> Option<u16> {
 
     PORT.store(chosen, Ordering::SeqCst);
     RUNNING.store(true, Ordering::SeqCst);
-    std::thread::spawn(move || run_loop(server, data_dir));
+    *SERVER.get_or_init(|| Mutex::new(None)).lock().unwrap() = Some(server);
+    std::thread::spawn(move || run_loop(data_dir));
     Some(chosen)
 }
 
@@ -105,6 +110,13 @@ fn random_port() -> u16 {
 pub fn stop() {
     RUNNING.store(false, Ordering::SeqCst);
     PORT.store(0, Ordering::SeqCst);
+    // 主动唤醒阻塞在 recv_timeout 的 run_loop 线程，使其立即退出并释放端口，
+    // 不再依赖最多 500ms 的轮询间隔（进程残留时新进程可立即复用端口）。
+    if let Some(guard) = SERVER.get().and_then(|m| m.lock().ok()) {
+        if let Some(s) = guard.as_ref() {
+            s.unblock();
+        }
+    }
 }
 
 pub fn is_running() -> bool {
@@ -115,10 +127,15 @@ pub fn get_port() -> u16 {
     PORT.load(Ordering::SeqCst)
 }
 
-fn run_loop(server: Server, data_dir: String) {
+fn run_loop(data_dir: String) {
     while RUNNING.load(Ordering::SeqCst) {
-        match server.recv_timeout(Duration::from_millis(500)) {
-            Ok(Some(request)) => {
+        // 从全局取 Server 引用；stop() 已 unblock 时 recv_timeout 立即返回
+        let recv = {
+            let guard = SERVER.get().unwrap().lock().unwrap();
+            guard.as_ref().map(|s| s.recv_timeout(Duration::from_millis(500)))
+        };
+        match recv {
+            Some(Ok(Some(request))) => {
                 // 每个请求独立线程处理：云盘上传等耗时请求（分片串行可达数十秒）
                 // 不再阻塞其他请求（如列表刷新、搜索），避免串行排队造成"卡住"。
                 // 全局状态（CACHE/DeviceConfig/session 常量）均持锁或 OnceLock，并发安全。
@@ -136,10 +153,11 @@ fn run_loop(server: Server, data_dir: String) {
                     eprintln!("[server] spawn handler thread failed: {}", e);
                 }
             }
-            Ok(None) => {}
-            Err(_) => {
+            Some(Ok(None)) => {}
+            Some(Err(_)) => {
                 std::thread::sleep(Duration::from_millis(100));
             }
+            None => break, // server 已移除（stop 后 unblock 唤醒，run_loop 退出）
         }
     }
 }

@@ -525,7 +525,8 @@ class _MainLayout extends StatefulWidget {
   State<_MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
+class _MainLayoutState extends State<_MainLayout>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
   int _previousSelectedIndex = 0;
 
@@ -539,8 +540,14 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
   bool _exitPressed = false;
   Timer? _exitResetTimer;
 
-  /// 退出中标记：置位后整页淡出并屏蔽交互，动画结束后 exit(0)。
+  /// 退出中标记：置位后整页缩小动画并屏蔽交互，动画结束后回桌面。
   bool _isExiting = false;
+
+  /// 微信风格退出动画：缩放 + 向右下角位移 + 渐隐（400ms）。
+  late final AnimationController _exitController;
+  late final Animation<double> _exitScale;
+  late final Animation<double> _exitOpacity;
+  late final Animation<Offset> _exitOffset;
 
   /// 根据 tab id 构建对应页面 Widget。
   Widget _buildPageForTab(String tabId) {
@@ -1023,6 +1030,21 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    // 微信风格退出动画：缩放 1.0→0.1（图标大小）、位移 0→右下角 70%、渐隐 1.0→0.0
+    _exitController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _exitScale = Tween<double>(begin: 1.0, end: 0.1).animate(
+      CurvedAnimation(parent: _exitController, curve: Curves.easeInOutCubic),
+    );
+    _exitOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _exitController, curve: Curves.easeIn),
+    );
+    _exitOffset = Tween<Offset>(begin: Offset.zero, end: const Offset(0.7, 0.7))
+        .animate(
+      CurvedAnimation(parent: _exitController, curve: Curves.easeInOutCubic),
+    );
     // 未登录时尝试播放联网歌曲,弹出登录提示
     context.read<PlayerProvider>().onLoginRequired = _showLoginRequiredDialog;
     // 监听应用生命周期：detached（进程被系统销毁前的最后窗口）时尝试关停本地 API 服务器
@@ -1045,6 +1067,7 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
   @override
   void dispose() {
     _exitResetTimer?.cancel();
+    _exitController.dispose();
     LyriconProviderService.instance.removeListener(_onLyriconStateChanged);
     kCoverFlowImmersive.removeListener(_onCoverFlowImmersiveChanged);
     shortcutTabRequest.removeListener(_handleShortcutTabRequest);
@@ -1317,10 +1340,9 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
     // 2) 封面流沉浸中：返回键先恢复 tab 栏（退出沉浸），不弹退出确认
     // 3) 否则弹“退出 App”确认对话框
     //
-    // 退出动画：_isExiting 置位后整页 300ms 淡出（emphasizedEasing），
-    // 底层以 surface 色打底，避免淡出过程透出不可控的窗口底色；
-    // AbsorbPointer 在淡出期间屏蔽一切触摸。
-    final surfaceColor = Theme.of(context).colorScheme.surface;
+    // 退出动画：_isExiting 置位后整页微信风格缩小消失（缩放+位移+渐隐，400ms），
+    // 底层以纯黑打底（微信同款），避免缩小后透出不可控的窗口底色；
+    // AbsorbPointer 在动画期间屏蔽一切触摸。
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -1339,15 +1361,30 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
       },
       child: AbsorbPointer(
         absorbing: _isExiting,
-        child: ColoredBox(
-          // 正常状态透明，让底层 AppBackgroundLayer 的壁纸透出；
-          // 仅退出淡出期间用 surface 打底，避免淡出过程透出不可控的窗口底色。
-          color: _isExiting ? surfaceColor : Colors.transparent,
-          child: AnimatedOpacity(
-            opacity: _isExiting ? 0.0 : 1.0,
-            duration: const Duration(milliseconds: 300),
-            curve: M3ExpressiveMotion.emphasizedEasing,
-            child: ResponsiveScaffold(
+        child: AnimatedBuilder(
+          animation: _exitController,
+          builder: (context, child) {
+            final size = MediaQuery.sizeOf(context);
+            final offset = _exitOffset.value;
+            // 微信风格：以左上角为锚点缩小到图标大小（0.1），
+            // 同时向右下角位移（宽高各 70%）并渐隐；
+            // 背景保持透明，缩小后露出系统桌面（FlutterView + windowBackground 透明）
+            return Transform.translate(
+              offset: Offset(
+                size.width * 0.7 * offset.dx,
+                size.height * 0.7 * offset.dy,
+              ),
+              child: Transform.scale(
+                scale: _exitScale.value,
+                alignment: Alignment.topLeft,
+                child: Opacity(
+                  opacity: _exitOpacity.value,
+                  child: child,
+                ),
+              ),
+            );
+          },
+          child: ResponsiveScaffold(
               destinations: destinations,
               railDestinations: railDestinations,
               drawerDestinations: drawerDestinations,
@@ -1371,7 +1408,6 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -1508,31 +1544,34 @@ class _MainLayoutState extends State<_MainLayout> with WidgetsBindingObserver {
   }
 
   /// 真正退出 App：
-  /// 1) 整页淡出动画（300ms）—— 第二次返回后先播动画再杀进程，
-  ///    避免界面瞬间消失的生硬感；淡出期间屏蔽触摸与返回键
+  /// 1) 播放微信风格缩小动画（400ms）—— 缩放 + 向右下角位移 + 渐隐，
+  ///    动画期间屏蔽触摸与返回键；背景透明露出系统桌面
   /// 2) `PlayerProvider.pause()` — 停 just_audio + 同步通知栏
-  /// 3) `KugouApiServer.stop()` — 释放本地 API 服务器端口（与淡出并行，不增加总耗时）
-  /// 4) `exit(0)` — 淡出完成后立即终止整个进程（保证端口释放）
+  /// 3) `KugouApiServer.stop()` — 释放本地 API 服务器端口（与动画并行，不增加总耗时）
+  /// 4) `exit(0)` — 动画结束后彻底关闭进程（端口由 OS 回收，重新打开秒进）
   Future<void> _doExit() async {
     if (_isExiting) return;
     setState(() => _isExiting = true);
-    // 淡出完成信号：略长于动画时长，确保最后一帧已渲染
-    final fadeDone = Future.delayed(const Duration(milliseconds: 340));
+    // 并行：停播放器 + 停服务器（不阻塞动画）
     // ignore: discarded_futures
     context.read<PlayerProvider>().pause();
+    // ignore: discarded_futures
+    _stopServerAsync();
+    // 播放缩小动画并等待完成（400ms）
+    await _exitController.forward();
+    // 动画结束后彻底关闭进程
+    // ignore: avoid_print
+    print('Exiting app...');
+    exit(0);
+  }
+
+  Future<void> _stopServerAsync() async {
     try {
       await KugouApiServer.stop();
       // nativeStopNode() 在独立线程执行，MethodChannel 返回只代表调用已发出，
       // 需要给 native 线程一点时间完成 服务器线程退出
       await Future.delayed(const Duration(milliseconds: 300));
     } catch (_) {}
-    await fadeDone;
-    // 杀进程：exit(0) 立即终止整个进程（含服务器线程），
-    // 确保端口一定被释放。SystemNavigator.pop() 只 finish Activity，
-    // 进程可能残留，导致下次启动时端口冲突/服务器未启动。
-    // ignore: avoid_print
-    print('Exiting app...');
-    exit(0);
   }
 
 }

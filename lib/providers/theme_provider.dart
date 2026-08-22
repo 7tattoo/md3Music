@@ -58,8 +58,8 @@ class ThemeProvider extends ChangeNotifier {
   // 自定义背景图片（全局界面背景）；默认开启，未选择图片时回落到内置默认壁纸
   bool _useBackgroundImage = true;
   String? _backgroundImagePath;
-  double _backgroundBlur = 0.0;
-  double _backgroundOpacity = 0.7;
+  double _backgroundBlur = 20.0;
+  double _backgroundOpacity = 0.4;
   // 按背景图莫奈取色（默认开启；关闭后背景图仍显示但不参与主题色）
   bool _useBackgroundMonet = true;
   // 从背景图片提取的主色（运行时，作为莫奈取色种子）
@@ -497,8 +497,8 @@ class ThemeProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _useBackgroundImage = prefs.getBool(_bgImageEnabledKey) ?? true;
     _backgroundImagePath = prefs.getString(_bgImagePathKey);
-    _backgroundBlur = prefs.getDouble(_bgBlurKey) ?? 0.0;
-    _backgroundOpacity = prefs.getDouble(_bgOpacityKey) ?? 0.7;
+    _backgroundBlur = prefs.getDouble(_bgBlurKey) ?? 20.0;
+    _backgroundOpacity = prefs.getDouble(_bgOpacityKey) ?? 0.4;
     _useBackgroundMonet = prefs.getBool(_bgMonetKey) ?? true;
     notifyListeners();
   }

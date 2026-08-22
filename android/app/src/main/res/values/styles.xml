@@ -13,7 +13,8 @@
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+        <!-- 透明：退出缩小动画时露出系统桌面（FlutterView 也需透明） -->
+        <item name="android:windowBackground">@android:color/transparent</item>
     </style>
 
     <!-- 锁屏歌词主题：暗色全屏无标题栏，不透明遮住锁屏时钟，作为纯展示层 -->

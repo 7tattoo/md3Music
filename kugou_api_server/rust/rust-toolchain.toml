@@ -4,4 +4,4 @@
 # 在下载依赖阶段直接报 "feature `edition2024` is required" 失败。
 # rustup 会在本目录下自动切换到该版本（未安装时自动下载）。
 [toolchain]
-channel = "1.88.0"
+channel = "stable"

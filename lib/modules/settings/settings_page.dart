@@ -110,8 +110,8 @@ class _SettingsPageState extends State<SettingsPage>
   // 自定义背景图片（全局界面背景）；默认开启，未选择图片时回落到内置默认壁纸
   bool _useBackgroundImage = true;
   String? _backgroundImagePath;
-  double _backgroundBlur = 0.0;
-  double _backgroundOpacity = 0.7;
+  double _backgroundBlur = 20.0;
+  double _backgroundOpacity = 0.4;
   // 按背景图莫奈取色（默认开启）
   bool _useBackgroundMonet = true;
   // 音乐频谱环绕显示开关（默认关闭，仅 Android 生效）

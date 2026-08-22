@@ -92,6 +92,14 @@ class MainActivity : FlutterActivity() {
         // 归为「跟随应用内设置」而锁在 60Hz。Flutter 引擎从不调用
         // Surface.setFrameRate()，系统无法得知 App 需要高刷，须在此显式声明。
         applyOptimalRefreshRate()
+        // 退出缩小动画时露出系统桌面：FlutterView 背景透明，
+        // 配合 NormalTheme 的透明 windowBackground，页面缩小后透出桌面（微信同款）。
+        try {
+            findViewById<io.flutter.embedding.android.FlutterView>(FLUTTER_VIEW_ID)
+                ?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        } catch (_: Exception) {
+            // 个别 ROM 可能不支持，忽略即可
+        }
     }
 
     override fun onResume() {
