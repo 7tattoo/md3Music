@@ -65,9 +65,9 @@ class ThemeProvider extends ChangeNotifier {
   double _backgroundOpacity = 0.4;
   // 按背景图莫奈取色（默认开启；关闭后背景图仍显示但不参与主题色）
   bool _useBackgroundMonet = true;
-  // 文字阴影（默认开启）：给全局文字加轮廓阴影，改善背景图上的可读性。
+  // 文字阴影（默认关闭）：给全局文字加轮廓阴影，改善背景图上的可读性。
   // 仅在 _useBackgroundImage 为 true 时生效（见 [useTextShadowEffective]）。
-  bool _useTextShadow = true;
+  bool _useTextShadow = false;
   // 文字阴影磅数（阴影模糊半径，用户可调）
   double _textShadowBlur = AppTheme.defaultTextShadowBlur;
   // 从背景图片提取的主色（运行时，作为莫奈取色种子）
@@ -514,7 +514,7 @@ class ThemeProvider extends ChangeNotifier {
     _backgroundBlur = prefs.getDouble(_bgBlurKey) ?? 20.0;
     _backgroundOpacity = prefs.getDouble(_bgOpacityKey) ?? 0.4;
     _useBackgroundMonet = prefs.getBool(_bgMonetKey) ?? true;
-    _useTextShadow = prefs.getBool(_textShadowKey) ?? true;
+    _useTextShadow = prefs.getBool(_textShadowKey) ?? false;
     _textShadowBlur =
         prefs.getDouble(_textShadowBlurKey) ?? AppTheme.defaultTextShadowBlur;
     notifyListeners();

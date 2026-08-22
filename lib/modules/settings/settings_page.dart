@@ -115,8 +115,8 @@ class _SettingsPageState extends State<SettingsPage>
   double _backgroundOpacity = 0.4;
   // 按背景图莫奈取色（默认开启）
   bool _useBackgroundMonet = true;
-  // 文字阴影（默认开启，仅在启用自定义背景图片时生效）
-  bool _useTextShadow = true;
+  // 文字阴影（默认关闭，仅在启用自定义背景图片时生效）
+  bool _useTextShadow = false;
   // 文字阴影磅数（阴影模糊半径）
   double _textShadowBlur = AppTheme.defaultTextShadowBlur;
   // 音乐频谱环绕显示开关（默认关闭，仅 Android 生效）

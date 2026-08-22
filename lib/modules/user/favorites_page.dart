@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/layout/page_title_alignment.dart';
+import '../../core/utils/app_toast.dart';
 import '../../data/repositories/collected_playlist_store.dart';
 import '../../data/repositories/favorite_lists_cache.dart';
 import '../../data/repositories/settings_repository.dart';
@@ -640,13 +641,14 @@ class _FavoritesPageState extends State<FavoritesPage>
     _exitManageMode();
     _loadPlaylists(forceNoCache: true);
 
-    if (failCount > 0 && mounted) {
-      final msg = okCount > 0
-          ? '成功删除 $okCount 个，$failCount 个失败'
-          : '删除失败，请稍后重试';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
-      );
+    // 删除结果用 toast 提示。
+    if (mounted) {
+      final msg = failCount == 0
+          ? '成功删除 $okCount 个歌单'
+          : okCount > 0
+              ? '成功删除 $okCount 个，$failCount 个失败'
+              : '删除失败，请稍后重试';
+      showToast(msg, long: true);
     }
   }
 
@@ -705,13 +707,14 @@ class _FavoritesPageState extends State<FavoritesPage>
     _exitManageMode();
     _loadAlbums(noCache: true);
 
-    if (failCount > 0 && mounted) {
-      final msg = okCount > 0
-          ? '成功删除 $okCount 个，$failCount 个失败'
-          : '删除失败，请稍后重试';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
-      );
+    // 删除结果用 toast 提示。
+    if (mounted) {
+      final msg = failCount == 0
+          ? '成功删除 $okCount 个专辑'
+          : okCount > 0
+              ? '成功删除 $okCount 个，$failCount 个失败'
+              : '删除失败，请稍后重试';
+      showToast(msg, long: true);
     }
   }
 
