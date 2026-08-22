@@ -30,6 +30,7 @@ class MainActivity : FlutterActivity() {
     private val RECOGNITION_CHANNEL = "com.md3music.md3music/floating_recognition"
     private val PIP_CHANNEL = "com.md3music.md3music/pip"
     private val MIUIX_DISCOVER_CHANNEL = "com.md3music.md3music/miuix_discover"
+    private val TASK_CHANNEL = "com.md3music.md3music/task"
     private var pendingDesktopLyricAction: String? = null
     private var folderPickerResult: MethodChannel.Result? = null
     private var fontPickerResult: MethodChannel.Result? = null
@@ -701,6 +702,23 @@ class MainActivity : FlutterActivity() {
                     } else {
                         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     }
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 注册任务控制 MethodChannel：Dart 双击返回 → 回到桌面挂后台
+        // 用 moveTaskToBack(等同按 Home)，不销毁 Activity、不杀进程，
+        // 播放器与本地 Rust 服务器都保持运行，重新打开瞬时恢复。
+        val taskChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            TASK_CHANNEL
+        )
+        taskChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "moveToBack" -> {
+                    moveTaskToBack(true)
                     result.success(true)
                 }
                 else -> result.notImplemented()

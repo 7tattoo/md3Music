@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -1382,11 +1381,8 @@ class _MainLayoutState extends State<_MainLayout>
     // 一级页面返回拦截：
     // 1) PopScope 拦截系统返回手势 / 物理返回键，canPop=false → 触发 onPopInvoked
     // 2) 封面流沉浸中：返回键先恢复 tab 栏（退出沉浸），不弹退出确认
-    // 3) 否则弹“退出 App”确认对话框
-    //
-    // 退出动画：_isExiting 置位后整页微信风格缩小消失（缩放+位移+渐隐，400ms），
-    // 底层以纯黑打底（微信同款），避免缩小后透出不可控的窗口底色；
-    // AbsorbPointer 在动画期间屏蔽一切触摸。
+    // 3) 否则双击返回回到手机桌面：首次返回 Toast 提示，3 秒内再按一次
+    //    走 moveTaskToBack 挂后台（不杀进程、不停播放器、不停本地 Rust 服务器）
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -1570,7 +1566,7 @@ class _MainLayoutState extends State<_MainLayout>
     }
     _exitPressed = true;
     // ignore: avoid_print
-    print('再按一次返回退出 App');
+    print('再按一次返回桌面');
     _showDoubleBackToast();
     _exitResetTimer?.cancel();
     _exitResetTimer = Timer(
@@ -1582,40 +1578,23 @@ class _MainLayoutState extends State<_MainLayout>
     );
   }
 
-  /// 显示「再按一次退出」提示（系统原生 Toast，非 SnackBar/弹窗）。
+  /// 显示「再按一次返回桌面」提示（系统原生 Toast，非 SnackBar/弹窗）。
   void _showDoubleBackToast() {
-    showToast('再按一次返回退出');
+    showToast('再按一次返回桌面');
   }
 
-  /// 真正退出 App：
-  /// 1) 播放微信风格缩小动画（400ms）—— 缩放 + 向右下角位移 + 渐隐，
-  ///    动画期间屏蔽触摸与返回键；背景透明露出系统桌面
-  /// 2) `PlayerProvider.pause()` — 停 just_audio + 同步通知栏
-  /// 3) `KugouApiServer.stop()` — 释放本地 API 服务器端口（与动画并行，不增加总耗时）
-  /// 4) `exit(0)` — 动画结束后彻底关闭进程（端口由 OS 回收，重新打开秒进）
+  /// 双击返回后回到手机桌面（仅挂后台）：
+  /// 不杀进程、不停播放器、不停本地 Rust 服务器，重新打开瞬时恢复。
+  /// 优先走原生 [method 'moveToBack']（等同按 Home），
+  /// 异常时兜底 [SystemNavigator.pop]（回桌面但保留后台进程与服务器）。
   Future<void> _doExit() async {
     if (_isExiting) return;
-    setState(() => _isExiting = true);
-    // 并行：停播放器 + 停服务器（不阻塞动画）
-    // ignore: discarded_futures
-    context.read<PlayerProvider>().pause();
-    // ignore: discarded_futures
-    _stopServerAsync();
-    // 播放缩小动画并等待完成（400ms）
-    await _exitController.forward();
-    // 动画结束后彻底关闭进程
-    // ignore: avoid_print
-    print('Exiting app...');
-    exit(0);
-  }
-
-  Future<void> _stopServerAsync() async {
     try {
-      await KugouApiServer.stop();
-      // nativeStopNode() 在独立线程执行，MethodChannel 返回只代表调用已发出，
-      // 需要给 native 线程一点时间完成 服务器线程退出
-      await Future.delayed(const Duration(milliseconds: 300));
-    } catch (_) {}
+      const MethodChannel('com.md3music.md3music/task')
+          .invokeMethod('moveToBack');
+    } catch (_) {
+      SystemNavigator.pop();
+    }
   }
 
 }
