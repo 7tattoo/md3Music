@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?><!-- 空矢量 = 全透明 108dp 位图，作为 Android 12+ 启动画面隐藏图标用。
+     系统能正确识别 VectorDrawable 为动画图标，空内容渲染为透明，
+     从而隐藏大图标。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108" />

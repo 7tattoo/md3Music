@@ -13,8 +13,11 @@
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <!-- 透明：退出缩小动画时露出系统桌面（FlutterView 也需透明） -->
-        <item name="android:windowBackground">@android:color/transparent</item>
+        <!-- 启动期间窗口背景显示壁纸（与 LaunchTheme 一致）：FlutterActivity.onCreate
+             一开始就把主题切到 NormalTheme，若此处透明会露出系统白色背景导致白屏。
+             首帧渲染前 FlutterSurfaceView 透明透出此壁纸；退出动画前由
+             MethodChannel 把窗口背景改为透明以露出系统桌面。 -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
 
     <!-- 锁屏歌词主题：暗色全屏无标题栏，不透明遮住锁屏时钟，作为纯展示层 -->

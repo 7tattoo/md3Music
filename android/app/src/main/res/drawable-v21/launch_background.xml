@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- 启动画面背景显示内置默认壁纸（v21+ 变体，所有设备实际使用此文件）：
+     引擎初始化期间不再是白色（原 ?android:colorBackground），
+     Flutter 首帧（main.dart 已预加载同一张壁纸）无缝衔接，
+     随后切换到用户自定义壁纸，避免"白屏一下"闪烁。 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <item>
         <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:gravity="fill"
+            android:src="@drawable/default_wallpaper" />
+    </item>
 </layer-list>

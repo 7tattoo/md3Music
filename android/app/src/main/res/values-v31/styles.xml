@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+（API 31+）系统强制显示启动画面（背景色 + 图标）。
+         背景用内置默认壁纸的平均色（中灰），避免系统默认白色背景造成
+         "白屏一下"闪烁；图标置为透明 drawable 以隐藏，启动结束后切到
+         NormalTheme。 -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">#8B8A89</item>
+        <!-- 空矢量图标隐藏大图标，圆底背景同时置透明，完全不可见 -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
+</resources>
