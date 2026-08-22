@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
+import '../../core/layout/page_title_alignment.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -57,7 +58,13 @@ class _CoverFlowPageState extends State<CoverFlowPage> {
         MediaQuery.orientationOf(context) == Orientation.landscape;
     return Scaffold(
       // 横屏沉浸模式：隐藏顶栏
-      appBar: isLandscape ? null : AppBar(title: const Text('封面流')),
+      appBar: isLandscape
+          ? null
+          : AppBar(
+              title: const Text('封面流'),
+              // 统一对齐规则：作为底部导航栏一级页面时左对齐，被 push 成二级页面时居中
+              centerTitle: centerPageTitle(context, tabId: 'coverflow'),
+            ),
       body: Consumer<KugouProvider>(
         builder: (context, kugou, _) {
           final songs = kugou.recommendSongs;

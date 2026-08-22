@@ -137,6 +137,7 @@ class _ChannelPageState extends State<ChannelPage> {
     return Scaffold(
       appBar: ScrollAwareAppBar(
         title: '频道',
+        tabId: 'channel',
         scrollController: _scrollController,
       ),
       body: _isLoading

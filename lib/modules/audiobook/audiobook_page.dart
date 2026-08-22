@@ -79,6 +79,7 @@ class _AudiobookPageState extends State<AudiobookPage> {
     return Scaffold(
       appBar: ScrollAwareAppBar(
         title: '听书',
+        tabId: 'audiobook',
         scrollController: _scrollController,
       ),
       body: _isLoading

@@ -46,6 +46,7 @@ class _ChartsPageState extends State<ChartsPage> {
     return Scaffold(
       appBar: ScrollAwareAppBar(
         title: '排行榜',
+        tabId: 'charts',
         scrollController: _scrollController,
         actions: [
           IconButton(

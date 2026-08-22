@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/layout/page_title_alignment.dart';
 import '../../core/services/background_image_loader.dart';
 import '../../core/widgets/app_background.dart' show kDefaultWallpaperAsset;
 import '../../core/services/custom_font_loader.dart';
@@ -114,6 +115,10 @@ class _SettingsPageState extends State<SettingsPage>
   double _backgroundOpacity = 0.4;
   // 按背景图莫奈取色（默认开启）
   bool _useBackgroundMonet = true;
+  // 文字阴影（默认开启，仅在启用自定义背景图片时生效）
+  bool _useTextShadow = true;
+  // 文字阴影磅数（阴影模糊半径）
+  double _textShadowBlur = AppTheme.defaultTextShadowBlur;
   // 音乐频谱环绕显示开关（默认关闭，仅 Android 生效）
   bool _spectrumEnabled = false;
   // 频谱柱数量（20~80，默认 40）
@@ -258,6 +263,8 @@ class _SettingsPageState extends State<SettingsPage>
     final backgroundBlur = context.read<ThemeProvider>().backgroundBlur;
     final backgroundOpacity = context.read<ThemeProvider>().backgroundOpacity;
     final useBackgroundMonet = context.read<ThemeProvider>().useBackgroundMonet;
+    final useTextShadow = context.read<ThemeProvider>().useTextShadow;
+    final textShadowBlur = context.read<ThemeProvider>().textShadowBlur;
     // 从 ThemeProvider 同步 UI 缩放
     final uiScale = context.read<ThemeProvider>().uiScale;
     // 读取蓝牙歌词开关
@@ -301,6 +308,8 @@ class _SettingsPageState extends State<SettingsPage>
       _backgroundBlur = backgroundBlur;
       _backgroundOpacity = backgroundOpacity;
       _useBackgroundMonet = useBackgroundMonet;
+      _useTextShadow = useTextShadow;
+      _textShadowBlur = textShadowBlur;
       _useGaussianBlur = LyricPreferences.instance.useGaussianBlur;
       _useGlowEffect = LyricPreferences.instance.useGlowEffect;
       _useFlowingBackground = LyricPreferences.instance.useFlowingBackground;
@@ -368,6 +377,9 @@ class _SettingsPageState extends State<SettingsPage>
                 )
               : null,
           title: Text(inSubpage ? _activeSection! : '设置'),
+          // 统一对齐规则：设置页内部的分类详情本身即二级页面，一律居中；
+          // 总览页则按「是否为底部导航栏可直达的一级页面」判定
+          centerTitle: inSubpage || centerPageTitle(context, tabId: 'settings'),
         ),
         // 页面切换过渡：先淡出旧页 → 切换内容 → 再淡入新页（严格串行）。
         // 淡入方向按页面层级区分：进入二级页自右侧推进、返回总览自左侧退回。
@@ -509,6 +521,7 @@ class _SettingsPageState extends State<SettingsPage>
     (label: '背景图片模糊', category: '外观', aliases: '模糊 高斯模糊 背景'),
     (label: '背景图片透明度', category: '外观', aliases: '透明度 背景'),
     (label: '背景图片莫奈取色', category: '外观', aliases: '莫奈 取色 动态取色 背景'),
+    (label: '文字阴影', category: '外观', aliases: '阴影 文字 可读性 背景 壁纸'),
     // 播放页样式
     (label: '歌词双击跳转', category: '播放页样式', aliases: '双击 跳转'),
     (label: '歌手写真背景轮播', category: '播放页样式', aliases: '写真 背景 轮播'),
@@ -1356,6 +1369,68 @@ class _SettingsPageState extends State<SettingsPage>
             // ignore: discarded_futures
             themeProvider.setUseBackgroundMonet(v);
           },
+        ),
+        // 文字阴影：只有启用背景图时才可用（关闭背景图时开关置灰，保留用户选择）
+        SwitchListTile(
+          title: const Text('文字阴影'),
+          subtitle: Text(
+            _useBackgroundImage
+                ? '给全局文字加阴影，改善背景图上的可读性；下方滑块调阴影磅数'
+                : '需先启用自定义背景图片',
+          ),
+          value: _useTextShadow,
+          onChanged: _useBackgroundImage
+              ? (v) {
+                  HapticFeedback.lightImpact();
+                  setState(() => _useTextShadow = v);
+                  // ignore: discarded_futures
+                  themeProvider.setUseTextShadow(v);
+                }
+              : null,
+        ),
+        // 阴影磅数：阴影本身没生效时置灰（与「文字阴影」开关同一套约定，
+        // 保留用户已选的磅数）
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.text_fields,
+                color: (_useBackgroundImage && _useTextShadow)
+                    ? colorScheme.onSurfaceVariant
+                    : colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
+              ),
+              const SizedBox(width: 50),
+              Expanded(
+                child: M3ESlider(
+                  value: _textShadowBlur,
+                  min: AppTheme.minTextShadowBlur,
+                  max: AppTheme.maxTextShadowBlur,
+                  divisions:
+                      (AppTheme.maxTextShadowBlur - AppTheme.minTextShadowBlur)
+                          .round(),
+                  enabled: _useBackgroundImage && _useTextShadow,
+                  label: '${_textShadowBlur.round()}',
+                  // 拖动只动滑块，松手才提交：改磅数要整棵主题树重建
+                  onChanged: (v) => setState(() => _textShadowBlur = v),
+                  onChangeEnd: (v) => themeProvider.setTextShadowBlur(v),
+                ),
+              ),
+              SizedBox(
+                width: 34,
+                child: Text(
+                  '${_textShadowBlur.round()}',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: (_useBackgroundImage && _useTextShadow)
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         ListTile(
           leading: const Icon(Icons.image_outlined),

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
+import '../../core/layout/page_title_alignment.dart';
 import '../../core/utils/app_toast.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../player/mini_player.dart';
@@ -328,6 +329,8 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
     return Scaffold(
       appBar: AppBar(
         title: const Text('听歌识曲'),
+        // 统一对齐规则：作为底部导航栏一级页面时左对齐，被 push 成二级页面时居中
+        centerTitle: centerPageTitle(context, tabId: 'recognition'),
       ),
       body: Column(
         children: [

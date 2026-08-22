@@ -6,6 +6,7 @@ import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/layout/page_title_alignment.dart';
 import '../../data/repositories/collected_playlist_store.dart';
 import '../../data/repositories/favorite_lists_cache.dart';
 import '../../data/repositories/settings_repository.dart';
@@ -728,8 +729,8 @@ class _FavoritesPageState extends State<FavoritesPage>
       },
       child: Scaffold(
         appBar: AppBar(
-          // 标题左对齐（全局 appBarTheme.centerTitle=true，这里单独覆盖）
-          centerTitle: false,
+          // 统一对齐规则：作为底部导航栏一级页面时左对齐，被 push 成二级页面时居中
+          centerTitle: centerPageTitle(context, tabId: 'favorites'),
           title: Text(
             '我的收藏',
             style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),

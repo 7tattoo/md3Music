@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/layout/page_title_alignment.dart';
 import '../../providers/tab_config_provider.dart';
 
 /// LaunchPad 导航页：以"导航网站"的形式列出所有可用 Tab（除"我的"和自身），
@@ -111,8 +112,8 @@ class _LaunchPadPageState extends State<LaunchPadPage> {
 
     return Scaffold(
       appBar: AppBar(
-        // 标题左对齐（全局 appBarTheme.centerTitle=true，这里单独覆盖）
-        centerTitle: false,
+        // 统一对齐规则：作为底部导航栏一级页面时左对齐，被 push 成二级页面时居中
+        centerTitle: centerPageTitle(context, tabId: 'launchpad'),
         title: Text(
           'LaunchPad',
           // 与 ScrollAwareAppBar 等一级页面标题保持一致：加粗

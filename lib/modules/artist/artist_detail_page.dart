@@ -416,7 +416,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                     SliverAppBar(
                       expandedHeight: 240,
                       pinned: true,
-                      centerTitle: false,
+                      // 标题对齐：歌手详情页恒为二级页面，走全局
+                      // appBarTheme.centerTitle=true 居中（见 page_title_alignment.dart）
                       // pinned 后顶栏背景色：滚动到 expandedHeight - kToolbarHeight
                       // 之后从透明渐变到 surface
                       actions: [
