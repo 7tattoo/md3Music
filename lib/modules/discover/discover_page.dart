@@ -20,18 +20,12 @@ import '../playlist/playlist_page.dart';
 import '../recognition/song_recognition_page.dart';
 import '../search/search_page.dart';
 
-/// 顶栏两枚图标按钮（搜索 / 识曲）的宽度。
-///
-/// 36 而不是 MD3 默认的 48：这两个是同一组入口，48dp 的框会把两个图标之间撑出
-/// 24dp，看起来像分属两处；36dp 让图标间距落到 12dp，纵向仍保留 40dp 触达高度。
-/// 再往下压就是拿误触换紧凑——两枚按钮通向不同的页面。
+/// 顶栏图标按钮（搜索 / 识曲）的尺寸：36 而不是 MD3 默认的 48，让两个图标之间
+/// 由 24dp 收到 12dp；纵向仍保留 40dp 触达高度。
 const double _kActionButtonWidth = 36.0;
-
-/// 图标按钮的高度（也就是它的纵向触达尺寸）。
 const double _kActionButtonHeight = 40.0;
 
-/// 识曲按钮右侧补回的间距：按钮比默认的 48dp 窄了 12dp，补 6dp 让最右那枚图标与
-/// 屏幕边缘的距离和默认尺寸时一致——收窄的是两枚按钮之间，不是最右侧的页边距。
+/// 补回按钮收窄的宽度，让最右那枚图标与屏幕边缘的距离保持不变。
 const double _kActionTrailingGap = 6.0;
 
 class DiscoverPage extends StatefulWidget {
@@ -224,12 +218,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         // 公开版偏好：无壁纸时顶部恒为不透明 surface（文字区稳定）；
         // 有壁纸时顶栏完全透明，壁纸透出与页面主体透明度上下一致
         opaque: true,
-        // 问候胶囊跟着标题排（左对齐，紧贴「发现」右边），宽度随昵称长短变，
-        // 最多用到标题区剩下的宽度，碰不到搜索按钮——见
-        // [ScrollAwareAppBar.titleTrailing]。
         titleTrailing: _buildGreetingPill(colorScheme),
-        // 搜索入口在右上角（左），识曲保持在最右；两枚按钮之间 12dp，
-        // 尺寸与各段间距见文件顶部的 _kActionButtonWidth 一组常量。
         actions: [
           _buildActionIcon(
             icon: Icons.search,
@@ -317,12 +306,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  /// 顶栏的一枚图标按钮，按 [_kActionButtonWidth] × [_kActionButtonHeight] 收窄。
-  ///
-  /// 三个参数是一套的，少一个都收不动：`constraints` 定按钮自己的尺寸，
-  /// `padding` 把内边距压到 6（否则 24dp 的图标塞不进 36dp 的框），
-  /// `visualDensity` 改的是 MD3 垫在外面那层 48dp 见方的**布局**尺寸——不动它
-  /// 按钮画小了、占的位置照旧，两个图标之间还是 24dp。
+  /// 三个参数缺一不可：`constraints` 定按钮尺寸，`padding` 让 24dp 的图标塞得进
+  /// 36dp 的框，`visualDensity` 改的是 MD3 垫在外面那层 48dp 的布局尺寸——不动它
+  /// 按钮画小了、占位照旧。
   Widget _buildActionIcon({
     required IconData icon,
     required VoidCallback onPressed,
@@ -339,25 +325,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  /// 问候胶囊，紧跟在顶栏标题「发现」右边。
-  ///
-  /// 它原来是页面顶部一张 96dp 高的 primaryContainer 卡片，整张卡只承载一句问候：
-  /// 不可点、不随内容变、不提供任何入口。收成顶栏里的一枚胶囊后，让出的高度全部
-  /// 归首屏的可操作内容；颜色角色沿用原卡片的 primaryContainer /
-  /// onPrimaryContainer——这是页面里唯一带用户身份的元素，换成中性色就和两个
-  /// 图标按钮混成一团了。
-  ///
-  /// 音符从原卡片保留下来但换了形态：原来是右上角一枚 64dp、alpha 0.1 的水印，
-  /// 胶囊只有 30dp 高，同样的水印裁进去只剩个看不出是什么的斑点，所以改成问候语
-  /// 前面一枚 16dp 的实色图标。
-  ///
-  /// 宽度不设固定上限，贴着文字长短变；能长到哪由标题区剩下的宽度决定
-  /// （[ScrollAwareAppBar.titleTrailing] 给的是松约束，而标题区够不到 actions），
-  /// 顶格时由 ellipsis 收尾。
+  /// 问候胶囊，紧跟在顶栏标题右边。宽度贴着文字长短变，上限由标题区剩下的宽度
+  /// 决定（见 [ScrollAwareAppBar.titleTrailing]），顶格时由 ellipsis 收尾。
   Widget _buildGreetingPill(ColorScheme cs) {
     final tt = Theme.of(context).textTheme;
     return Container(
-      // 左边窄一点：图标不像文字那样需要两侧同宽的呼吸区。
       padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
       decoration: ShapeDecoration(
         color: cs.primaryContainer,
@@ -368,10 +340,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         children: [
           Icon(Icons.music_note, size: 16, color: cs.onPrimaryContainer),
           const SizedBox(width: 4),
-          // Flexible：顶格时文字要能被压到 ellipsis，否则长昵称会从 Row 里溢出去。
           Flexible(
-            // 已登录时问候语后接昵称（"早上好，昵称"）；
-            // 未登录/昵称为空则只显示问候语。
             child: Selector<KugouProvider, String?>(
               selector: (_, kugou) =>
                   kugou.isLoggedIn ? kugou.userInfo?.nickname : null,
@@ -396,8 +365,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  /// 私人 FM 区块：电台卡片（正在播的封面右下角咬一张下一首的预告），
-  /// 位于顶栏与每日推荐之间。档位选择收在卡片右下角的按钮里。
   Widget _buildPersonalFmSection() {
     return const SliverToBoxAdapter(child: PersonalFmSection());
   }

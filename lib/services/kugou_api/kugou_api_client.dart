@@ -1643,6 +1643,36 @@ class KugouApiClient {
     }
   }
 
+  /// 获取歌曲评论「最热」列表（按点赞数全局降序）。
+  ///
+  /// [childrenId] 为评论区 id，取 [KugouCommentList.childrenId]（/comment/music
+  /// 响应顶层的 childrenid）或评论项的 [KugouComment.specialId]。上游不接受用
+  /// mixsongid 代替，缺少它会返回「参数错误」。
+  ///
+  /// 与 [getComments]（cmtlist，加权混排、与点赞数无关）是两个不同的列表，
+  /// 但不返回歌手评论/精彩评论，那两个列表仍需 [getComments]。
+  Future<KugouCommentList?> getToplikedComments(
+    String childrenId, {
+    int page = 1,
+    int pagesize = 30,
+  }) async {
+    if (childrenId.isEmpty) return null;
+    final json = await _get(
+      KugouEndpoints.commentMusicTopliked,
+      queryParameters: {
+        'childrenid': childrenId,
+        'page': page,
+        'pagesize': pagesize,
+      },
+    );
+    if (json == null) return null;
+    try {
+      return KugouCommentList.fromJson(json);
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<KugouCommentList?> getCommentsByClassify(
     String hash, {
     String? classify,
@@ -1686,19 +1716,20 @@ class KugouApiClient {
     }
   }
 
-  /// 获取楼层评论（楼中楼回复）
+  /// 获取楼层评论（楼中楼回复），按时间倒序返回（新的在前）。
   ///
   /// [specialId] 歌曲对应的 special_id（从评论数据中获取）
   /// [tid] 评论 ID
   /// [mixSongId] 歌曲 ID
-  /// [code] 评论 code（部分接口返回）
+  /// [code] 评论 code（部分接口返回），同时决定走歌曲还是歌单/专辑的楼层接口
+  /// [pagesize] 上游硬上限为 50，传更大的值会被静默截断成 50
   Future<KugouCommentList?> getFloorComments({
     required String specialId,
     required String tid,
     String? mixSongId,
     String? code,
     int page = 1,
-    int pagesize = 30,
+    int pagesize = 50,
   }) async {
     if (specialId.isEmpty || tid.isEmpty) return null;
     final params = <String, dynamic>{
@@ -2097,12 +2128,17 @@ class KugouApiClient {
 
   // ==================== Personal FM ====================
 
+  /// [noCache] 供「同一游标要下一批」的续播场景使用：本地服务端的 apicache 按
+  /// URL 缓存，而 [_onRequest] 只在 noCache 时才加 bypass 头和 t= 戳（登录态在
+  /// L183 设的那份 bypass 头会被 L207-209 的 else 分支删掉），否则同参数请求
+  /// 会被原样回放，续播拿到的永远是同一批歌。
   Future<List<KugouSongDetail>?> getPersonalFm({
     String? mode,
     int? songPoolId,
     String? hash,
     String? songId,
     String? action,
+    bool noCache = false,
   }) async {
     final params = <String, dynamic>{};
     if (mode != null) params['mode'] = mode;
@@ -2111,7 +2147,11 @@ class KugouApiClient {
     if (songId != null) params['songid'] = songId;
     if (action != null) params['action'] = action;
 
-    final json = await _get(KugouEndpoints.personalFm, queryParameters: params);
+    final json = await _get(
+      KugouEndpoints.personalFm,
+      queryParameters: params,
+      noCache: noCache,
+    );
     if (json == null) return null;
     try {
       final data = json['data'] as Map<String, dynamic>? ?? json;
