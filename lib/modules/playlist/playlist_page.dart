@@ -12,6 +12,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/playlist_collection_notifier.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/song_list_item.dart';
@@ -81,10 +82,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
   final Set<String> _selectedSongIds = {};
   bool _isDeleting = false;
 
-  // 已缓存筛选（与历史记录页一致）
-  bool _showOnlyPlayable = false;
-  Set<String> _playableIds = {};
-
   /// 删除歌曲用的 listid（仅自己创建的歌单有效）
   String? get _deleteListid => widget.playlist.listCreateListid;
 
@@ -115,8 +112,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
         await _loadCachedSongs();
       }
       _fetchSongs();
-      // 等歌曲列表加载完后检测"已缓存"状态
-      Future.delayed(const Duration(milliseconds: 500), _checkPlayableSongs);
     });
   }
 
@@ -167,17 +162,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
   String? _lastSearchQuery;
   _SortBy? _lastSortBy;
   bool? _lastSortAscending;
-  bool? _lastShowOnlyPlayable;
-  int? _lastPlayableIdsHash;
 
   /// 获取当前显示的歌曲列表（带缓存）
   List<Song> get _displaySongs {
     if (_cachedDisplaySongs != null &&
         _lastSearchQuery == _searchQuery &&
         _lastSortBy == _sortBy &&
-        _lastSortAscending == _sortAscending &&
-        _lastShowOnlyPlayable == _showOnlyPlayable &&
-        _lastPlayableIdsHash == _playableIds.length) {
+        _lastSortAscending == _sortAscending) {
       return _cachedDisplaySongs!;
     }
     _rebuildDisplaySongs();
@@ -186,10 +177,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   void _rebuildDisplaySongs() {
     List<Song> list;
-    // 先按"已缓存"过滤（在搜索/排序之前；空集表示还没检测完）
-    if (_showOnlyPlayable) {
-      list = _songs.where((s) => _playableIds.contains(s.id)).toList();
-    } else if (_searchQuery.isEmpty) {
+    if (_searchQuery.isEmpty) {
       list = List.of(_songs);
     } else {
       final q = _searchQuery.toLowerCase();
@@ -218,29 +206,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
     _lastSearchQuery = _searchQuery;
     _lastSortBy = _sortBy;
     _lastSortAscending = _sortAscending;
-    _lastShowOnlyPlayable = _showOnlyPlayable;
-    _lastPlayableIdsHash = _playableIds.length;
-  }
-
-  /// 切换"仅显示已缓存"
-  void _togglePlayableFilter() {
-    setState(() {
-      _showOnlyPlayable = !_showOnlyPlayable;
-      _invalidateDisplaySongs();
-    });
-  }
-
-  /// 检测 _songs 里哪些歌曲可以被离线播放（公开库无边听边存，恒为空）。
-  Future<void> _checkPlayableSongs() async {
-    if (_songs.isEmpty) return;
-
-    final ids = <String>{};
-
-    if (!mounted) return;
-    setState(() {
-      _playableIds = ids;
-      _invalidateDisplaySongs();
-    });
   }
 
   /// 使显示列表缓存失效
@@ -931,6 +896,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final displayPlaylist = widget.playlist.copyWith(songs: _songs);
+    final useBackgroundImage =
+        context.watch<ThemeProvider>().useBackgroundImage;
 
     return PopScope(
       canPop: !_isMultiSelectMode,
@@ -957,31 +924,18 @@ class _PlaylistPageState extends State<PlaylistPage> {
                         expandedHeight: 280,
                         pinned: true,
                         // pinned 后顶栏背景色：滚动到 expandedHeight - kToolbarHeight
-                        // 之后从透明渐变到 surface
-                        backgroundColor: Color.lerp(
-                          Colors.transparent,
-                          colorScheme.surface,
-                          (_scrollOffset - (280 - kToolbarHeight))
-                              .clamp(0.0, 60.0) / 60,
-                        )!,
+                        // 之后从透明渐变到 surface；开启壁纸时完全透明透出壁纸
+                        backgroundColor: useBackgroundImage
+                            ? Colors.transparent
+                            : Color.lerp(
+                                Colors.transparent,
+                                colorScheme.surface,
+                                (_scrollOffset - (280 - kToolbarHeight))
+                                    .clamp(0.0, 60.0) / 60,
+                              )!,
                         surfaceTintColor: Colors.transparent,
                         scrolledUnderElevation: 0,
                         actions: [
-                          if (_songs.isNotEmpty)
-                            IconButton(
-                              icon: Icon(
-                                _showOnlyPlayable
-                                    ? Icons.filter_alt
-                                    : Icons.filter_alt_outlined,
-                                color: _showOnlyPlayable
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
-                              ),
-                              tooltip: _showOnlyPlayable
-                                  ? '显示全部'
-                                  : '仅显示已缓存',
-                              onPressed: _togglePlayableFilter,
-                            ),
                           if (_songs.isNotEmpty)
                             IconButton(
                               icon: Icon(
@@ -1099,12 +1053,21 @@ class _PlaylistPageState extends State<PlaylistPage> {
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
-                                colors: [
-                                  colorScheme.primaryContainer,
-                                  // 底部渐变到透明：启用全局背景图（页面背景透明）时，
-                                  // 若此处仍是实色 surface 会与下方背景图形成接缝穿帮。
-                                  colorScheme.surface.withValues(alpha: 0),
-                                ],
+                                colors: useBackgroundImage
+                                    ? [
+                                        // 开启壁纸时整个展开区完全透明，壁纸透出
+                                        colorScheme.primaryContainer
+                                            .withValues(alpha: 0),
+                                        colorScheme.surface
+                                            .withValues(alpha: 0),
+                                      ]
+                                    : [
+                                        colorScheme.primaryContainer,
+                                        // 底部渐变到透明：启用全局背景图（页面背景透明）时，
+                                        // 若此处仍是实色 surface 会与下方背景图形成接缝穿帮。
+                                        colorScheme.surface
+                                            .withValues(alpha: 0),
+                                      ],
                               ),
                             ),
                             child: SafeArea(
@@ -1443,40 +1406,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
                       if (!_isMultiSelectMode && _songs.isEmpty)
                         SliverToBoxAdapter(
                           child: _buildEmptySongsHint(colorScheme, textTheme),
-                        ),
-                      // 开启"仅显示已缓存"但无匹配歌曲时
-                      if (!_isMultiSelectMode &&
-                          _showOnlyPlayable &&
-                          _songs.isNotEmpty &&
-                          _displaySongs.isEmpty)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  Icons.cloud_off_outlined,
-                                  size: 48,
-                                  color: colorScheme.onSurfaceVariant
-                                      .withValues(alpha: 0.5),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  '没有已缓存的歌曲',
-                                  style: textTheme.titleMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '播放歌曲时会自动缓存',
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                     ],
                   ),

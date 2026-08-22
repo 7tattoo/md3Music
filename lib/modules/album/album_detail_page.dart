@@ -9,6 +9,7 @@ import '../../data/models/song.dart';
 import '../../data/repositories/collected_playlist_store.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/playlist_collection_notifier.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/playlist_comments_view.dart';
@@ -420,6 +421,8 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final useBackgroundImage =
+        context.watch<ThemeProvider>().useBackgroundImage;
     // 字段级 fallback：API 返回的 albumDetail 优先，但其 artworkUri 为 null 时
     // 保留传入的 widget.album.artworkUri（即 song.artworkUri），避免丢失初始封面
     final apiAlbum = _albumDetail?.toAlbum();
@@ -444,12 +447,14 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                           SliverAppBar(
                             expandedHeight: 280,
                             pinned: true,
-                            backgroundColor: Color.lerp(
-                              Colors.transparent,
-                              colorScheme.surface,
-                              (_scrollOffset - (280 - kToolbarHeight))
-                                  .clamp(0.0, 60.0) / 60,
-                            )!,
+                            backgroundColor: useBackgroundImage
+                                ? Colors.transparent
+                                : Color.lerp(
+                                    Colors.transparent,
+                                    colorScheme.surface,
+                                    (_scrollOffset - (280 - kToolbarHeight))
+                                        .clamp(0.0, 60.0) / 60,
+                                  )!,
                             surfaceTintColor: Colors.transparent,
                             scrolledUnderElevation: 0,
                             actions: [
@@ -543,7 +548,18 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                                   gradient: LinearGradient(
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
-                                    colors: [colorScheme.primaryContainer, colorScheme.surface],
+                                    colors: useBackgroundImage
+                                        ? [
+                                            // 开启壁纸时整个展开区完全透明，壁纸透出
+                                            colorScheme.primaryContainer
+                                                .withValues(alpha: 0),
+                                            colorScheme.surface
+                                                .withValues(alpha: 0),
+                                          ]
+                                        : [
+                                            colorScheme.primaryContainer,
+                                            colorScheme.surface,
+                                          ],
                                   ),
                                 ),
                                 child: SafeArea(

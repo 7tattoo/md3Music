@@ -6,6 +6,7 @@ import 'package:m3e_core/m3e_core.dart';
 import '../../core/utils/app_toast.dart';
 import '../../data/models/song.dart';
 import '../../providers/player_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/song_list_item.dart';
@@ -401,6 +402,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final avatarUrl = _fixImageUrl(_resolvedAvatarUrl ?? widget.avatarUrl);
+    final useBackgroundImage =
+        context.watch<ThemeProvider>().useBackgroundImage;
 
     return Scaffold(
       body: _isLoading
@@ -487,12 +490,14 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                             ],
                           ),
                       ],
-                      backgroundColor: Color.lerp(
-                        Colors.transparent,
-                        colorScheme.surface,
-                        (_scrollOffset - (240 - kToolbarHeight))
-                            .clamp(0.0, 60.0) / 60,
-                      )!,
+                      backgroundColor: useBackgroundImage
+                          ? Colors.transparent
+                          : Color.lerp(
+                              Colors.transparent,
+                              colorScheme.surface,
+                              (_scrollOffset - (240 - kToolbarHeight))
+                                  .clamp(0.0, 60.0) / 60,
+                            )!,
                       surfaceTintColor: Colors.transparent,
                       scrolledUnderElevation: 0,
                       // pinned 后顶栏标题：滚动超过阈值后 fade-in 显示歌手名
@@ -513,10 +518,18 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [
-                                colorScheme.primaryContainer,
-                                colorScheme.surface,
-                              ],
+                              colors: useBackgroundImage
+                                  ? [
+                                      // 开启壁纸时整个展开区完全透明，壁纸透出
+                                      colorScheme.primaryContainer
+                                          .withValues(alpha: 0),
+                                      colorScheme.surface
+                                          .withValues(alpha: 0),
+                                    ]
+                                  : [
+                                      colorScheme.primaryContainer,
+                                      colorScheme.surface,
+                                    ],
                             ),
                           ),
                           child: SafeArea(
