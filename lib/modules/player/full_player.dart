@@ -16,7 +16,6 @@ import '../../core/services/spectrum_service.dart';
 import '../../core/services/usb_audio_service.dart';
 import '../../core/utils/audio_scanner.dart';
 import '../../core/utils/app_toast.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/settings_repository.dart';
@@ -905,14 +904,13 @@ class _FullPlayerState extends State<FullPlayer>
             child: Container(
               color: Colors.black.withValues(alpha: 0.6),
               alignment: Alignment.center,
-              padding: EdgeInsets.all(context.scaledSize(8)),
+              padding: const EdgeInsets.all(8),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    // 进度环容器随图标一起缩放
-                    width: context.scaledSize(40),
-                    height: context.scaledSize(40),
+                    width: 40,
+                    height: 40,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -1074,6 +1072,19 @@ class _FullPlayerState extends State<FullPlayer>
 
   @override
   Widget build(BuildContext context) {
+    // 播放详情页整页豁免「调整全局界面大小」：页内封面、歌词、进度条与控件的
+    // 尺寸互相咬合，跟随缩放必然破版。noScaling 一次关掉页内文字、Icon
+    // （applyTextScaling 读 MediaQuery.textScalerOf）与 context.scaledSize
+    // （封面/头像换算），与歌词界面同一手法。
+    // 从播放页拉起的弹层（歌词偏好面板、投屏面板、更多菜单）挂在 Navigator
+    // 的 overlay 上、不在这棵子树里，仍按全局缩放显示。
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+      child: Builder(builder: _buildPlayer),
+    );
+  }
+
+  Widget _buildPlayer(BuildContext context) {
     final playerProvider = context.watch<PlayerProvider>();
     final themeProvider = context.watch<ThemeProvider>();
     final usePhotoBg = themeProvider.useArtistPhotoBackground;
@@ -1089,7 +1100,12 @@ class _FullPlayerState extends State<FullPlayer>
     if (currentSong == null) {
       return Scaffold(
         backgroundColor: colorScheme.surface,
-        appBar: AppBar(leading: const BackButton()),
+        // 顶栏高度取常量：主题里的 toolbarHeight 被全局界面缩放乘过，
+        // 而它走 Theme 而非 MediaQuery，不受本页 noScaling 约束
+        appBar: AppBar(
+          leading: const BackButton(),
+          toolbarHeight: kToolbarHeight,
+        ),
         body: const Center(child: Text('暂无播放')),
       );
     }
@@ -2227,10 +2243,8 @@ class _FullPlayerState extends State<FullPlayer>
     ColorScheme colorScheme, {
     bool isExpanded = false,
   }) {
-    // 按钮容器与间距随图标一起缩放：控件里的 Icon 走全局 textScaler，
-    // 容器写死时放大的图标会溢出圆底
-    final spacing = context.scaledSize(isExpanded ? 4.0 : 8.0);
-    final sideButtonSize = context.scaledSize(isExpanded ? 48.0 : 56.0);
+    final spacing = isExpanded ? 4.0 : 8.0;
+    final sideButtonSize = isExpanded ? 48.0 : 56.0;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -2259,7 +2273,7 @@ class _FullPlayerState extends State<FullPlayer>
         MD3ETransportRow(
           isPlaying: playerProvider.isPlaying,
           sideButtonSize: sideButtonSize,
-          playButtonSize: context.scaledSize(isExpanded ? 64.0 : 72.0),
+          playButtonSize: isExpanded ? 64.0 : 72.0,
           spacing: spacing,
           onPrevious: () => playerProvider.previous(),
           onPlayPause: () {
@@ -3153,8 +3167,7 @@ class _FullPlayerState extends State<FullPlayer>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               CircleAvatar(
-                                // 圆底随头像图标一起缩放
-                                radius: context.scaledSize(12),
+                                radius: 12,
                                 backgroundColor: colorScheme.primary.withValues(
                                   alpha: 0.15,
                                 ),
@@ -3207,8 +3220,7 @@ class _FullPlayerState extends State<FullPlayer>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 CircleAvatar(
-                                  // 圆底随头像图标一起缩放
-                                  radius: context.scaledSize(10),
+                                  radius: 10,
                                   backgroundColor: colorScheme.primary
                                       .withValues(alpha: 0.15),
                                   child: const Icon(

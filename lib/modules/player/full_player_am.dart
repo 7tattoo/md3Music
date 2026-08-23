@@ -18,7 +18,6 @@ import '../../core/services/spectrum_service.dart';
 import '../../core/services/usb_audio_service.dart';
 import '../../core/utils/audio_scanner.dart';
 import '../../core/utils/app_toast.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../core/utils/artwork_color_extractor.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
@@ -642,14 +641,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             child: Container(
               color: Colors.black.withValues(alpha: 0.6),
               alignment: Alignment.center,
-              padding: EdgeInsets.all(context.scaledSize(8)),
+              padding: const EdgeInsets.all(8),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    // 进度环容器随图标一起缩放
-                    width: context.scaledSize(40),
-                    height: context.scaledSize(40),
+                    width: 40,
+                    height: 40,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -1254,6 +1252,19 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
 
   @override
   Widget build(BuildContext context) {
+    // 播放详情页整页豁免「调整全局界面大小」：页内封面、歌词、进度条与控件的
+    // 尺寸互相咬合，跟随缩放必然破版。noScaling 一次关掉页内文字、Icon
+    // （applyTextScaling 读 MediaQuery.textScalerOf）与 context.scaledSize
+    // （封面/头像换算），与歌词界面同一手法。
+    // 从播放页拉起的弹层（歌词偏好面板、投屏面板、更多菜单）挂在 Navigator
+    // 的 overlay 上、不在这棵子树里，仍按全局缩放显示。
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+      child: Builder(builder: _buildPlayer),
+    );
+  }
+
+  Widget _buildPlayer(BuildContext context) {
     // v4 优化：父级 build 只在切歌（currentSong.id 变化）或播放/暂停（isPlaying）时执行。
     // position 更新（200ms）通过 AppleLyricsView 与进度条自身的 Selector 注入，不触发父级重建。
     return Selector<
@@ -1276,7 +1287,12 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
         if (currentSong == null) {
           return Scaffold(
             backgroundColor: colorScheme.surface,
-            appBar: AppBar(leading: const BackButton()),
+            // 顶栏高度取常量：主题里的 toolbarHeight 被全局界面缩放乘过，
+            // 而它走 Theme 而非 MediaQuery，不受本页 noScaling 约束
+            appBar: AppBar(
+              leading: const BackButton(),
+              toolbarHeight: kToolbarHeight,
+            ),
             body: const Center(child: Text('暂无播放')),
           );
         }
@@ -2528,8 +2544,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     required bool shuffleEnabled,
   }) {
     // Apple Music HIG 风格：大按钮居中，白色图标，圆形白色播放按钮
-    // 间距随图标一起缩放（IconButton 自身容器会跟着 iconSize 自适应）
-    final spacing = context.scaledSize(isExpanded ? 4.0 : 8.0);
+    final spacing = isExpanded ? 4.0 : 8.0;
     final skipIconSize = isExpanded ? 28.0 : 36.0;
     final playIconSize = isExpanded ? 40.0 : 48.0;
 
@@ -3449,8 +3464,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               CircleAvatar(
-                                // 圆底随头像图标一起缩放
-                                radius: context.scaledSize(12),
+                                radius: 12,
                                 backgroundColor: colorScheme.primary.withValues(
                                   alpha: 0.15,
                                 ),
@@ -3502,8 +3516,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 CircleAvatar(
-                                  // 圆底随头像图标一起缩放
-                                  radius: context.scaledSize(10),
+                                  radius: 10,
                                   backgroundColor: colorScheme.primary
                                       .withValues(alpha: 0.15),
                                   child: const Icon(
