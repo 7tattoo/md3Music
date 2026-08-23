@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/layout/page_title_alignment.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../providers/tab_config_provider.dart';
 
 /// LaunchPad 导航页：以"导航网站"的形式列出所有可用 Tab（除"我的"和自身），
@@ -107,14 +106,9 @@ class _LaunchPadPageState extends State<LaunchPadPage> {
     final unpinned = tabs
         .where((t) => tabConfig.hiddenTabs.contains(t.id))
         .toList();
-    // 手机竖屏 3 列，横屏（及宽屏）4 列；「调整全局界面大小」放大后图标与
-    // 标签需要更大的格子，按缩放因子减少列数（最少 1 列），否则图标撑破格子
-    final baseColumns =
+    // 手机竖屏 3 列，横屏（及宽屏）4 列
+    final columns =
         MediaQuery.orientationOf(context) == Orientation.landscape ? 4 : 3;
-    final columns = (baseColumns / context.scaledSize(1.0)).round().clamp(
-      1,
-      baseColumns,
-    );
 
     return Scaffold(
       appBar: AppBar(
@@ -203,8 +197,8 @@ class _LaunchPadPageState extends State<LaunchPadPage> {
       sliver: SliverGrid(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: columns,
-          crossAxisSpacing: context.scaledSize(12),
-          mainAxisSpacing: context.scaledSize(12),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
           childAspectRatio: 1.0,
         ),
         delegate: SliverChildBuilderDelegate((context, i) {
@@ -395,8 +389,7 @@ class _LaunchPadCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     // 固定/未固定的卡片样式完全一致（均不透明），区分交给分区标题
     final content = ClipRRect(
-      // 圆角与内边距随图标一起缩放
-      borderRadius: BorderRadius.circular(context.scaledSize(16)),
+      borderRadius: BorderRadius.circular(16),
       child: Material(
         color: cs.surfaceContainerLow,
         child: InkWell(
@@ -405,10 +398,10 @@ class _LaunchPadCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 36, color: cs.primary),
-              SizedBox(height: context.scaledSize(10)),
+              SizedBox(height: 10),
               Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: context.scaledSize(8),
+                  horizontal: 8,
                 ),
                 child: Text(
                   label,
@@ -450,20 +443,19 @@ class _LaunchPadCard extends StatelessWidget {
   Widget _buildEnableHint(BuildContext context) {
     return IgnorePointer(
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(context.scaledSize(16)),
+        borderRadius: BorderRadius.circular(16),
         child: AnimatedOpacity(
           opacity: showHint ? 1.0 : 0.0,
           duration: _LaunchPadPageState._hintFade,
           child: Container(
             color: Colors.black.withValues(alpha: 0.6),
             alignment: Alignment.center,
-            // 内边距与图标-文字间距随图标一起缩放
-            padding: EdgeInsets.all(context.scaledSize(8)),
+            padding: EdgeInsets.all(8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.power_settings_new, color: Colors.white, size: 28),
-                SizedBox(height: context.scaledSize(8)),
+                SizedBox(height: 8),
                 Text(
                   '继续长按启用「$label」',
                   textAlign: TextAlign.center,

@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../core/utils/ui_scale.dart';
 import 'local_artwork_image.dart';
 
 /// 智能封面图组件：根据 artworkUri 类型选择不同的加载策略。
@@ -13,9 +12,7 @@ import 'local_artwork_image.dart';
 /// - **local://<filePath>** 本地文件：使用 [LocalArtworkCache] 懒加载
 /// - **null** 或未知：显示占位符
 ///
-/// [size] 与 [borderRadius] 按「调整全局界面大小」缩放；`double.infinity`
-/// （网格里由 cell 决定尺寸）不缩放。转交 [LocalArtworkImage] 的那几条分支
-/// 传原始值，由它自己缩放一次，避免两层组件重复放大。
+/// [size] 为 `double.infinity` 时由所在 cell（网格）决定尺寸。
 class SmartArtworkImage extends StatefulWidget {
   final String? artworkUri;
   final String? fallbackFilePath;
@@ -43,8 +40,8 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final uri = widget.artworkUri;
-    final size = context.scaledSize(widget.size);
-    final radius = context.scaledSize(widget.borderRadius);
+    final size = widget.size;
+    final radius = widget.borderRadius;
 
     Widget child;
     if (uri == null) {
@@ -117,8 +114,6 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
             child: Icon(
               Icons.hourglass_empty,
               size: isFill ? 40 : size * 0.4,
-              // size 已按封面缩放过，这里再跟随字号会二次放大
-              applyTextScaling: false,
               color: colorScheme.onSurfaceVariant,
             ),
           );
@@ -157,21 +152,19 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
   }
 
   Widget _placeholder(ColorScheme colorScheme) {
-    final size = context.scaledSize(widget.size);
+    final size = widget.size;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(
-          context.scaledSize(widget.borderRadius),
+          widget.borderRadius,
         ),
       ),
       child: Icon(
         Icons.music_note,
         size: size * 0.4,
-        // size 已按封面缩放过，这里再跟随字号会二次放大
-        applyTextScaling: false,
         color: colorScheme.onSurfaceVariant,
       ),
     );

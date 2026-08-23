@@ -4,7 +4,6 @@ import 'package:flutter/rendering.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/song.dart';
 import '../../providers/comment_display_provider.dart';
 import '../../providers/kugou_provider.dart';
@@ -1091,15 +1090,15 @@ class _CommentsViewState extends State<CommentsView> {
     final avatarUrl = _fixAvatarUrl(comment.avatar);
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       return CircleAvatar(
-        radius: context.scaledSize(18),
+        radius: 18,
         backgroundColor: usernameColor.withValues(alpha: 0.15),
         child: ClipOval(
           child: CachedNetworkImage(
             imageUrl: avatarUrl,
-            memCacheWidth: context.scaledCache(108),
-            memCacheHeight: context.scaledCache(108),
-            width: context.scaledSize(36),
-            height: context.scaledSize(36),
+            memCacheWidth: 108,
+            memCacheHeight: 108,
+            width: 36,
+            height: 36,
             fit: BoxFit.cover,
             placeholder: (_, _) => _buildTextAvatar(comment, usernameColor),
             errorWidget: (_, _, _) => _buildTextAvatar(comment, usernameColor),
@@ -1114,15 +1113,15 @@ class _CommentsViewState extends State<CommentsView> {
     final avatarUrl = _fixAvatarUrl(comment.avatar);
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       return CircleAvatar(
-        radius: context.scaledSize(12),
+        radius: 12,
         backgroundColor: usernameColor.withValues(alpha: 0.15),
         child: ClipOval(
           child: CachedNetworkImage(
             imageUrl: avatarUrl,
-            memCacheWidth: context.scaledCache(72),
-            memCacheHeight: context.scaledCache(72),
-            width: context.scaledSize(24),
-            height: context.scaledSize(24),
+            memCacheWidth: 72,
+            memCacheHeight: 72,
+            width: 24,
+            height: 24,
             fit: BoxFit.cover,
             placeholder: (_, _) =>
                 _buildSmallTextAvatar(comment, usernameColor),
@@ -1137,7 +1136,7 @@ class _CommentsViewState extends State<CommentsView> {
 
   Widget _buildTextAvatar(KugouComment comment, Color usernameColor) {
     return CircleAvatar(
-      radius: context.scaledSize(18),
+      radius: 18,
       backgroundColor: usernameColor.withValues(alpha: 0.15),
       child: Text(
         comment.username.isNotEmpty ? comment.username[0] : '?',
@@ -1150,7 +1149,7 @@ class _CommentsViewState extends State<CommentsView> {
 
   Widget _buildSmallTextAvatar(KugouComment comment, Color usernameColor) {
     return CircleAvatar(
-      radius: context.scaledSize(12),
+      radius: 12,
       backgroundColor: usernameColor.withValues(alpha: 0.15),
       child: Text(
         comment.username.isNotEmpty ? comment.username[0] : '?',

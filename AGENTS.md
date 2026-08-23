@@ -385,3 +385,12 @@ flutter analyze                           # Dart 静态分析
 - ✅ 横屏侧栏改用**自定义 `CompactNavigationRail`**（不再用 NavigationRail）：宽度 34 仅容纳图标、**图标间距 6dp（M3 内置 12dp 的一半）**、**图标组垂直居中**（原 SingleChildScrollView 包裹会破坏 NavigationRail 内部 Flexible+Align 居中，图标堆顶部）、tab 过多时可滚动；背景/指示器颜色读 NavigationRailTheme（壁纸模式自动半透明）
 - ✅ MiniPlayer **留白减半**：内边距 horizontal 8→4 / vertical 4→2、封面-文字间距 12→8、右侧按钮 `VisualDensity.compact`（48→40）
 
+### 8.7 尺寸与「显示大小」（勿回退到逐元素缩放）
+
+- ✅ **页面尺寸一律直接写 dp 设计 token**（封面 52、导航栏 44、侧栏 34…）。Flutter 的逻辑像素本身就是 DPI 无关的，**这就是适配不同 DPI 的正解**；屏幕差异交给断点（`getScreenType` / `isPadLayout`）、可用空间（LayoutBuilder）与 WindowInsets（SafeArea），原生层只负责正确提供窗口与 Insets（edgeToEdge）
+- ❌ **不要再引入逐元素缩放辅助函数**（历史上的 `core/utils/ui_scale.dart` + `context.scaledSize()` / `scaledCache()`，曾散落 31 个文件 210 处调用，已于「显示大小」重写中整体删除）。它的根本缺陷：元素被乘大而可用逻辑尺寸不变，放大必然溢出，只能靠补 `NavigationBar.height` / `AppBar.toolbarHeight` 和整页 `noScaling` 豁免打补丁
+- ✅ 整体缩放**只有一个点**：`core/layout/ui_density.dart` 的 `DisplayScaleScope`（挂在 `MaterialApp.builder` 最外层）。语义等同安卓系统「显示大小」：`MediaQuery` 逻辑尺寸/insets ÷ s、devicePixelRatio × s，再由 `FittedBox` 映射回物理屏。档位 0.85~1.30（键 `ui_display_scale`，旧键 `ui_scale` 已在加载时清理、不做值迁移）
+- ✅ 不变量：`MediaQuery.sizeOf × MediaQuery.devicePixelRatioOf` 恒等于真实物理像素 —— "宽 × dpr = 解码宽度"（如 `app_background.dart`）之类的算法据此保持正确
+- ✅ 系统「字体大小」（`MediaQuery.textScaler`）**跟随但限幅 1.30x**（下限钉 1.0，想变小走显示大小滑块）。唯二豁免点：`lyrics_view.dart`（字号是用户单独设置项，且行高缓存已按该字号预算过）与设置页的迷你预览示意图；`AppleLyricsView` 用裸 `TextPainter`，本来就不受影响
+- ✅ Pad 布局判定统一走 `isPadLayout(context)`（按**有效视口**最短边 ≥ 600dp），**不要**用设备物理 dp —— 显示大小调大后原生同样会跌出 sw600dp 桶
+

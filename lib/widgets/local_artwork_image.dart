@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../core/services/local_artwork_cache.dart';
-import '../core/utils/ui_scale.dart';
 
 /// 本地音乐封面图组件。
 ///
@@ -64,9 +63,8 @@ class _LocalArtworkImageState extends State<LocalArtworkImage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isFill = widget.size == double.infinity;
-    // 按「调整全局界面大小」缩放；填充式（infinity）不缩放
-    final size = context.scaledSize(widget.size);
-    final radius = context.scaledSize(widget.borderRadius);
+    final size = widget.size;
+    final radius = widget.borderRadius;
 
     if (_bytes != null) {
       return ClipRRect(
@@ -91,8 +89,6 @@ class _LocalArtworkImageState extends State<LocalArtworkImage> {
       child: Icon(
         _loaded ? Icons.music_note : Icons.hourglass_empty,
         size: isFill ? 40 : size * 0.4,
-        // size 已按封面缩放过，这里再跟随字号会二次放大
-        applyTextScaling: false,
         color: colorScheme.onSurfaceVariant,
       ),
     );

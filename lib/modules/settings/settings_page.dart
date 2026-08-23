@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -12,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/layout/page_title_alignment.dart';
+import '../../core/layout/ui_density.dart';
 import '../../core/services/background_image_loader.dart';
 import '../../core/widgets/app_background.dart' show kDefaultWallpaperAsset;
 import '../../core/services/custom_font_loader.dart';
@@ -97,7 +99,6 @@ class _SettingsPageState extends State<SettingsPage>
   // 锁屏歌词独立字号/粗细（默认跟随 AM 歌词偏好）
   double _lockScreenLyricFontSize = 22;
   int _lockScreenLyricFontWeight = 400;
-  double _uiScale = 1.0;
   // 暂停淡入淡出开关
   bool _pauseFadeEnabled = false;
   // 播放时保持屏幕常亮开关
@@ -267,8 +268,6 @@ class _SettingsPageState extends State<SettingsPage>
     final useBackgroundMonet = context.read<ThemeProvider>().useBackgroundMonet;
     final useTextShadow = context.read<ThemeProvider>().useTextShadow;
     final textShadowBlur = context.read<ThemeProvider>().textShadowBlur;
-    // 从 ThemeProvider 同步 UI 缩放
-    final uiScale = context.read<ThemeProvider>().uiScale;
     // 读取蓝牙歌词开关
     final bluetoothLyricEnabled = await _settingsRepository
         .getBluetoothLyricEnabled();
@@ -319,7 +318,6 @@ class _SettingsPageState extends State<SettingsPage>
       _useDuetLayout = LyricPreferences.instance.useDuetLayout;
       _lyricEcoMode = LyricPreferences.instance.ecoMode;
       _lyricDynamicColor = LyricPreferences.instance.useDynamicLyricColor;
-      _uiScale = uiScale;
       _bluetoothLyricEnabled = bluetoothLyricEnabled;
       _lockScreenLyricEnabled = lockScreenLyricEnabled;
       _lockScreenLyricFontSize = lockScreenLyricFontSize;
@@ -1226,52 +1224,11 @@ class _SettingsPageState extends State<SettingsPage>
               : null,
         ),
         const Divider(),
-        // UI 缩放滑块
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Row(
-            children: [
-              Icon(Icons.format_size, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 12),
-              Expanded(
-                child: M3ESlider(
-                  decoration: const M3ESliderDecoration(haptic: M3EHapticFeedback.medium),
-                  value: _uiScale,
-                  min: 0.5,
-                  max: 5.0,
-                  divisions: 45,
-                  label: '${_uiScale.toStringAsFixed(1)}x',
-                  onChanged: (v) {
-                    setState(() => _uiScale = v);
-                  },
-                  onChangeEnd: (v) {
-                    context.read<ThemeProvider>().setUiScale(v);
-                  },
-                ),
-              ),
-              SizedBox(
-                width: 40,
-                child: Text(
-                  '${_uiScale.toStringAsFixed(1)}x',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            '调整全局界面大小，含专辑封面与头像（歌词界面不受影响）',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
+        // 「显示大小」滑块单独抽成 StatefulWidget：拖动中的中间值只重建这一小块。
+        // 若放在设置页里用 setState 承接，每个 drag update 都会重建整页三千余行的
+        // 元素树，滑块自身的手势识别器可能被连带重建 → 拖动中途"断触"、
+        // onChangeEnd 提前触发（手还没抬就应用并弹确认框）。
+        const _DisplayScaleTile(),
         const Divider(height: 16),
         // 底部导航栏文字显示行为：始终显示 / 仅当前页 / 始终不显示
         Padding(
@@ -2609,10 +2566,10 @@ class _SettingsPageState extends State<SettingsPage>
                 child: SizedBox(
                   height: 140,
                   width: double.infinity,
-                  // 预览是按 1.0x 画的迷你界面示意图：高度固定 140、宽度受
-                  // Expanded 约束，内部元素没法随「调整全局界面大小」等比放大
-                  // （图标一放大就撑破 28dp 顶栏、24dp 图标块）。这里豁免缩放，
-                  // 让预览恒按真实比例呈现，与歌词界面的 noScaling 同一手法。
+                  // 迷你界面示意图：高度固定 140、宽度受 Expanded 约束，
+                  // 内部元素（28dp 顶栏、24dp 图标块）没有余量跟随系统字号，
+                  // 字一放大就撑破。这里豁免系统字号，让预览恒按真实比例呈现。
+                  // 「显示大小」不在此列 —— 它整页等比变化，预览随之整体缩放。
                   child: MediaQuery(
                     data: MediaQuery.of(
                       context,
@@ -3274,6 +3231,196 @@ class _LyricTimeOffsetTileState extends State<_LyricTimeOffsetTile> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 「显示大小」设置项：无极滑块 + 抬手应用 + 10 秒超时自动还原。
+///
+/// 单独成 widget 而非留在设置页里：拖动过程中的中间值只需要重建这一小块，
+/// 放在设置页会让每个 drag update 重建整页元素树，进而在拖动中途打断手势。
+class _DisplayScaleTile extends StatefulWidget {
+  const _DisplayScaleTile();
+
+  @override
+  State<_DisplayScaleTile> createState() => _DisplayScaleTileState();
+}
+
+class _DisplayScaleTileState extends State<_DisplayScaleTile> {
+  /// 拖动中的临时值；null 表示显示 [ThemeProvider.displayScale] 的已应用档位。
+  double? _pending;
+
+  /// 手指是否还按在滑块上。
+  ///
+  /// **不能把 M3ESlider 的 onChangeEnd 当作「抬手」信号**：它的 GestureDetector
+  /// 同时挂了 tap 与 horizontalDrag。手指按下停留超过 kPressTimeout(100ms) 会先
+  /// 触发 onTapDown（值跳到触点），随后一移动 tap 就输掉手势竞技场 → onTapCancel；
+  /// 而 onTapCancel 的守卫是 `if (!_isDragging)`，竞技场是「先 reject 其他成员、
+  /// 再 accept 胜者」，此刻 _isDragging 仍为 false，于是在 divisions == null
+  /// （无极，无吸附动画）下 onChangeEnd 被立即调用 —— 手还没抬就应用了档位并弹出
+  /// 模态确认框，弹窗吃掉后续指针事件，手感就是拖动途中"断触"。
+  /// 因此提交时机改由 Listener 的真实 pointer up / cancel 决定。
+  bool _pointerDown = false;
+
+  /// 抬手提交：值真的变了才应用，否则只清掉临时值。
+  void _commit() {
+    _pointerDown = false;
+    final pending = _pending;
+    final applied = context.read<ThemeProvider>().displayScale;
+    if (pending == null || pending == applied) {
+      if (pending != null) setState(() => _pending = null);
+      return;
+    }
+    // ignore: discarded_futures
+    _apply(pending, applied);
+  }
+
+  /// 应用档位：落盘后弹确认框，10 秒内不点「保留」自动还原。
+  /// 极端档位下滑块与按钮自身也被放大/缩小，可能已无法再操作，必须留一条
+  /// 不依赖用户交互的退路。
+  Future<void> _apply(double value, double previous) async {
+    final theme = context.read<ThemeProvider>();
+    await theme.setDisplayScale(value);
+    if (!mounted) return;
+    final keep = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DisplayScaleConfirmDialog(),
+    );
+    if (!mounted) return;
+    if (keep != true) {
+      await theme.setDisplayScale(previous);
+      if (!mounted) return;
+    }
+    setState(() => _pending = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final applied = context.watch<ThemeProvider>().displayScale;
+    final value = (_pending ?? applied).clamp(kMinDisplayScale, kMaxDisplayScale);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Row(
+            children: [
+              Icon(Icons.fit_screen, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Expanded(
+                // Listener 在 GestureDetector 之上，指针事件按 hit-test 路径原样
+                // 送达、不参与手势竞技场，所以 up / cancel 是可靠的「抬手」信号。
+                child: Listener(
+                  onPointerDown: (_) => _pointerDown = true,
+                  onPointerUp: (_) => _commit(),
+                  onPointerCancel: (_) => _commit(),
+                  child: M3ESlider(
+                    // 显式给 hapticConfig：M3ESlider 在 divisions == null 时默认取
+                    // M3EHapticConfig.continuous()（minimumDragInterval 10ms +
+                    // 2% 阈值），拖动中会以最高约 100 次/秒走 MethodChannel 触发
+                    // vibrate，真机上马达饱和 + 通道洪泛。discrete() 关掉
+                    // dragTexture，只保留首尾端点反馈。
+                    decoration: const M3ESliderDecoration(
+                      haptic: M3EHapticFeedback.medium,
+                      hapticConfig: M3EHapticConfig.discrete(),
+                    ),
+                    value: value,
+                    min: kMinDisplayScale,
+                    max: kMaxDisplayScale,
+                    // divisions 不传 = 无极调节（M3ESlider.divisions 为 int?）
+                    label: '${value.toStringAsFixed(2)}x',
+                    // 拖动中只更新本地值，界面不缩放
+                    onChanged: (v) => setState(() => _pending = v),
+                    // 指针交互一律等 Listener 的 pointer up（见 _pointerDown 注释）；
+                    // 这里只兜住键盘方向键那条没有指针的路径。
+                    onChangeEnd: (_) {
+                      if (!_pointerDown) _commit();
+                    },
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  '${value.toStringAsFixed(2)}x',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            '显示大小：与系统同名设置一致，整体等比放大或缩小界面，一屏能显示的内容随之增减',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 「显示大小」确认弹窗：显示剩余秒数，超时自动返回 false（= 还原）。
+///
+/// 返回值：true = 保留新档位，false / null = 还原。
+class _DisplayScaleConfirmDialog extends StatefulWidget {
+  const _DisplayScaleConfirmDialog();
+
+  @override
+  State<_DisplayScaleConfirmDialog> createState() =>
+      _DisplayScaleConfirmDialogState();
+}
+
+class _DisplayScaleConfirmDialogState
+    extends State<_DisplayScaleConfirmDialog> {
+  static const int _timeoutSeconds = 10;
+
+  int _remaining = _timeoutSeconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _remaining--);
+      if (_remaining <= 0) {
+        _timer?.cancel();
+        Navigator.of(context).pop(false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('保留此显示大小？'),
+      content: Text('若界面已难以操作，$_remaining 秒后将自动还原。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('还原'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('保留'),
+        ),
+      ],
     );
   }
 }

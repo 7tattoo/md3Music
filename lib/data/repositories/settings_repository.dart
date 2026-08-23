@@ -11,7 +11,6 @@ class SettingsRepository {
   static const String _keyAutoPlay = 'settings_auto_play';
   static const String _keyShowLyrics = 'settings_show_lyrics';
   static const String _keyAutoReceiveVip = 'settings_auto_receive_vip';
-  static const String _keyUiScale = 'settings_ui_scale';
   // Pad 端网格页面列数偏好
   static const String _keyGridColumns = 'grid_columns';
   // MV 画中画：按 Home 自动进入画中画（默认关闭，手动按钮不受影响）
@@ -394,18 +393,6 @@ class SettingsRepository {
   Future<void> setLockScreenLyricFontWeight(int v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyLockScreenLyricFontWeight, v);
-  }
-
-  // ===== UI 缩放 =====
-
-  Future<double> getUiScale() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble(_keyUiScale) ?? 1.0;
-  }
-
-  Future<void> setUiScale(double scale) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_keyUiScale, scale);
   }
 
   // ===== 暂停淡入淡出 =====

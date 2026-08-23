@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
 import '../../core/utils/app_toast.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/song.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -545,14 +544,14 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                                       ? ClipOval(
                                           child: CachedNetworkImage(
                                             imageUrl: avatarUrl,
-                                            memCacheWidth: context.scaledCache(300),
-                                            memCacheHeight: context.scaledCache(300),
-                                            width: context.scaledSize(100),
-                                            height: context.scaledSize(100),
+                                            memCacheWidth: 300,
+                                            memCacheHeight: 300,
+                                            width: 100,
+                                            height: 100,
                                             fit: BoxFit.cover,
                                             placeholder: (_, _) => Container(
-                                              width: context.scaledSize(100),
-                                              height: context.scaledSize(100),
+                                              width: 100,
+                                              height: 100,
                                               color: colorScheme.surfaceContainerHighest,
                                               child: Icon(
                                                 Icons.person,
@@ -561,8 +560,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                                               ),
                                             ),
                                             errorWidget: (_, _, _) => Container(
-                                              width: context.scaledSize(100),
-                                              height: context.scaledSize(100),
+                                              width: 100,
+                                              height: 100,
                                               color: colorScheme.surfaceContainerHighest,
                                               child: Icon(
                                                 Icons.person,
@@ -573,8 +572,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                                           ),
                                         )
                                       : Container(
-                                          width: context.scaledSize(100),
-                                          height: context.scaledSize(100),
+                                          width: 100,
+                                          height: 100,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             color: colorScheme.surfaceContainerHighest,

@@ -4,7 +4,6 @@ import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/utils/app_toast.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/kugou_account.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
@@ -152,7 +151,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
   Widget _buildUserAvatar(KugouProvider kugou, ColorScheme cs) {
     final avatarUrl = kugou.userInfo?.avatar;
     final userId = kugou.userid ?? 'default';
-    final radius = context.scaledSize(32);
+    const double radius = 32;
 
     if (avatarUrl == null || avatarUrl.isEmpty) {
       return CircleAvatar(
@@ -179,8 +178,8 @@ class _UserCenterPageState extends State<UserCenterPage> {
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: avatarUrl,
-          memCacheWidth: context.scaledCache(192),
-          memCacheHeight: context.scaledCache(192),
+          memCacheWidth: 192,
+          memCacheHeight: 192,
           cacheKey: cacheKey,
           width: radius * 2,
           height: radius * 2,
@@ -194,10 +193,8 @@ class _UserCenterPageState extends State<UserCenterPage> {
     );
   }
 
-  // ── 用户卡片版式基准值（未缩放的设计值）──
+  // ── 用户卡片版式基准值 ──
   // 头像：直径 64 + 3 描边 = 70，左上角外移 (-8, -18)，圆心落在卡片内 (27, 17)。
-  // 头像随「调整全局界面大小」缩放，这几个与头像绑定的量必须同比缩放，
-  // 否则让位宽度和光环圆心会跟头像脱开。
   static const double _kAvatarRadius = 32;
   static const double _kAvatarOverhangX = 8;
   static const double _kAvatarOverhangY = 18;
@@ -205,23 +202,22 @@ class _UserCenterPageState extends State<UserCenterPage> {
   /// 头像让位宽度：内容左缘 = 20 + 52 = 72，与头像右缘（62）留 10 呼吸位。
   /// 这条线同时是 LV 文字与进度条的左对齐基准。
   static const double _kAvatarGutter = 52;
-  /// 卡片内边距：不跟头像缩放
   static const double _kCardPadH = 20;
 
   Widget _buildUserHeader(ColorScheme cs, TextTheme tt, KugouProvider kugou) {
     final grade = kugou.gradeInfo;
-    final ring = context.scaledSize(_kAvatarRing);
-    final overhangX = context.scaledSize(_kAvatarOverhangX);
-    final overhangY = context.scaledSize(_kAvatarOverhangY);
-    final gutter = context.scaledSize(_kAvatarGutter);
+    final ring = _kAvatarRing;
+    final overhangX = _kAvatarOverhangX;
+    final overhangY = _kAvatarOverhangY;
+    final gutter = _kAvatarGutter;
     // 头像圆心（相对卡片左上角），供光环定位
-    final haloCx = context.scaledSize(_kAvatarRadius) + ring - overhangX;
-    final haloCy = context.scaledSize(_kAvatarRadius) + ring - overhangY;
+    final haloCx = _kAvatarRadius + ring - overhangX;
+    final haloCy = _kAvatarRadius + ring - overhangY;
 
     return SliverToBoxAdapter(
       child: Padding(
         // 顶部留出空间容纳超出卡片的头像
-        padding: EdgeInsets.fromLTRB(16, context.scaledSize(28), 16, 16),
+        padding: EdgeInsets.fromLTRB(16, 28, 16, 16),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -242,14 +238,14 @@ class _UserCenterPageState extends State<UserCenterPage> {
                     cs,
                     cx: haloCx,
                     cy: haloCy,
-                    radius: context.scaledSize(98),
+                    radius: 98,
                     alpha: 0.11,
                   ),
                   _buildAvatarHalo(
                     cs,
                     cx: haloCx,
                     cy: haloCy,
-                    radius: context.scaledSize(146),
+                    radius: 146,
                     alpha: 0.06,
                   ),
                   InkWell(
@@ -272,7 +268,7 @@ class _UserCenterPageState extends State<UserCenterPage> {
                               Expanded(
                                 // 无等级数据时占住等级行的高度，避免卡片塌到头像里
                                 child: grade == null
-                                    ? SizedBox(height: context.scaledSize(38))
+                                    ? SizedBox(height: 38)
                                     : _buildGradeInfo(
                                         cs,
                                         tt,
@@ -683,23 +679,23 @@ class _UserCenterPageState extends State<UserCenterPage> {
     );
     if (avatarUrl == null || avatarUrl.isEmpty) {
       return CircleAvatar(
-        radius: context.scaledSize(20),
+        radius: 20,
         backgroundColor: cs.primary.withValues(alpha: 0.15),
         child: fallback,
       );
     }
     final safeUserId = account.userid.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     return CircleAvatar(
-      radius: context.scaledSize(20),
+      radius: 20,
       backgroundColor: cs.primary.withValues(alpha: 0.15),
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: avatarUrl,
-          memCacheWidth: context.scaledCache(96),
-          memCacheHeight: context.scaledCache(96),
+          memCacheWidth: 96,
+          memCacheHeight: 96,
           cacheKey: 'avatar_$safeUserId',
-          width: context.scaledSize(40),
-          height: context.scaledSize(40),
+          width: 40,
+          height: 40,
           fit: BoxFit.cover,
           errorWidget: (c, u, e) => fallback,
         ),
@@ -904,11 +900,10 @@ class _UserCenterPageState extends State<UserCenterPage> {
   /// 签到日历展示位：仅做视觉提示，点击由整张会员卡片统一处理。
   Widget _buildCalendarEntry(ColorScheme cs, TextTheme tt) {
     return Container(
-      // 宽度与圆角随图标/文字一起缩放
-      width: context.scaledSize(76),
+      width: 76,
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(context.scaledSize(12)),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1032,9 +1027,8 @@ class _UserCenterPageState extends State<UserCenterPage> {
       child: Column(
         children: [
           Container(
-            // 圆形底随图标一起缩放
-            width: context.scaledSize(48),
-            height: context.scaledSize(48),
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: cs.surfaceContainerHighest,

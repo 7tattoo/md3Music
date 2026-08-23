@@ -4,7 +4,6 @@ import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
-import '../core/utils/ui_scale.dart';
 import '../providers/kugou_provider.dart';
 import '../providers/comment_display_provider.dart';
 import '../services/kugou_api/comment_thread.dart';
@@ -967,15 +966,15 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
 
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       return CircleAvatar(
-        radius: context.scaledSize(18),
+        radius: 18,
         backgroundColor: colorScheme.primary.withValues(alpha: 0.15),
         child: ClipOval(
           child: CachedNetworkImage(
             imageUrl: avatarUrl,
-            memCacheWidth: context.scaledCache(108),
-            memCacheHeight: context.scaledCache(108),
-            width: context.scaledSize(36),
-            height: context.scaledSize(36),
+            memCacheWidth: 108,
+            memCacheHeight: 108,
+            width: 36,
+            height: 36,
             fit: BoxFit.cover,
             placeholder: (_, _) => _buildTextAvatar(comment, colorScheme),
             errorWidget: (_, _, _) => _buildTextAvatar(comment, colorScheme),
@@ -991,15 +990,15 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
     final avatarUrl = _fixAvatarUrl(comment.avatar);
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       return CircleAvatar(
-        radius: context.scaledSize(12),
+        radius: 12,
         backgroundColor: colorScheme.primary.withValues(alpha: 0.15),
         child: ClipOval(
           child: CachedNetworkImage(
             imageUrl: avatarUrl,
-            memCacheWidth: context.scaledCache(72),
-            memCacheHeight: context.scaledCache(72),
-            width: context.scaledSize(24),
-            height: context.scaledSize(24),
+            memCacheWidth: 72,
+            memCacheHeight: 72,
+            width: 24,
+            height: 24,
             fit: BoxFit.cover,
             placeholder: (_, _) => _buildSmallTextAvatar(comment, colorScheme),
             errorWidget: (_, _, _) =>
@@ -1013,7 +1012,7 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
 
   Widget _buildTextAvatar(KugouComment comment, ColorScheme colorScheme) {
     return CircleAvatar(
-      radius: context.scaledSize(18),
+      radius: 18,
       backgroundColor: colorScheme.primary.withValues(alpha: 0.15),
       child: Text(
         comment.username.isNotEmpty ? comment.username[0] : '?',
@@ -1026,7 +1025,7 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
 
   Widget _buildSmallTextAvatar(KugouComment comment, ColorScheme colorScheme) {
     return CircleAvatar(
-      radius: context.scaledSize(12),
+      radius: 12,
       backgroundColor: colorScheme.primary.withValues(alpha: 0.15),
       child: Text(
         comment.username.isNotEmpty ? comment.username[0] : '?',

@@ -26,7 +26,6 @@ import '../settings/equalizer_settings_page.dart';
 import 'artist_photo_background.dart';
 import 'mv_player_page.dart';
 import 'song_info_page.dart';
-import '../../providers/device_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/local_favorites_provider.dart';
@@ -628,7 +627,7 @@ class _FullPlayerState extends State<FullPlayer>
   void _checkPadMode() {
     if (!mounted) return;
     final width = MediaQuery.sizeOf(context).width;
-    final deviceIsPad = context.read<DeviceProvider>().isPad;
+    final deviceIsPad = isPadLayout(context);
     final shouldBePadMode = deviceIsPad || width >= 600;
     // 手机横屏：宽度 >= 600 但设备不是 Pad
     final shouldBePhoneLandscape = !deviceIsPad && width >= 600;
@@ -1072,16 +1071,7 @@ class _FullPlayerState extends State<FullPlayer>
 
   @override
   Widget build(BuildContext context) {
-    // 播放详情页整页豁免「调整全局界面大小」：页内封面、歌词、进度条与控件的
-    // 尺寸互相咬合，跟随缩放必然破版。noScaling 一次关掉页内文字、Icon
-    // （applyTextScaling 读 MediaQuery.textScalerOf）与 context.scaledSize
-    // （封面/头像换算），与歌词界面同一手法。
-    // 从播放页拉起的弹层（歌词偏好面板、投屏面板、更多菜单）挂在 Navigator
-    // 的 overlay 上、不在这棵子树里，仍按全局缩放显示。
-    return MediaQuery(
-      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
-      child: Builder(builder: _buildPlayer),
-    );
+    return Builder(builder: _buildPlayer);
   }
 
   Widget _buildPlayer(BuildContext context) {
@@ -1100,12 +1090,7 @@ class _FullPlayerState extends State<FullPlayer>
     if (currentSong == null) {
       return Scaffold(
         backgroundColor: colorScheme.surface,
-        // 顶栏高度取常量：主题里的 toolbarHeight 被全局界面缩放乘过，
-        // 而它走 Theme 而非 MediaQuery，不受本页 noScaling 约束
-        appBar: AppBar(
-          leading: const BackButton(),
-          toolbarHeight: kToolbarHeight,
-        ),
+        appBar: AppBar(leading: const BackButton()),
         body: const Center(child: Text('暂无播放')),
       );
     }

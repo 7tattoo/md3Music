@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
 import '../../core/utils/app_toast.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/song.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
@@ -313,12 +312,12 @@ class _IpDetailPageState extends State<IpDetailPage>
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
-                width: context.scaledSize(72),
-                height: context.scaledSize(72),
+                width: 72,
+                height: 72,
                 child: CachedNetworkImage(
                   imageUrl: cover,
-                  memCacheWidth: context.scaledCache(216),
-                  memCacheHeight: context.scaledCache(216),
+                  memCacheWidth: 216,
+                  memCacheHeight: 216,
                   fit: BoxFit.cover,
                   errorWidget: (_, _, _) => Container(
                     color: cs.surfaceContainerHighest,
@@ -453,13 +452,13 @@ class _IpDetailPageState extends State<IpDetailPage>
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: SizedBox(
-                    width: context.scaledSize(72),
-                    height: context.scaledSize(48),
+                    width: 72,
+                    height: 48,
                     child: cover != null
                         ? CachedNetworkImage(
                             imageUrl: cover,
-                            memCacheWidth: context.scaledCache(216),
-                            memCacheHeight: context.scaledCache(144),
+                            memCacheWidth: 216,
+                            memCacheHeight: 144,
                             fit: BoxFit.cover,
                             errorWidget: (_, _, _) =>
                                 _coverPlaceholder(cs, radius: 0),
@@ -534,13 +533,13 @@ class _IpDetailPageState extends State<IpDetailPage>
             leading: ClipRRect(
               borderRadius: BorderRadius.circular(24),
               child: SizedBox(
-                width: context.scaledSize(48),
-                height: context.scaledSize(48),
+                width: 48,
+                height: 48,
                 child: artist.avatarUrl != null
                     ? CachedNetworkImage(
                         imageUrl: artist.avatarUrl!,
-                        memCacheWidth: context.scaledCache(144),
-                        memCacheHeight: context.scaledCache(144),
+                        memCacheWidth: 144,
+                        memCacheHeight: 144,
                         fit: BoxFit.cover,
                         errorWidget: (_, _, _) => Container(
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -618,13 +617,13 @@ class _IpDetailPageState extends State<IpDetailPage>
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: SizedBox(
-                        width: context.scaledSize(56),
-                        height: context.scaledSize(56),
+                        width: 56,
+                        height: 56,
                         child: p.coverUrl != null
                             ? CachedNetworkImage(
                                 imageUrl: p.coverUrl!,
-                                memCacheWidth: context.scaledCache(168),
-                                memCacheHeight: context.scaledCache(168),
+                                memCacheWidth: 168,
+                                memCacheHeight: 168,
                                 fit: BoxFit.cover,
                                 errorWidget: (_, _, _) =>
                                     _coverPlaceholder(cs, radius: 0),

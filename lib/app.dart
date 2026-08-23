@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:quick_actions/quick_actions.dart';
 
 import 'core/layout/responsive_layout.dart';
+import 'core/layout/ui_density.dart';
 import 'core/services/lyricon_provider_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/motion_constants.dart';
@@ -306,56 +307,42 @@ class _AppViewState extends State<_AppView> {
       // fontFamily 透传给 ThemeData，影响所有 Material Widget 的默认字体。
       // 启用自定义背景图时，通过 _applyBackgroundOverrides 把主要表面改为透明，
       // 让底层 AppBackgroundLayer 的模糊背景图透出。
-      theme: _applyUiScale(
-        _applyBackgroundOverrides(
-          AppTheme.lightThemeFromSeed(
-            themeProvider.effectiveSeedColor,
-            fontFamily: fontFamily,
-            labelBehavior: themeProvider.navLabelBehavior,
-          ),
-          themeProvider,
+      theme: _applyBackgroundOverrides(
+        AppTheme.lightThemeFromSeed(
+          themeProvider.effectiveSeedColor,
+          fontFamily: fontFamily,
+          labelBehavior: themeProvider.navLabelBehavior,
         ),
-        themeProvider.uiScale,
+        themeProvider,
       ),
-      darkTheme: _applyUiScale(
-        _applyBackgroundOverrides(
-          AppTheme.darkThemeFromSeed(
-            themeProvider.effectiveSeedColor,
-            useOledBlack: themeProvider.useOledBlack,
-            fontFamily: fontFamily,
-            labelBehavior: themeProvider.navLabelBehavior,
-          ),
-          themeProvider,
+      darkTheme: _applyBackgroundOverrides(
+        AppTheme.darkThemeFromSeed(
+          themeProvider.effectiveSeedColor,
+          useOledBlack: themeProvider.useOledBlack,
+          fontFamily: fontFamily,
+          labelBehavior: themeProvider.navLabelBehavior,
         ),
-        themeProvider.uiScale,
+        themeProvider,
       ),
       themeMode: themeProvider.themeMode,
       // 根据主题设置系统导航栏颜色
       builder: (context, child) {
-        final scale = context.watch<ThemeProvider>().uiScale;
-        return MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: TextScaler.linear(scale)),
-          // 让所有 Icon 按同一个 textScaler 缩放。applyTextScaling 对显式写了
-          // size 的 Icon 同样生效（见 Icon.build），且读的是
-          // MediaQuery.textScalerOf，所以歌词界面（覆写为 noScaling）自动豁免。
-          // 用 merge 而非 IconTheme：保留 Theme 提供的 color/size，只补这一项；
-          // 下游组件的 IconTheme.merge 走 copyWith，不会把它重置回 null。
-          child: IconTheme.merge(
-            data: const IconThemeData(applyTextScaling: true),
-            child: _SystemUiUpdater(
-              child: Stack(
-                children: [
-                  // 全局背景层（主页/底层背景）：复用 AppBackground 组件。
-                  // 二级页面由路由过渡内嵌 AppBackground，随页面位移入场。
-                  Positioned.fill(child: AppBackground()),
-                  child!,
-                  const DlnaCastingOverlay(),
-                  // 上滑拖拽跟手覆盖层（在 Navigator 之上，拖拽期间显示预览）
-                  const PlayerDragOverlay(),
-                ],
-              ),
+        // 全局「显示大小」：整个 App 唯一的缩放点，页面侧一律直接写 dp。
+        // 包在最外层，所以背景层、Navigator（全部路由）、Overlay（对话框 /
+        // 底部弹层 / 菜单）、DLNA 与拖拽覆盖层都在作用域内。
+        return DisplayScaleScope(
+          scale: context.watch<ThemeProvider>().displayScale,
+          child: _SystemUiUpdater(
+            child: Stack(
+              children: [
+                // 全局背景层（主页/底层背景）：复用 AppBackground 组件。
+                // 二级页面由路由过渡内嵌 AppBackground，随页面位移入场。
+                Positioned.fill(child: AppBackground()),
+                child!,
+                const DlnaCastingOverlay(),
+                // 上滑拖拽跟手覆盖层（在 Navigator 之上，拖拽期间显示预览）
+                const PlayerDragOverlay(),
+              ],
             ),
           ),
         );
@@ -419,27 +406,6 @@ class _AppViewState extends State<_AppView> {
         }
         return null;
       },
-    );
-  }
-
-  /// 与「调整全局界面大小」相关的主题覆盖。
-  ///
-  /// 图标随 [IconTheme.applyTextScaling] 一起变大后，两个固定高度的容器装不下：
-  /// - NavigationBar 的 height（主题里写死 80），内部是图标 + 标签的 Column；
-  /// - AppBar 的 toolbarHeight（默认 kToolbarHeight = 56）。
-  ///
-  /// 只有普通 [AppBar] 读 `appBarTheme.toolbarHeight`；[SliverAppBar] 的
-  /// toolbarHeight 默认取 kToolbarHeight 常量、不读主题，所以这里不会与那几个
-  /// 详情页的 expandedHeight 打架。
-  ThemeData _applyUiScale(ThemeData base, double scale) {
-    if (scale == 1.0) return base;
-    return base.copyWith(
-      navigationBarTheme: base.navigationBarTheme.copyWith(
-        height: (base.navigationBarTheme.height ?? 80) * scale,
-      ),
-      appBarTheme: base.appBarTheme.copyWith(
-        toolbarHeight: (base.appBarTheme.toolbarHeight ?? kToolbarHeight) * scale,
-      ),
     );
   }
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../core/utils/ui_scale.dart';
 import '../main.dart';
 import '../modules/player/dlna_remote_page.dart';
 import '../providers/dlna_provider.dart';
@@ -48,20 +47,11 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
   static const double _maxExpandedWidth = 280; // 浮动态最大宽度
   static const double _height = _iconSize;  // 浮动态高度，与吸附态一致
 
-  // ── 「调整全局界面大小」缩放 ──
-  // 浮窗内的 Icon 随全局 textScaler 放大，容器必须同比放大才装得下；
-  // 吸附/拖拽的位置计算也用这几个尺寸，所以统一走缩放后的值。
-  // build 里刷新，供 build 外的指针回调（_onPointerMove 等）读取。
-  double _uiScale = 1.0;
-  double get _scaledIconSize => _iconSize * _uiScale;
-  double get _scaledHeight => _height * _uiScale;
-  double get _scaledMaxWidth => _maxExpandedWidth * _uiScale;
-
   // 测量实际渲染宽度，用于精确的边界约束（修复只能在左半屏拖动的问题）
   final GlobalKey _overlayKey = GlobalKey();
   double get _actualWidth {
     final renderBox = _overlayKey.currentContext?.findRenderObject() as RenderBox?;
-    return renderBox?.size.width ?? _scaledIconSize;
+    return renderBox?.size.width ?? _iconSize;
   }
 
   /// 进入遥控页面：通过全局 navigatorKey，避免依赖 BuildContext。
@@ -85,9 +75,9 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
     final screenWidth = screenSize.width;
     final statusBarHeight = MediaQuery.of(context).padding.top;
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    final width = _actualWidth > _scaledIconSize ? _actualWidth : _scaledMaxWidth;
+    final width = _actualWidth > _iconSize ? _actualWidth : _maxExpandedWidth;
     final currentX = _floatingPosition?.dx ?? (screenWidth - width);
-    final maxTop = (screenSize.height - _scaledHeight - bottomInset - 80)
+    final maxTop = (screenSize.height - _height - bottomInset - 80)
         .clamp(statusBarHeight, double.infinity);
     final currentY = _floatingPosition?.dy ?? (statusBarHeight + 56);
     setState(() {
@@ -101,15 +91,15 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
 
   /// 获取悬浮窗在屏幕中的矩形区域，用于判断点击是否在外部。
   Rect _currentRect(Size screenSize, double statusBarHeight, double bottomInset) {
-    final width = _expanded ? _actualWidth : _scaledIconSize;
-    final height = _expanded ? _scaledHeight : _scaledIconSize;
+    final width = _expanded ? _actualWidth : _iconSize;
+    final height = _expanded ? _height : _iconSize;
     final maxTop = (screenSize.height - height - bottomInset - 80)
         .clamp(statusBarHeight, double.infinity);
     final maxLeft = (screenSize.width - width).clamp(0.0, double.infinity);
     final left = _expanded
         ? (_floatingPosition?.dx ?? (screenSize.width - width))
             .clamp(0.0, maxLeft)
-        : (_attachedRight ? screenSize.width - _scaledIconSize : 0.0);
+        : (_attachedRight ? screenSize.width - _iconSize : 0.0);
     final top = _expanded
         ? (_floatingPosition?.dy ?? (statusBarHeight + 56))
             .clamp(statusBarHeight, maxTop)
@@ -142,7 +132,7 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
             ? (screenSize.width - width).clamp(0.0, double.infinity)
             : 0.0;
         // 沿用吸附态记录的 Y，避免拖拽瞬间跳到顶部固定高度
-        final maxTop = (screenSize.height - _scaledHeight - bottomInset - 80)
+        final maxTop = (screenSize.height - _height - bottomInset - 80)
             .clamp(statusBarHeight, double.infinity);
         final initialTop = _resolveAttachedTop(statusBarHeight, maxTop);
         setState(() {
@@ -153,7 +143,7 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
     }
     // 拖拽中：实时更新位置
     if (_isDragging) {
-      final maxTop = (screenSize.height - _scaledHeight - bottomInset - 80)
+      final maxTop = (screenSize.height - _height - bottomInset - 80)
           .clamp(statusBarHeight, double.infinity);
       final maxLeft = (screenSize.width - width).clamp(0.0, double.infinity);
       setState(() {
@@ -186,12 +176,12 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
       final statusBarHeight = MediaQuery.of(context).padding.top;
       final bottomInset = MediaQuery.of(context).padding.bottom;
       // 展开时位置基于实际宽度计算（首次展开用 _maxExpandedWidth 估算）
-      final width = _actualWidth > _scaledIconSize ? _actualWidth : _scaledMaxWidth;
+      final width = _actualWidth > _iconSize ? _actualWidth : _maxExpandedWidth;
       final initialLeft = _attachedRight
           ? (screenWidth - width).clamp(0.0, double.infinity)
           : 0.0;
       // 就近展开：Y 沿用吸附态记录的位置，而不是跳到顶部固定高度
-      final maxTop = (screenSize.height - _scaledHeight - bottomInset - 80)
+      final maxTop = (screenSize.height - _height - bottomInset - 80)
           .clamp(statusBarHeight, double.infinity);
       final initialTop = _resolveAttachedTop(statusBarHeight, maxTop);
       setState(() {
@@ -204,7 +194,7 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_expanded || _isDragging) return;
         final actualWidth = _actualWidth;
-        if (actualWidth <= _scaledIconSize) return; // 宽度尚未更新，跳过
+        if (actualWidth <= _iconSize) return; // 宽度尚未更新，跳过
         final correctedLeft = _attachedRight
             ? (screenWidth - actualWidth).clamp(0.0, double.infinity)
             : 0.0;
@@ -220,8 +210,6 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    // 「调整全局界面大小」的缩放因子：容器尺寸与位置计算都按它换算
-    _uiScale = context.scaledSize(1.0);
     // Selector 只监听必要字段，避免 position 每 2 秒更新触发重建
     return Selector<DlnaProvider,
         ({bool isCasting, bool isPlaying, String? castTitle, String? deviceName})>(
@@ -288,7 +276,7 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
     double statusBarHeight,
     double bottomInset,
   ) {
-    final maxTop = (screenSize.height - _scaledHeight - bottomInset - 80)
+    final maxTop = (screenSize.height - _height - bottomInset - 80)
         .clamp(statusBarHeight, double.infinity);
 
     // 计算位置：用实际渲染宽度做边界约束，避免内容比 _maxExpandedWidth 窄时
@@ -304,7 +292,7 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
       top = (_floatingPosition?.dy ?? (statusBarHeight + 56))
           .clamp(statusBarHeight, maxTop);
     } else {
-      left = _attachedRight ? screenSize.width - _scaledIconSize : 0.0;
+      left = _attachedRight ? screenSize.width - _iconSize : 0.0;
       // 沿用记忆的 Y 位置，使吸附态可在不同高度停留
       top = _resolveAttachedTop(statusBarHeight, maxTop);
     }
@@ -333,16 +321,16 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
     ThemeData theme,
   ) {
     return Container(
-      width: _scaledIconSize,
-      height: _scaledIconSize,
+      width: _iconSize,
+      height: _iconSize,
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer,
         borderRadius: _attachedRight
             ? BorderRadius.horizontal(
-                left: Radius.circular(_scaledIconSize / 2),
+                left: Radius.circular(_iconSize / 2),
               )
             : BorderRadius.horizontal(
-                right: Radius.circular(_scaledIconSize / 2),
+                right: Radius.circular(_iconSize / 2),
               ),
         boxShadow: [
           BoxShadow(
@@ -366,14 +354,13 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
     ThemeData theme,
   ) {
     return Container(
-      // 内边距与圆角随图标一起缩放
       padding: EdgeInsets.symmetric(
-        horizontal: 12 * _uiScale,
-        vertical: 8 * _uiScale,
+        horizontal: 12,
+        vertical: 8,
       ),
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(24 * _uiScale),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -393,7 +380,7 @@ class _DlnaCastingOverlayState extends State<DlnaCastingOverlay> {
           const SizedBox(width: 8),
           // 自适应宽度：文本短则窄，长则截断，最大不超过 _maxExpandedWidth - icon - padding
           ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: _scaledMaxWidth - 60 * _uiScale),
+            constraints: BoxConstraints(maxWidth: _maxExpandedWidth - 60),
             child: Text(
               state.castTitle ?? '正在投屏播放中',
               maxLines: 1,

@@ -371,7 +371,6 @@ class LyricsViewState extends State<LyricsView> {
     final otherFontSize = (fontSize - 3).clamp(10.0, fontSize);
     final fontFamily = prefs.effectiveFontFamily;
 
-    // 排除全局 UI 缩放，歌词保持原始大小
     Widget content;
     if (_parsedLyrics.isEmpty) {
       content = Center(
@@ -454,6 +453,10 @@ class LyricsViewState extends State<LyricsView> {
       );
     }
 
+    // 歌词整页豁免系统字号：字号由用户在歌词偏好里单独设置
+    // （[Md3LyricPreferences.fontSize]），且 _ensureLayout 已按该字号预算过
+    // 行高缓存，再叠系统字号会让实测行高与实际绘制脱节。
+    // 「显示大小」不在此列 —— 它整页等比变化，不会破坏页内比例。
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
       child: content,
