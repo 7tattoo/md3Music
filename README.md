@@ -36,7 +36,7 @@
 - **私人 FM** - 猜你喜欢，无限畅听，支持红心/小众/速览模式
 - **AI 歌曲推荐** - 根据当前播放歌曲一键获取相似推荐，长按歌曲即可触发，随时发现新歌
 - **歌手详情** - 歌手歌曲浏览，支持搜索/定位/排序，关注/取消关注歌手
-- **歌曲评论** - 歌单/专辑/歌曲评论查看，热门评论置顶 + 楼中楼展开，支持分页加载与评论字号调节
+- **歌曲评论** - 歌单/专辑/歌曲评论查看，评论区支持按热度排序、楼中楼展开，支持分页加载与评论字号调节
 - **MV 播放** - 在线 MV 播放，支持一键投屏到 DLNA 设备、画中画
 - **相似歌单** - 歌单页面一键获取相似歌单推荐
 - **云盘音乐** - 登录后浏览/搜索/播放/上传云盘歌曲，支持批量上传与内嵌封面展示
@@ -83,6 +83,7 @@
 - **播放列表面板** - AM 风格队列面板，长按拖拽重排、右滑删除
 - **后台播放** - Android 通知栏控制与状态栏播放
 - **音频焦点** - 来电/拔耳机等场景自动暂停与恢复
+- **快捷回桌面** - 双击返回键回到手机桌面挂后台，不杀播放器与本地服务器，快速恢复
 
 ### 📱 用户中心
 - **VIP 双签到** - 自动领取畅听 VIP + 升级概念版 VIP，签到日历可视化（进度环 + 徽章），支持二次安全验证码
@@ -100,7 +101,9 @@
 - **iOS 分组卡片风格** - 一级页面统一中性背景 + 圆角分组卡片，浅深色自动适配
 - **主题色** - 预设种子色面板 + 自定义取色 + 莫奈色（Android 12+）
 - **封面动态取色** - 跟随当前歌曲封面自动调整全局主题色（可叠加系统主题色）
-- **全局背景图** - 自定义全局背景图片（模糊/透明度/莫奈取色可调）
+- **全局背景图** - 自定义全局背景图片（模糊/透明度/莫奈取色可调），歌单/歌手/专辑等详情页联动透明透出
+- **文字阴影** - 背景图下改善可读性的全局文字阴影，阴影磅数可调（默认关闭）
+- **全局界面缩放** - 一键调整整个应用界面大小，封面/头像/图标等非文字元素同步缩放
 - **深色模式** - 浅色/深色/跟随系统/OLED 纯黑
 - **设备模式** - 自动/手机/平板手动切换
 - **封面流** - CoverFlow 3D 封面流浏览，横屏沉浸模式
@@ -306,6 +309,7 @@ md3Music/
 │   │   ├── audiobook/          # 听书
 │   │   ├── scene/              # 场景音乐
 │   │   ├── channel/            # 频道
+│   │   ├── brush/              # 刷刷（竖屏视频流）
 │   │   ├── user/               # 用户中心（签到/收藏/历史/听歌排行）
 │   │   ├── library/            # 音乐库（本地音乐/云盘）
 │   │   ├── settings/           # 设置（含均衡器）
@@ -313,7 +317,7 @@ md3Music/
 │   │   ├── onboarding/         # 新手引导
 │   │   └── recognition/        # 听歌识曲
 │   ├── providers/              # 状态管理
-│   ├── services/               # API 服务（元数据写入管理）
+│   ├── services/               # 服务层（本地 API 客户端 / 服务器启动）
 │   └── widgets/                # 公共组件
 │       └── apple_lyrics/       # Apple Music 风格歌词
 ├── kugou_api_server/           # 嵌入式 Rust API 服务器
@@ -329,7 +333,7 @@ md3Music/
 │   │   ├── build_android.sh    # 一键交叉编译脚本
 │   │   └── Cargo.toml
 │   └── module/                 # 旧 JS 模块（已废弃，仅供参考）
-── img/                        # 界面预览截图（README 用）
+├── img/                        # 界面预览截图（README 用）
 │   ├── phone/                  # 手机：md3 / applemusic / other
 │   └── pad/                    # 平板：md3 / applemusic / other
 ├── assets/                     # 资源文件
@@ -337,7 +341,8 @@ md3Music/
 │   └── fonts/                  # 字体文件
 ├── android/                    # Android 平台配置
 │   └── app/src/main/
-│       ├── kotlin/.../        # KugouApiService（启动本地服务器）
+│       ├── cpp/                # USB 独占输出 C++ 驱动（CMake）
+│       ├── kotlin/.../        # KugouApiService（启动本地服务器）/ MainActivity
 │       └── jniLibs/           # libkugou_server.so（四个架构）
 └── pubspec.yaml                # Flutter 配置
 ```
@@ -350,6 +355,7 @@ md3Music/
 |------|------|
 | **UI 框架** | Flutter 3.12+ |
 | **状态管理** | Provider |
+| **动效** | m3e_core（M3 Expressive Motion） |
 | **音频播放** | just_audio + just_audio_background |
 | **音频焦点** | audio_session |
 | **网络请求** | Dio |
@@ -357,12 +363,16 @@ md3Music/
 | **图片缓存** | cached_network_image |
 | **嵌入式服务器** | Rust（tiny_http + ureq） |
 | **加密** | rsa / aes / md-5 / sha1 / sha2 |
-| **元数据写入** | JAudioTagger (MP3/FLAC/M4A) |
+| **元数据读取/写入** | audio_metadata_reader + JAudioTagger (MP3/FLAC/M4A) |
 | **DLNA 投屏** | dlna_dart |
 | **MV 播放** | video_player + chewie |
-| **USB 独占输出** | 原生 JNI + C++（usbdevfs） |
-| **取色** | palette_generator + dynamic_color |
+| **USB 独占输出** | 原生 JNI + CMake C++（usbdevfs） |
+| **取色** | palette_generator + dynamic_color + material_color_utilities |
 | **桌面歌词** | Lyricon Provider |
+| **听歌识曲** | record（录音）+ Rust PCM 预处理 |
+| **原生通知** | fluttertoast（Toast） |
+| **文件/权限** | permission_handler + path_provider |
+| **桌面快捷方式** | quick_actions |
 | **音频均衡器** | just_audio 平台均衡器 |
 | **音乐源** | 酷狗音乐 API |
 
@@ -447,6 +457,9 @@ cargo test          # 本地测试（不依赖外网）
 感谢以下项目的支持：
 
 - [EchoMusic](https://github.com/hoowhoami/EchoMusic) - UI 设计和架构参考
+- [apple-music-like-lyrics](https://github.com/amll-dev/applemusic-like-lyrics) - Apple Music 风格逐字歌词渲染参考
+- [Reorderable](https://github.com/Calvin-LL/Reorderable) - 播放列表面板长按拖拽排序
+- [MaterialKolor](https://github.com/jordond/MaterialKolor) - 莫奈取色 / Material Design 3 动态配色
 - [KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi) - API 代理服务
 - [tiny_http](https://github.com/tiny-http/tiny-http) - Rust HTTP 服务器
 - [ureq](https://github.com/algesten/ureq) - Rust HTTP 客户端
