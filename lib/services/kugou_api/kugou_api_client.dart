@@ -2692,7 +2692,9 @@ class KugouApiClient {
   }
 
   Future<KugouUserVipDetail?> getUserVipDetail() async {
-    final json = await _get(KugouEndpoints.userVipDetail);
+    // noCache=true：VIP 到期时间等是账号隔离且需实时展示的数据，
+    // 避免 Rust apicache 命中上一账号（切换账号后不更新）的旧缓存。
+    final json = await _get(KugouEndpoints.userVipDetail, noCache: true);
     if (json == null) return null;
     try {
       return KugouUserVipDetail.fromJson(json);

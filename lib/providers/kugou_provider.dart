@@ -1208,6 +1208,11 @@ class KugouProvider extends ChangeNotifier {
         return SwitchAccountResult.tokenExpired;
       }
       await _fetchUserInfo();
+      // 会员到期时间与签到日历按账号隔离：切换后必须立即重载新账号的数据，
+      // 否则「我的」页面会员卡片仍显示上一账号的信息（且 _vipInfo 已被清空）。
+      await getVipDetail();
+      await getGradeInfo();
+      await _loadLocalSignedDays();
     }
 
     print('✅ [Account] 已切换到账号: $userid');
