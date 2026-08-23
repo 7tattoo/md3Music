@@ -185,6 +185,27 @@ class AudioService {
     } catch (_) {}
   }
 
+  /// 切换「忽略音频焦点」开关并立即使生效。
+  ///
+  /// 仅切换 [ignoreAudioFocus] 不足以即时生效：本应用通过
+  /// `setActive(true, androidWillPauseWhenDucked: true)` 申请焦点并声明
+  /// 「被压低时由 App 自处理」后，系统在其它应用抢占焦点时不再向本应用派发
+  /// 中断事件，listener 自然收不到、也无法按新开关值处理，需重启/重新激活才接管。
+  /// 这里在字段切换后重新激活会话（先释放、再以新策略申请），让系统立刻按
+  /// 当前开关重新评估中断派发，从而无需杀 App 即可换档。
+  /// [playing] 表示当前是否有播放，用于关闭开关时若处于「忽略」状态把
+  /// 已暂停标记复位，避免焦点回来时误恢复。
+  Future<void> setIgnoreAudioFocus(bool value) async {
+    ignoreAudioFocus = value;
+    try {
+      final session = await AudioSession.instance;
+      // 先置为不活跃，释放当前焦点，再以同样的激活参数重新申请，
+      // 促使系统重新评估本应用的中断处理策略。
+      await session.setActive(false);
+      await session.setActive(true, androidWillPauseWhenDucked: true);
+    } catch (_) {}
+  }
+
   /// 焦点恢复时尝试自动恢复播放。
   ///
   /// 仅当：

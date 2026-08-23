@@ -282,11 +282,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// 设置「忽略音频焦点」开关：持久化 + 即时同步到播放器中断处理。
+  /// 通过 AudioService 的重激活让系统立即按新开关评估中断派发，无需重启。
   Future<void> setIgnoreAudioFocus(bool value) async {
     try {
       await SettingsRepository().setIgnoreAudioFocus(value);
       // ignore: avoid_dynamic_calls
-      _audioService?.ignoreAudioFocus = value;
+      await _audioService?.setIgnoreAudioFocus(value);
     } catch (_) {}
   }
 
