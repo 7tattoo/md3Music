@@ -809,8 +809,8 @@ class _SettingsPageState extends State<SettingsPage>
         ),
         // 锁屏歌词（独立开关）：锁屏时全屏显示逐字歌词
         SwitchListTile(
-          title: const Text('锁屏歌词'),
-          subtitle: const Text('锁屏时全屏显示逐字歌词（熄灭屏幕后点亮，覆盖在系统锁屏上方；解锁自动关闭）'),
+          title: const Text('锁屏歌词试验线功能'),
+          subtitle: const Text('锁屏时全屏显示逐字歌词（熄灭屏幕后点亮，覆盖在系统锁屏上方；解锁自动关闭；需要在权限管理同时开启锁屏通知和后台弹出界面以及显示悬浮窗权限才能显示）'),
           value: _lockScreenLyricEnabled,
           onChanged: (value) async {
             HapticFeedback.lightImpact();

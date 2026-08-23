@@ -1124,6 +1124,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         LyriconProviderService.instance.seekTo(position.inMilliseconds);
       } catch (_) {}
     }
+    // seek 后立即同步通知/小组件进度（频率天然低），并重置节流时间戳，
+    // 使新位置立即反映到媒体通知进度条。
+    _lastNotificationUpdate = null;
+    _updateNotification();
   }
 
   Future<bool> _resolveAndPlayCurrentSong({Duration? seekTo, bool play = true}) async {
@@ -1847,8 +1851,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // playingStream(false) 触发过最终状态通知，之后无需再更新。
     if (!_isPlaying) return;
     final now = DateTime.now();
+    // P0: 播放中通知刷新降到 30s 一次（原 1s/次）。
+    // 原因：PlaybackStateCompat 传入 STATE_PLAYING + position 后，系统会基于
+    // elapsed 时间自动推进通知进度条，无需每秒上报。原每秒 enqueue 重建通知
+    // 会触发 SystemUI 高频刷新媒体卡片（魅族等 ROM 实测极度卡顿）。
+    // 30s 一次仅作基线校正；切歌/暂停/seek 时由对应事件单独触发更新。
     if (_lastNotificationUpdate != null &&
-        now.difference(_lastNotificationUpdate!).inSeconds < 1) {
+        now.difference(_lastNotificationUpdate!).inSeconds < 30) {
       return;
     }
     _lastNotificationUpdate = now;
