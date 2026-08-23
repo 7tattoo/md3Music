@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
 import '../../core/layout/responsive_layout.dart';
+import '../../core/utils/ui_scale.dart';
 import '../../data/models/album.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/song.dart';
@@ -185,6 +186,7 @@ class _HomePageState extends State<HomePage> {
 
     if (avatarUrl == null || avatarUrl.isEmpty) {
       return CircleAvatar(
+        radius: context.scaledSize(20),
         backgroundColor: colorScheme.primaryContainer,
         child: Icon(
           isLoggedIn ? Icons.person : Icons.person_outline,
@@ -194,15 +196,16 @@ class _HomePageState extends State<HomePage> {
     }
 
     return CircleAvatar(
+      radius: context.scaledSize(20),
       backgroundColor: colorScheme.primaryContainer,
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: avatarUrl,
-          memCacheWidth: 120,
-          memCacheHeight: 120,
+          memCacheWidth: context.scaledCache(120),
+          memCacheHeight: context.scaledCache(120),
           cacheKey: 'avatar_$userId',
-          width: 40,
-          height: 40,
+          width: context.scaledSize(40),
+          height: context.scaledSize(40),
           fit: BoxFit.cover,
           placeholder: (context, url) => Icon(
             isLoggedIn ? Icons.person : Icons.person_outline,
@@ -261,7 +264,8 @@ class _HomePageState extends State<HomePage> {
       return _buildEmptySection('暂无数据');
     }
     return SizedBox(
-      height: 200,
+      // 区块高度随封面一起缩放，否则放大后的卡片会溢出
+      height: context.scaledSize(200),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -291,7 +295,8 @@ class _HomePageState extends State<HomePage> {
       return _buildEmptySection('暂无数据');
     }
     return SizedBox(
-      height: 200,
+      // 区块高度随封面一起缩放，否则放大后的卡片会溢出
+      height: context.scaledSize(200),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -301,7 +306,7 @@ class _HomePageState extends State<HomePage> {
           return Padding(
             padding: const EdgeInsets.only(right: 12),
             child: SizedBox(
-              width: 150,
+              width: context.scaledSize(150),
               child: AlbumCard(
                 album: album,
                 onTap: () {
@@ -451,7 +456,7 @@ class _PlaylistHorizontalCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 12),
       child: SizedBox(
-        width: 150,
+        width: context.scaledSize(150),
         child: Material(
           color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
@@ -464,8 +469,8 @@ class _PlaylistHorizontalCard extends StatelessWidget {
                   child: artworkUri != null
                       ? CachedNetworkImage(
                           imageUrl: artworkUri!,
-                          memCacheWidth: 480,
-                          memCacheHeight: 480,
+                          memCacheWidth: context.scaledCache(480),
+                          memCacheHeight: context.scaledCache(480),
                           fit: BoxFit.cover,
                           width: double.infinity,
                           placeholder: (_, _) => Container(

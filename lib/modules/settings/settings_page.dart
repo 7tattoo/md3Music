@@ -1261,7 +1261,7 @@ class _SettingsPageState extends State<SettingsPage>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            '调整全局界面大小（歌词界面不受影响）',
+            '调整全局界面大小，含专辑封面与头像（歌词界面不受影响）',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
