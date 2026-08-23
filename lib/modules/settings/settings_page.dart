@@ -2430,18 +2430,20 @@ class _SettingsPageState extends State<SettingsPage>
           },
         ),
         // 开发者入口：Miuix（MIUI 风格组件库）发现页移植测试页（原生 Kotlin + Compose）
-        ListTile(
-          title: const Text('Miuix 发现页测试（开发）'),
-          subtitle: const Text('MIUI 风格重新排版的发现页信息呈现'),
-          leading: const Icon(Icons.explore_outlined),
-          onTap: _openMiuixDiscover,
-        ),
+        // 已隐藏：仅保留入口数据与跳转方法，可在需要时取消注释恢复
+        // ListTile(
+        //   title: const Text('Miuix 发现页测试（开发）'),
+        //   subtitle: const Text('MIUI 风格重新排版的发现页信息呈现'),
+        //   leading: const Icon(Icons.explore_outlined),
+        //   onTap: _openMiuixDiscover,
+        // ),
       ],
     );
   }
 
   /// 打开原生 Miuix 发现页测试：通过 MethodChannel 启动 MiuixDiscoverActivity，
   /// 并把本地 Rust API 服务器当前端口传过去（原生页据此直连取数）。
+  // ignore: unused_element
   Future<void> _openMiuixDiscover() async {
     const channel = MethodChannel('com.md3music.md3music/miuix_discover');
     try {
