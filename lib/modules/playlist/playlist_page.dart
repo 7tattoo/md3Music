@@ -956,7 +956,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
                               onPressed: _scrollToPlayingSong,
                               tooltip: '定位正在播放',
                             ),
-                          if (_songs.isNotEmpty)
+                          // 专辑详情（isAlbum）不展示相似歌单
+                          if (_songs.isNotEmpty && !widget.isAlbum)
                             IconButton(
                               icon: const Icon(Icons.auto_awesome),
                               onPressed: () =>
