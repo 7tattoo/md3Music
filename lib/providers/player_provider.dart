@@ -229,6 +229,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _audioService.init();
       _initStreams();
       await _loadDefaultQuality();
+      await _syncIgnoreAudioFocus();
       // 恢复持久化的应用内音量（重启后保留）
       await _restoreVolume();
       // 恢复上次播放状态
@@ -269,6 +270,24 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       notifyListeners();
     } catch (e) {}
+  }
+
+  /// 把「忽略音频焦点」设置同步到 AudioService，使播放器中断处理即时生效。
+  Future<void> _syncIgnoreAudioFocus() async {
+    try {
+      final ignore = await SettingsRepository().getIgnoreAudioFocus();
+      // ignore: avoid_dynamic_calls
+      _audioService?.ignoreAudioFocus = ignore;
+    } catch (_) {}
+  }
+
+  /// 设置「忽略音频焦点」开关：持久化 + 即时同步到播放器中断处理。
+  Future<void> setIgnoreAudioFocus(bool value) async {
+    try {
+      await SettingsRepository().setIgnoreAudioFocus(value);
+      // ignore: avoid_dynamic_calls
+      _audioService?.ignoreAudioFocus = value;
+    } catch (_) {}
   }
 
   Future<dynamic> _loadAudioService() async {

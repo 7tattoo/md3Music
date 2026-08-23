@@ -436,6 +436,21 @@ class SettingsRepository {
     await prefs.setBool(_keyKeepScreenOn, value);
   }
 
+  // ===== 忽略音频焦点（允许与其他应用同时播放音频） =====
+  static const String _keyIgnoreAudioFocus = 'settings_ignore_audio_focus';
+
+  /// 是否忽略音频焦点：开启后不响应其它应用（短视频/播放器等）的音频焦点
+  /// 请求，本应用持续播放、音量不变，与其它应用声音共存。默认 true。
+  Future<bool> getIgnoreAudioFocus() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyIgnoreAudioFocus) ?? true;
+  }
+
+  Future<void> setIgnoreAudioFocus(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyIgnoreAudioFocus, value);
+  }
+
   // ===== 音乐频谱环绕显示 =====
   static const String _keySpectrumEnabled = 'settings_spectrum_enabled';
   static const String _keySpectrumBandCount = 'settings_spectrum_band_count';

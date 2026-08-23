@@ -71,6 +71,11 @@ class AudioService {
   /// just_audio 0.9.x 在播放器初始化后才会有值。
   int? get androidAudioSessionId => _player.androidAudioSessionId;
 
+  /// 「忽略音频焦点」开关：开启后不响应任何音频焦点中断，与本应用音乐
+  /// 同时播放的其他媒体（短视频/其他播放器/语音）都不断开、不停顿本应用，
+  /// 声音叠加共存。默认由上层按用户设置写入。
+  bool ignoreAudioFocus = false;
+
   /// 是否因为音频焦点丢失 / 设备中断（拔耳机、来电等）而处于暂停状态。
   /// 在此状态下若重新获得音频焦点，可自动恢复播放。
   /// 主动调用 [pause] 不会设置此标志。
@@ -118,6 +123,10 @@ class AudioService {
       await session.configure(const AudioSessionConfiguration.music());
       _interruptionSub = session.interruptionEventStream.listen((event) {
         if (event.begin) {
+          // 忽略音频焦点：任何中断开端一律忽略，保持本应用持续播放、
+          // 音量不变，与其他媒体（短视频/播放器/语音）声音共存。
+          // 注意：开启后来电等系统强中断也会与本应用声音叠加。
+          if (ignoreAudioFocus) return;
           _pendingResumeOnReady = false;
           switch (event.type) {
             case AudioInterruptionType.duck:
@@ -144,7 +153,9 @@ class AudioService {
       });
       // 拔耳机 / 蓝牙断开：通常伴随系统焦点变更，但 just_audio 也会收到
       // becomingNoisyEvent。统一标记为「中断暂停」以便外层恢复逻辑复用。
+      // 忽略音频焦点开启时同样放行：拔线不断开本应用播放。
       _noisySub = session.becomingNoisyEventStream.listen((_) {
+        if (ignoreAudioFocus) return;
         if (_player.playing) {
           _pausedByInterruption = true;
           pause();

@@ -102,6 +102,8 @@ class _SettingsPageState extends State<SettingsPage>
   bool _pauseFadeEnabled = false;
   // 播放时保持屏幕常亮开关
   bool _keepScreenOn = false;
+  // 忽略音频焦点开关（默认开启：允许与其他应用同时播放音频）
+  bool _ignoreAudioFocus = true;
   // MiniPlayer 滑动切歌开关（默认开启）
   bool _miniPlayerSwipeSwitch = true;
   // 收藏歌单按「最近点击」排序（默认开启）
@@ -280,6 +282,7 @@ class _SettingsPageState extends State<SettingsPage>
         .getLockScreenLyricFontWeight();
     final pauseFadeEnabled = await _settingsRepository.getPauseFadeEnabled();
     final keepScreenOn = await _settingsRepository.getKeepScreenOn();
+    final ignoreAudioFocus = await _settingsRepository.getIgnoreAudioFocus();
     final spectrumEnabled = await _settingsRepository.getSpectrumEnabled();
     final spectrumBandCount = await _settingsRepository.getSpectrumBandCount();
     final spectrumStyle = await _settingsRepository.getSpectrumStyle();
@@ -323,6 +326,7 @@ class _SettingsPageState extends State<SettingsPage>
       _lockScreenLyricFontWeight = lockScreenLyricFontWeight;
       _pauseFadeEnabled = pauseFadeEnabled;
       _keepScreenOn = keepScreenOn;
+      _ignoreAudioFocus = ignoreAudioFocus;
       _spectrumEnabled = spectrumEnabled;
       _spectrumBandCount = spectrumBandCount;
       _spectrumStyle = spectrumStyle;
@@ -542,6 +546,7 @@ class _SettingsPageState extends State<SettingsPage>
     (label: '自动领取 VIP', category: '播放', aliases: 'vip 会员 自动领取'),
     (label: '暂停淡入淡出', category: '播放', aliases: '淡入淡出 渐变 音量'),
     (label: '播放时保持屏幕常亮', category: '播放', aliases: '屏幕常亮 常亮 息屏'),
+    (label: '允许与其他应用同时播放音频', category: '播放', aliases: '音频焦点 忽略焦点 同时播放 共存 不被打断 焦点'),
     (label: '播放 MV 时自动画中画', category: '播放', aliases: '画中画 pip 悬浮'),
     (label: 'MiniPlayer 滑动切歌', category: '播放', aliases: 'miniplaer 迷你播放条 滑动切歌 切歌'),
     (label: '收藏歌单按最近点击排序', category: '播放', aliases: '收藏 歌单 排序 最近点击 顺序'),
@@ -2111,6 +2116,19 @@ class _SettingsPageState extends State<SettingsPage>
             });
             _settingsRepository.setKeepScreenOn(value);
             WakelockService.instance.setSettingEnabled(value);
+          },
+        ),
+        SwitchListTile(
+          title: const Text('允许与其他应用同时播放音频'),
+          subtitle: const Text('忽略音频焦点请求，打开其他 App 时音乐不被打断',
+              maxLines: 2, overflow: TextOverflow.ellipsis),
+          value: _ignoreAudioFocus,
+          onChanged: (value) {
+            HapticFeedback.lightImpact();
+            setState(() {
+              _ignoreAudioFocus = value;
+            });
+            context.read<PlayerProvider>().setIgnoreAudioFocus(value);
           },
         ),
         // MV 画中画：按 Home 自动进入（手动按钮始终可用）
