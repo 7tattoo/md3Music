@@ -904,10 +904,11 @@ class _UserCenterPageState extends State<UserCenterPage> {
   /// 签到日历展示位：仅做视觉提示，点击由整张会员卡片统一处理。
   Widget _buildCalendarEntry(ColorScheme cs, TextTheme tt) {
     return Container(
-      width: 76,
+      // 宽度与圆角随图标/文字一起缩放
+      width: context.scaledSize(76),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(context.scaledSize(12)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1031,8 +1032,9 @@ class _UserCenterPageState extends State<UserCenterPage> {
       child: Column(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            // 圆形底随图标一起缩放
+            width: context.scaledSize(48),
+            height: context.scaledSize(48),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: cs.surfaceContainerHighest,

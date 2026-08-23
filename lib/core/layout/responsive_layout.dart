@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/ui_scale.dart';
+
 enum ScreenType { compact, medium, expanded }
 
 const double _compactBreakpoint = 600;
@@ -196,7 +198,8 @@ class CompactNavigationRail extends StatelessWidget {
         right: false,
         bottom: false,
         child: SizedBox(
-          width: 34,
+          // 栏宽随「调整全局界面大小」缩放：图标容器同比放大后 34 装不下
+          width: context.scaledSize(34),
           child: Column(
             children: [
               if (leading != null) ...[leading!, const SizedBox(height: 8)],
@@ -259,13 +262,14 @@ class _CompactRailDestination extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(17),
+      borderRadius: BorderRadius.circular(context.scaledSize(17)),
       child: Padding(
         // 上下各 3 → 相邻图标间距 6dp（M3 默认 12dp 的一半）
-        padding: const EdgeInsets.symmetric(vertical: 3),
+        padding: EdgeInsets.symmetric(vertical: context.scaledSize(3)),
         child: Container(
-          width: 28,
-          height: 28,
+          // 指示器容器随图标一起缩放，否则放大后的图标会溢出胶囊底色
+          width: context.scaledSize(28),
+          height: context.scaledSize(28),
           alignment: Alignment.center,
           decoration: selected
               ? ShapeDecoration(

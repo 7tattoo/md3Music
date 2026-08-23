@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/utils/ui_scale.dart';
+
 /// 播放器更多菜单中的宫格动作单元：上方 icon、下方文字。
 /// 用于将均衡器 / 定时关闭 / 投屏 等横向排列在同一行（MD3E 容器分组）。
 class MenuActionCell extends StatelessWidget {
@@ -30,15 +32,16 @@ class MenuActionCell extends StatelessWidget {
     final color = active ? colorScheme.primary : colorScheme.onSurfaceVariant;
     return Expanded(
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        // 圆角与内边距随图标一起缩放
+        borderRadius: BorderRadius.circular(context.scaledSize(12)),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: EdgeInsets.symmetric(vertical: context.scaledSize(6)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 26, color: color),
-              const SizedBox(height: 4),
+              SizedBox(height: context.scaledSize(4)),
               Text(
                 label,
                 style: textTheme.labelMedium?.copyWith(color: color),

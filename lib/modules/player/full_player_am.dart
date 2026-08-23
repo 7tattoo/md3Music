@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui';
@@ -154,14 +153,34 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   /// 引发无效的 applyImmersiveForOrientation 调用导致系统栏闪烁。
   Size? _lastPhysicalSize;
 
-  // ── Zen Mode：长按播放列表按钮进入沉浸模式 ──
+  // ── Zen Mode：长按专辑封面进入/退出沉浸模式 ──
   bool _zenMode = false;
   late final AnimationController _zenController;
   late final Animation<double> _zenAnimation;
 
-  // ── Zen 长按专辑图片退出 ──
-  Timer? _zenLongPressTimer;
-  bool _zenLongPressActive = false;
+  // ── Zen 长按专辑封面（进入 / 退出）──
+  /// 长按封面切换 Zen 模式所需时长（进入与退出一致）。
+  static const Duration _zenPressDuration = Duration(milliseconds: 2000);
+
+  /// 提示层开始淡入的进度点（≈500ms，与系统长按识别时机对齐）。
+  static const double _zenHintStart = 0.25;
+
+  /// 判定为滑动手势（切 tab / 拖拽）而取消长按的指针位移阈值（px）。
+  static const double _zenPressSlop = 18.0;
+
+  /// 按压进度 0→1：驱动封面内缩、提示层淡入与进度环；跑满即切换 Zen 模式。
+  late final AnimationController _zenPressController;
+
+  /// 提示层淡入时的轻震是否已触发（每次长按只震一次）。
+  bool _zenHintHapticFired = false;
+
+  /// 本次按压是否已进入长按引导阶段：松手不再当作点击（否则封面 tab 的
+  /// onTap 会把长按当点击、跳到歌词页）。Listener 不参与手势竞技场，
+  /// 只能由封面 tab 的 onTap 主动放弃这一次点击。
+  bool _zenPressConsumedTap = false;
+
+  /// 按下时的指针全局位置；null 表示当前没有长按在进行。
+  Offset? _zenPressOrigin;
 
   // 进度条拖动状态：记录拖动前是否正在播放，拖动结束后恢复
   bool _wasPlayingBeforeDrag = false;
@@ -227,6 +246,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
       parent: _zenController,
       curve: Curves.easeInOut,
     );
+    _zenPressController = AnimationController(
+      duration: _zenPressDuration,
+      reverseDuration: const Duration(milliseconds: 220),
+      vsync: this,
+    )..addListener(_onZenPressProgress);
     // 记录初始物理尺寸，避免首次 didChangeMetrics 因 _lastPhysicalSize==null 误判方向变化
     _lastPhysicalSize =
         WidgetsBinding.instance.platformDispatcher.views.first.physicalSize;
@@ -467,7 +491,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
   void dispose() {
     // 未完成展开就收起时，移除拖拽展开的监听（未切换系统栏，无需恢复）
     _dragRoute?.controller.removeStatusListener(_onDragRouteStatus);
-    _zenLongPressTimer?.cancel();
+    _zenPressController.dispose();
     try {
       context.read<PlayerProvider>().removeListener(_onPlayerSongChanged);
     } catch (_) {}
@@ -511,57 +535,143 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     applyImmersiveForOrientation();
   }
 
-  /// Zen 模式下长按专辑图片 2000ms 退出，期间显示文字提示。
-  /// 通过 Listener 的 onPointerDown/Up 直接监听指针事件，
+  /// 长按专辑封面 [_zenPressDuration] 切换 Zen 模式（未进入则进入，已进入则退出）。
+  /// 通过 Listener 的 onPointerDown/Move/Up 直接跟踪指针，
   /// 精确实现 2000ms 长按（不依赖系统 500ms 长按识别延迟），
-  /// 同时不影响 TabBarView 水平滑动手势。
-  void _onArtworkLongPressStart() {
-    if (!_zenMode) return;
-    _zenLongPressActive = true;
-    // 轻震：提示用户已开始长按倒计时
-    HapticFeedback.lightImpact();
-    setState(() {}); // 触发文字提示显示
-    _zenLongPressTimer = Timer(const Duration(milliseconds: 2000), () {
-      if (_zenLongPressActive && _zenMode) {
-        _zenLongPressActive = false;
-        // 中震：确认长按达到 2000ms，Zen 模式退出
-        HapticFeedback.mediumImpact();
+  /// 同时不与 TabBarView 的水平滑动抢手势。
+  void _onArtworkPointerDown(PointerDownEvent event) {
+    _zenPressOrigin = event.position;
+    _zenHintHapticFired = false;
+    // 兜底复位：上一次的 tap 可能被竖直拖拽等手势抢走、没走到 onTap
+    _zenPressConsumedTap = false;
+    _zenPressController.forward(from: 0.0).then((_) {
+      // 中途松手/滑动取消时 TickerFuture 同样会完成，用进度判断是否真的按满
+      if (!mounted || _zenPressController.value < 1.0) return;
+      _zenPressOrigin = null;
+      // 中震：确认长按达到 2000ms，切换 Zen 模式
+      HapticFeedback.mediumImpact();
+      if (_zenMode) {
         _exitZenMode();
+      } else {
+        _enterZenMode();
       }
+      // 提示层与封面内缩随 Zen 转场一起回弹淡出
+      _zenPressController.reverse();
     });
   }
 
-  void _onArtworkLongPressEnd() {
-    _zenLongPressTimer?.cancel();
-    _zenLongPressTimer = null;
-    if (_zenLongPressActive) {
-      _zenLongPressActive = false;
-      setState(() {}); // 隐藏文字提示
+  /// 指针位移超过 [_zenPressSlop]：判定为滑动（切 tab / 拖拽），取消长按。
+  void _onArtworkPointerMove(PointerMoveEvent event) {
+    final origin = _zenPressOrigin;
+    if (origin == null) return;
+    if ((event.position - origin).distance > _zenPressSlop) {
+      _cancelArtworkPress();
     }
   }
 
-  /// Zen 模式长按退出提示层：覆盖在封面上，半透明黑色背景 + 文字提示。
-  /// 通过 AnimatedOpacity 淡入淡出（200ms），IgnorePointer 避免拦截指针事件。
-  Widget _buildZenLongPressHint() {
+  /// 松手 / 手势取消 / 判定为滑动：回弹按压动效并淡出提示层。
+  void _cancelArtworkPress() {
+    if (_zenPressOrigin == null) return;
+    _zenPressOrigin = null;
+    _zenHintHapticFired = false;
+    if (_zenPressController.value > 0.0) _zenPressController.reverse();
+  }
+
+  /// 按压进度回调：跨过 [_zenHintStart]（提示层开始淡入）时轻震一次，
+  /// 并标记这次按压已是长按语义、松手不再触发封面 tab 的点击跳转。
+  /// 封面内缩与提示层由 AnimatedBuilder 监听 controller 重建，此处只管震动。
+  void _onZenPressProgress() {
+    if (_zenHintHapticFired || _zenPressController.value < _zenHintStart) {
+      return;
+    }
+    _zenHintHapticFired = true;
+    _zenPressConsumedTap = true;
+    HapticFeedback.lightImpact();
+  }
+
+  /// 封面 tab 的 onTap 入口：本次按压已被 Zen 长按消费则放弃这次点击。
+  bool _consumeZenPressTap() {
+    if (!_zenPressConsumedTap) return false;
+    _zenPressConsumedTap = false;
+    return true;
+  }
+
+  /// 封面长按包装：指针监听 + 按压内缩动效 + Zen 长按引导提示层。
+  /// [child] 为原封面内容（含播放/暂停缩放动画）。
+  Widget _wrapArtworkZenPress({required Widget child}) {
+    return Listener(
+      onPointerDown: _onArtworkPointerDown,
+      onPointerMove: _onArtworkPointerMove,
+      onPointerUp: (_) => _cancelArtworkPress(),
+      onPointerCancel: (_) => _cancelArtworkPress(),
+      child: AnimatedBuilder(
+        animation: _zenPressController,
+        child: child,
+        builder: (context, artwork) {
+          final progress = _zenPressController.value;
+          // 按压时封面轻微内缩（1.0 → 0.94），松手回弹
+          final press = Curves.easeOut.transform(progress);
+          return Stack(
+            children: [
+              Transform.scale(scale: 1.0 - 0.06 * press, child: artwork),
+              _buildZenPressHint(progress),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Zen 长按引导提示层：覆盖在封面上，半透明黑底 + 进度环 + 图标 + 文案。
+  /// [progress] 为按压进度（0→1）：跨过 [_zenHintStart] 后淡入，
+  /// 进度环显示距切换还差多少。IgnorePointer 避免拦截指针事件。
+  Widget _buildZenPressHint(double progress) {
+    final opacity = ((progress - _zenHintStart) / 0.15).clamp(0.0, 1.0);
+    if (opacity == 0.0) return const SizedBox.shrink();
+    final ring = ((progress - _zenHintStart) / (1.0 - _zenHintStart)).clamp(
+      0.0,
+      1.0,
+    );
     return Positioned.fill(
       child: IgnorePointer(
-        child: AnimatedOpacity(
-          opacity: _zenLongPressActive ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
+        child: Opacity(
+          opacity: opacity,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Container(
               color: Colors.black.withValues(alpha: 0.6),
               alignment: Alignment.center,
-              child: const Column(
+              padding: const EdgeInsets.all(8),
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.exit_to_app, color: Colors.white, size: 32),
-                  SizedBox(height: 8),
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: ring,
+                          strokeWidth: 3,
+                          backgroundColor: Colors.white24,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                        Icon(
+                          _zenMode ? Icons.exit_to_app : Icons.self_improvement,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Text(
-                    '继续长按退出 Zen 模式',
-                    style: TextStyle(color: Colors.white, fontSize: 14),
+                    _zenMode ? '继续长按退出 Zen 模式' : '继续长按进入 Zen 模式',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ],
               ),
@@ -1142,6 +1252,19 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
 
   @override
   Widget build(BuildContext context) {
+    // 播放详情页整页豁免「调整全局界面大小」：页内封面、歌词、进度条与控件的
+    // 尺寸互相咬合，跟随缩放必然破版。noScaling 一次关掉页内文字、Icon
+    // （applyTextScaling 读 MediaQuery.textScalerOf）与 context.scaledSize
+    // （封面/头像换算），与歌词界面同一手法。
+    // 从播放页拉起的弹层（歌词偏好面板、投屏面板、更多菜单）挂在 Navigator
+    // 的 overlay 上、不在这棵子树里，仍按全局缩放显示。
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+      child: Builder(builder: _buildPlayer),
+    );
+  }
+
+  Widget _buildPlayer(BuildContext context) {
     // v4 优化：父级 build 只在切歌（currentSong.id 变化）或播放/暂停（isPlaying）时执行。
     // position 更新（200ms）通过 AppleLyricsView 与进度条自身的 Selector 注入，不触发父级重建。
     return Selector<
@@ -1164,7 +1287,12 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
         if (currentSong == null) {
           return Scaffold(
             backgroundColor: colorScheme.surface,
-            appBar: AppBar(leading: const BackButton()),
+            // 顶栏高度取常量：主题里的 toolbarHeight 被全局界面缩放乘过，
+            // 而它走 Theme 而非 MediaQuery，不受本页 noScaling 约束
+            appBar: AppBar(
+              leading: const BackButton(),
+              toolbarHeight: kToolbarHeight,
+            ),
             body: const Center(child: Text('暂无播放')),
           );
         }
@@ -1297,7 +1425,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                 // 播放列表面板（index 0，专辑封面 tab 左侧）
                 const PlayerPlaylistView(useDisplayName: true),
                 GestureDetector(
-                  onTap: () => _tabController.animateTo(2),
+                  onTap: () {
+                    // 长按封面切 Zen 模式后松手不再当作点击跳歌词页
+                    if (_consumeZenPressTap()) return;
+                    _tabController.animateTo(2);
+                  },
                   behavior: HitTestBehavior.opaque,
                   // 封面 tab 与顶栏一样支持向下拖拽原路返回关闭播放器
                   onVerticalDragStart: _onTopBarDragStart,
@@ -1447,37 +1579,26 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                 child: SizedBox(
                                   width: size,
                                   height: size,
-                                  // Listener 包裹封面：Zen 模式下监听长按手势
-                                  child: Listener(
-                                    onPointerDown: (_) =>
-                                        _onArtworkLongPressStart(),
-                                    onPointerUp: (_) =>
-                                        _onArtworkLongPressEnd(),
-                                    onPointerCancel: (_) =>
-                                        _onArtworkLongPressEnd(),
-                                    child: Stack(
-                                      children: [
-                                        AnimatedScale(
-                                          // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
-                                          scale:
-                                              _spectrumEnabled &&
-                                                  _spectrumStyle < 2
-                                              ? 1.0
-                                              : (playerProvider.isPlaying
-                                                    ? 1.0
-                                                    : 0.85),
-                                          duration: const Duration(
-                                            milliseconds: 500,
-                                          ),
-                                          curve: Curves.easeOutBack,
-                                          child: _buildLandscapeArtworkContent(
-                                            playerProvider,
-                                            currentSong,
-                                            colorScheme,
-                                          ),
-                                        ),
-                                        _buildZenLongPressHint(),
-                                      ],
+                                  // 长按封面进入/退出 Zen 模式（按压内缩 + 引导提示）
+                                  child: _wrapArtworkZenPress(
+                                    child: AnimatedScale(
+                                      // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
+                                      scale:
+                                          _spectrumEnabled &&
+                                              _spectrumStyle < 2
+                                          ? 1.0
+                                          : (playerProvider.isPlaying
+                                                ? 1.0
+                                                : 0.85),
+                                      duration: const Duration(
+                                        milliseconds: 500,
+                                      ),
+                                      curve: Curves.easeOutBack,
+                                      child: _buildLandscapeArtworkContent(
+                                        playerProvider,
+                                        currentSong,
+                                        colorScheme,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1703,38 +1824,26 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                   ),
                                   child: AspectRatio(
                                     aspectRatio: 1,
-                                    // Listener 包裹封面：Zen 模式下监听长按手势
-                                    child: Listener(
-                                      onPointerDown: (_) =>
-                                          _onArtworkLongPressStart(),
-                                      onPointerUp: (_) =>
-                                          _onArtworkLongPressEnd(),
-                                      onPointerCancel: (_) =>
-                                          _onArtworkLongPressEnd(),
-                                      child: Stack(
-                                        children: [
-                                          AnimatedScale(
-                                            // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
-                                            scale:
-                                                _spectrumEnabled &&
-                                                    _spectrumStyle < 2
-                                                ? 1.0
-                                                : (playerProvider.isPlaying
-                                                      ? 1.0
-                                                      : 0.85),
-                                            duration: const Duration(
-                                              milliseconds: 500,
-                                            ),
-                                            curve: Curves.easeOutBack,
-                                            child:
-                                                _buildLandscapeArtworkContent(
-                                                  playerProvider,
-                                                  currentSong,
-                                                  colorScheme,
-                                                ),
-                                          ),
-                                          _buildZenLongPressHint(),
-                                        ],
+                                    // 长按封面进入/退出 Zen 模式（按压内缩 + 引导提示）
+                                    child: _wrapArtworkZenPress(
+                                      child: AnimatedScale(
+                                        // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
+                                        scale:
+                                            _spectrumEnabled &&
+                                                _spectrumStyle < 2
+                                            ? 1.0
+                                            : (playerProvider.isPlaying
+                                                  ? 1.0
+                                                  : 0.85),
+                                        duration: const Duration(
+                                          milliseconds: 500,
+                                        ),
+                                        curve: Curves.easeOutBack,
+                                        child: _buildLandscapeArtworkContent(
+                                          playerProvider,
+                                          currentSong,
+                                          colorScheme,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -2027,53 +2136,44 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             LayoutBuilder(
               builder: (context, constraints) {
                 final maxSize = (constraints.maxWidth - 32).clamp(0.0, 380.0);
-                // Listener 包裹封面：Zen 模式下监听长按手势，精确 2000ms 退出
-                return Listener(
-                  onPointerDown: (_) => _onArtworkLongPressStart(),
-                  onPointerUp: (_) => _onArtworkLongPressEnd(),
-                  onPointerCancel: (_) => _onArtworkLongPressEnd(),
-                  child: Stack(
-                    children: [
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: maxSize,
-                          maxHeight: maxSize,
-                        ),
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: AnimatedScale(
-                            // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
-                            scale: _spectrumEnabled && _spectrumStyle < 2
-                                ? 1.0
-                                : (playerProvider.isPlaying ? 1.0 : 0.85),
-                            duration: const Duration(milliseconds: 500),
-                            curve: Curves.easeOutBack,
-                            // 频谱模式：style 0/1 白色圆形旋转封面 + 环形频谱
-                            child: _spectrumEnabled && _spectrumStyle < 2
-                                ? SpectrumArtwork(
-                                    artworkUri: currentSong.artworkUri,
-                                    fallbackFilePath: currentSong.localPath,
-                                    isPlaying: playerProvider.isPlaying,
-                                    bandCount:
-                                        SpectrumService.instance.bandCount,
-                                    style: _spectrumStyle,
-                                    barColor: _spectrumColor,
-                                    opacity: _spectrumOpacity,
-                                  )
-                                : ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: _buildCrossfadeArtwork(
-                                      currentSong.artworkUri,
-                                      colorScheme,
-                                      iconSize: iconSize,
-                                      fallbackFilePath: currentSong.localPath,
-                                    ),
-                                  ),
-                          ),
-                        ),
+                // 长按封面进入/退出 Zen 模式：精确 2000ms + 按压内缩与引导提示
+                return _wrapArtworkZenPress(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: maxSize,
+                      maxHeight: maxSize,
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: AnimatedScale(
+                        // 频谱模式（style 0/1 圆形旋转封面）不需要封面的放大缩小动画
+                        scale: _spectrumEnabled && _spectrumStyle < 2
+                            ? 1.0
+                            : (playerProvider.isPlaying ? 1.0 : 0.85),
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOutBack,
+                        // 频谱模式：style 0/1 白色圆形旋转封面 + 环形频谱
+                        child: _spectrumEnabled && _spectrumStyle < 2
+                            ? SpectrumArtwork(
+                                artworkUri: currentSong.artworkUri,
+                                fallbackFilePath: currentSong.localPath,
+                                isPlaying: playerProvider.isPlaying,
+                                bandCount: SpectrumService.instance.bandCount,
+                                style: _spectrumStyle,
+                                barColor: _spectrumColor,
+                                opacity: _spectrumOpacity,
+                              )
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: _buildCrossfadeArtwork(
+                                  currentSong.artworkUri,
+                                  colorScheme,
+                                  iconSize: iconSize,
+                                  fallbackFilePath: currentSong.localPath,
+                                ),
+                              ),
                       ),
-                      _buildZenLongPressHint(),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -2585,7 +2685,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                         ),
                         Row(
                           children: [
-                            // 播放列表 — 切换到播放列表面板（长按进 Zen 模式）
+                            // 播放列表 — 切换到播放列表面板
                             Expanded(
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
@@ -2593,10 +2693,6 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                                   if (_tabController.index != 0) {
                                     _tabController.animateTo(0);
                                   }
-                                },
-                                onLongPress: () {
-                                  HapticFeedback.lightImpact();
-                                  _enterZenMode();
                                 },
                                 child: Center(
                                   child: Icon(

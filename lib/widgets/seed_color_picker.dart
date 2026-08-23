@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_theme.dart';
+import '../core/utils/ui_scale.dart';
 
 /// 预设种子色 + 自定义颜色选择面板。
 ///
@@ -54,10 +55,12 @@ class SeedColorPicker extends StatelessWidget {
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              // 「调整全局界面大小」放大后，选中态的勾选图标需要更大的色块，
+              // 按缩放因子减少列数（最少 2 列），否则图标撑破圆形色块
+              crossAxisCount: (4 / context.scaledSize(1.0)).round().clamp(2, 4),
+              crossAxisSpacing: context.scaledSize(12),
+              mainAxisSpacing: context.scaledSize(12),
               childAspectRatio: 1,
             ),
             itemCount: total,

@@ -331,7 +331,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   Widget _buildGreetingPill(ColorScheme cs) {
     final tt = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+      padding: const EdgeInsets.fromLTRB(14, 6, 10, 6),
       decoration: ShapeDecoration(
         color: cs.primaryContainer,
         shape: const StadiumBorder(),
@@ -339,8 +339,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.music_note, size: 16, color: cs.onPrimaryContainer),
-          const SizedBox(width: 4),
           Flexible(
             child: Selector<KugouProvider, String?>(
               selector: (_, kugou) =>
@@ -361,6 +359,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
               },
             ),
           ),
+          const SizedBox(width: 4),
+          Icon(Icons.music_note, size: 16, color: cs.onPrimaryContainer),
         ],
       ),
     );
