@@ -30,12 +30,6 @@ const double kMaxDisplayScale = 5.0;
 /// 默认档位：设备真实 dp，不做任何变换。
 const double kDefaultDisplayScale = 1.0;
 
-/// 滑块步长。
-const double kDisplayScaleStep = 0.05;
-
-/// 滑块分段数 = (5.00 - 0.85) / 0.05。
-const int kDisplayScaleDivisions = 83;
-
 /// 系统「字体大小」的跟随上限。
 ///
 /// 只压上限、下限钉在 1.0：系统调大时 App 跟随（最多 1.3x），调小时不跟随

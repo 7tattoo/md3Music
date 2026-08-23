@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -1241,14 +1242,20 @@ class _SettingsPageState extends State<SettingsPage>
                   value: _displayScale,
                   min: kMinDisplayScale,
                   max: kMaxDisplayScale,
-                  divisions: kDisplayScaleDivisions,
+                  // divisions 不传 = 无极调节（M3ESlider.divisions 为 int?）
                   label: '${_displayScale.toStringAsFixed(2)}x',
                   onChanged: (v) {
                     setState(() => _displayScale = v);
                   },
-                  // 只在松手时落盘：每格都重排整个 App 太重
+                  // 只在松手时落盘：每格都重排整个 App 太重。
+                  // 落盘后弹确认框，10 秒内不确认自动还原 —— 极端档位可能让
+                  // 界面难以操作（滑块自身也被放大），必须留一条自动退路。
                   onChangeEnd: (v) {
+                    final previous =
+                        context.read<ThemeProvider>().displayScale;
+                    if (v == previous) return;
                     context.read<ThemeProvider>().setDisplayScale(v);
+                    _confirmDisplayScale(previous);
                   },
                 ),
               ),
@@ -2337,6 +2344,23 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
+  /// 「显示大小」调整后的确认弹窗：10 秒内未点「保留」则自动还原到 [previous]。
+  ///
+  /// 极端档位下滑块与按钮自身也被放大/缩小，可能已经难以再操作，所以必须有
+  /// 一条不依赖用户交互的退路。弹窗本身在缩放后的树里渲染，用户看到的就是
+  /// 新档位的真实效果。
+  Future<void> _confirmDisplayScale(double previous) async {
+    final keep = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DisplayScaleConfirmDialog(),
+    );
+    if (!mounted || keep == true) return;
+    await context.read<ThemeProvider>().setDisplayScale(previous);
+    if (!mounted) return;
+    setState(() => _displayScale = previous);
+  }
+
   Future<void> _showDataMigrationDialog() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -3277,6 +3301,62 @@ class _LyricTimeOffsetTileState extends State<_LyricTimeOffsetTile> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 「显示大小」确认弹窗：显示剩余秒数，超时自动返回 false（= 还原）。
+///
+/// 返回值：true = 保留新档位，false / null = 还原。
+class _DisplayScaleConfirmDialog extends StatefulWidget {
+  const _DisplayScaleConfirmDialog();
+
+  @override
+  State<_DisplayScaleConfirmDialog> createState() =>
+      _DisplayScaleConfirmDialogState();
+}
+
+class _DisplayScaleConfirmDialogState
+    extends State<_DisplayScaleConfirmDialog> {
+  static const int _timeoutSeconds = 10;
+
+  int _remaining = _timeoutSeconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _remaining--);
+      if (_remaining <= 0) {
+        _timer?.cancel();
+        Navigator.of(context).pop(false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('保留此显示大小？'),
+      content: Text('若界面已难以操作，$_remaining 秒后将自动还原。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('还原'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('保留'),
+        ),
+      ],
     );
   }
 }

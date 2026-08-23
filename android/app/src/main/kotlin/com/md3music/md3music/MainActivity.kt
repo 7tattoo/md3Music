@@ -279,6 +279,9 @@ class MainActivity : FlutterActivity() {
                         call.argument<Double>(FloatingLyricService.EXTRA_FONT_SIZE)?.let {
                             putExtra(FloatingLyricService.EXTRA_FONT_SIZE, it.toFloat())
                         }
+                        call.argument<Double>(FloatingLyricService.EXTRA_DISPLAY_SCALE)?.let {
+                            putExtra(FloatingLyricService.EXTRA_DISPLAY_SCALE, it.toFloat())
+                        }
                         call.argument<Boolean>(FloatingLyricService.EXTRA_DOUBLE_LINE)?.let {
                             putExtra(FloatingLyricService.EXTRA_DOUBLE_LINE, it)
                         }
