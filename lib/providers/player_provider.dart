@@ -2146,9 +2146,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (ctx != null) {
             try {
               final kugou = ctx.read<KugouProvider>();
-              // 本地歌曲传空 hash + "歌名 艺术家" 关键词搜索
+              // 本地歌曲传空 hash + "歌名 艺术家" 关键词搜索；搜索词与播放器页面 full_player 保持一致，
+              // 确保 Lyricon 推送与播放器页面命中同一版本歌词。
               final lyricHash = song.isOnline ? song.id : '';
-              final searchName = !song.isOnline && song.artist != '未知艺术家'
+              final searchName = song.artist != '未知艺术家'
                   ? '${song.title} ${song.artist}'
                   : song.title;
               await kugou.getLyric(lyricHash, songName: searchName, fmt: 'lrc');
