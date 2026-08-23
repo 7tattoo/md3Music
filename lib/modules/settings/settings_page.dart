@@ -1233,8 +1233,8 @@ class _SettingsPageState extends State<SettingsPage>
                   decoration: const M3ESliderDecoration(haptic: M3EHapticFeedback.medium),
                   value: _uiScale,
                   min: 0.5,
-                  max: 2.0,
-                  divisions: 15,
+                  max: 5.0,
+                  divisions: 45,
                   label: '${_uiScale.toStringAsFixed(1)}x',
                   onChanged: (v) {
                     setState(() => _uiScale = v);
@@ -1261,7 +1261,7 @@ class _SettingsPageState extends State<SettingsPage>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            '调整全局界面大小（歌词界面不受影响）',
+            '调整全局界面大小，含专辑封面与头像（歌词界面不受影响）',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
@@ -1406,11 +1406,9 @@ class _SettingsPageState extends State<SettingsPage>
                   value: _textShadowBlur,
                   min: AppTheme.minTextShadowBlur,
                   max: AppTheme.maxTextShadowBlur,
-                  divisions:
-                      (AppTheme.maxTextShadowBlur - AppTheme.minTextShadowBlur)
-                          .round(),
+                  // 不传 divisions：磅数无极（连续）调节
                   enabled: _useBackgroundImage && _useTextShadow,
-                  label: '${_textShadowBlur.round()}',
+                  label: _textShadowBlur.toStringAsFixed(1),
                   // 拖动只动滑块，松手才提交：改磅数要整棵主题树重建
                   onChanged: (v) => setState(() => _textShadowBlur = v),
                   onChangeEnd: (v) => themeProvider.setTextShadowBlur(v),
@@ -1419,7 +1417,7 @@ class _SettingsPageState extends State<SettingsPage>
               SizedBox(
                 width: 34,
                 child: Text(
-                  '${_textShadowBlur.round()}',
+                  _textShadowBlur.toStringAsFixed(1),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: (_useBackgroundImage && _useTextShadow)

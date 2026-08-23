@@ -920,6 +920,27 @@ class KugouProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 拉一批用于续播的私人 FM 歌曲，只把结果交给调用方。
+  ///
+  /// 与 [getPersonalFm] 的区别是它**不替换** [personalFmSongs]：续播是往队列尾巴
+  /// 上接，整体替换会把正在播的那首挤出列表，之后就再也认不出那条队列是电台的。
+  /// 走 noCache 是必须的，理由见 [KugouApiClient.getPersonalFm]。
+  Future<List<KugouSongDetail>?> fetchMorePersonalFm({
+    required String mode,
+    required int songPoolId,
+    String? hash,
+    String? songId,
+  }) {
+    return _apiClient.getPersonalFm(
+      mode: mode,
+      songPoolId: songPoolId,
+      hash: hash,
+      songId: songId,
+      action: 'play',
+      noCache: true,
+    );
+  }
+
   Future<void> getPlaylist({
     String? categoryId,
     int page = 1,

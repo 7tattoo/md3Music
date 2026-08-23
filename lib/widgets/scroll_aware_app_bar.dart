@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../core/layout/page_title_alignment.dart';
 import '../providers/theme_provider.dart';
 
-/// 标题与 [ScrollAwareAppBar.titleTrailing] 之间的间距。
 const double _kTitleTrailingGap = 8.0;
 
 /// 通用滚动感知 AppBar。
@@ -39,12 +38,11 @@ class ScrollAwareAppBar extends StatefulWidget implements PreferredSizeWidget {
   final double fadeRange;
   final Widget? leading;
 
-  /// 紧跟在标题右边的一枚组件（如发现页的问候胶囊）。
+  /// 紧跟在标题右边的一枚组件（如发现页的问候胶囊），跟着标题左对齐。
   ///
-  /// 放这里而不是放进 [actions]：它属于标题那一簇，跟着标题左对齐。宽度由它自己
-  /// 的内容决定，但最多用到标题区剩下的宽度——[AppBar] 的标题区不含 actions
-  /// 那一段，中间还留着 [NavigationToolbar.kMiddleSpacing]，所以它再长也碰不到
-  /// 第一枚图标按钮。
+  /// 宽度由它自己的内容决定，上限是标题区剩下的宽度——[AppBar] 的标题区不含
+  /// actions 那一段，中间还留着 [NavigationToolbar.kMiddleSpacing]，所以它再长
+  /// 也碰不到第一枚图标按钮。
   final Widget? titleTrailing;
 
   /// 为 true 时背景不做滚动透明度渐变：未启用自定义背景时恒为不透明
@@ -147,8 +145,6 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
     );
   }
 
-  /// 标题：没有 [ScrollAwareAppBar.titleTrailing] 时就是一行文字；有的话在它
-  /// 右边排上那枚组件，两者一起构成标题那一簇。
   Widget _buildTitle(TextTheme textTheme) {
     final titleText = Text(
       widget.title,
@@ -160,7 +156,6 @@ class _ScrollAwareAppBarState extends State<ScrollAwareAppBar> {
       children: [
         titleText,
         const SizedBox(width: _kTitleTrailingGap),
-        // Flexible 而不是 Expanded：组件按自己的内容取宽度，只是不许超过标题区。
         Flexible(child: trailing),
       ],
     );

@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/utils/ui_scale.dart';
 import '../data/models/song.dart';
 import '../providers/player_provider.dart';
 import 'player_artwork_image.dart';
@@ -430,8 +431,8 @@ class _PlayerPlaylistViewState extends State<PlayerPlaylistView> {
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: SizedBox(
-              width: 44,
-              height: 44,
+              width: context.scaledSize(44),
+              height: context.scaledSize(44),
               child: PlayerArtworkImage(
                 artworkUri: song.artworkUri,
                 fallbackFilePath: song.localPath,

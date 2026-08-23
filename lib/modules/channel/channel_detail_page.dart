@@ -4,6 +4,7 @@ import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/utils/app_toast.dart';
+import '../../core/utils/ui_scale.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -513,10 +514,10 @@ class _ChannelDetailPageState extends State<ChannelDetailPage> {
             child: _coverUrl != null
                 ? CachedNetworkImage(
                     imageUrl: _coverUrl!,
-                    memCacheWidth: 330,
-                    memCacheHeight: 330,
-                    width: 110,
-                    height: 110,
+                    memCacheWidth: context.scaledCache(330),
+                    memCacheHeight: context.scaledCache(330),
+                    width: context.scaledSize(110),
+                    height: context.scaledSize(110),
                     fit: BoxFit.cover,
                     errorWidget: (_, _, _) => _coverPlaceholder(cs),
                   )
@@ -566,8 +567,8 @@ class _ChannelDetailPageState extends State<ChannelDetailPage> {
 
   Widget _coverPlaceholder(ColorScheme cs) {
     return Container(
-      width: 110,
-      height: 110,
+      width: context.scaledSize(110),
+      height: context.scaledSize(110),
       color: cs.surfaceContainerHighest,
       child: Icon(
         Icons.dynamic_feed_outlined,
@@ -671,10 +672,10 @@ class _ChannelDetailPageState extends State<ChannelDetailPage> {
         child: story.coverUrl != null
             ? CachedNetworkImage(
                 imageUrl: story.coverUrl!,
-                memCacheWidth: 132,
-                memCacheHeight: 132,
-                width: 44,
-                height: 44,
+                memCacheWidth: context.scaledCache(132),
+                memCacheHeight: context.scaledCache(132),
+                width: context.scaledSize(44),
+                height: context.scaledSize(44),
                 fit: BoxFit.cover,
                 errorWidget: (_, _, _) => _storyPlaceholder(cs),
               )
@@ -719,8 +720,8 @@ class _ChannelDetailPageState extends State<ChannelDetailPage> {
 
   Widget _storyPlaceholder(ColorScheme cs) {
     return Container(
-      width: 44,
-      height: 44,
+      width: context.scaledSize(44),
+      height: context.scaledSize(44),
       color: cs.surfaceContainerHighest,
       child: Icon(Icons.music_note_outlined, color: cs.onSurfaceVariant),
     );
@@ -740,7 +741,8 @@ class _ChannelDetailPageState extends State<ChannelDetailPage> {
           ),
         ),
         SizedBox(
-          height: 160,
+          // 区块高度随封面一起缩放
+          height: context.scaledSize(160),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -776,7 +778,7 @@ class _SimilarChannelCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return SizedBox(
-      width: 110,
+      width: context.scaledSize(110),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
@@ -788,10 +790,10 @@ class _SimilarChannelCard extends StatelessWidget {
               child: channel.coverUrl != null
                   ? CachedNetworkImage(
                       imageUrl: channel.coverUrl!,
-                      memCacheWidth: 330,
-                      memCacheHeight: 330,
-                      width: 110,
-                      height: 110,
+                      memCacheWidth: context.scaledCache(330),
+                      memCacheHeight: context.scaledCache(330),
+                      width: context.scaledSize(110),
+                      height: context.scaledSize(110),
                       fit: BoxFit.cover,
                       errorWidget: (_, _, _) => Container(
                         color: cs.surfaceContainerHighest,
@@ -802,8 +804,8 @@ class _SimilarChannelCard extends StatelessWidget {
                       ),
                     )
                   : Container(
-                      width: 110,
-                      height: 110,
+                      width: context.scaledSize(110),
+                      height: context.scaledSize(110),
                       color: cs.surfaceContainerHighest,
                       child: Icon(
                         Icons.dynamic_feed_outlined,

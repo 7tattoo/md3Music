@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../core/services/local_artwork_cache.dart';
+import '../core/utils/ui_scale.dart';
 
 /// 本地音乐封面图组件。
 ///
@@ -63,14 +64,17 @@ class _LocalArtworkImageState extends State<LocalArtworkImage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isFill = widget.size == double.infinity;
+    // 按「调整全局界面大小」缩放；填充式（infinity）不缩放
+    final size = context.scaledSize(widget.size);
+    final radius = context.scaledSize(widget.borderRadius);
 
     if (_bytes != null) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(widget.borderRadius),
+        borderRadius: BorderRadius.circular(radius),
         child: Image.memory(
           _bytes!,
-          width: isFill ? double.infinity : widget.size,
-          height: isFill ? double.infinity : widget.size,
+          width: isFill ? double.infinity : size,
+          height: isFill ? double.infinity : size,
           fit: BoxFit.cover,
         ),
       );
@@ -78,15 +82,17 @@ class _LocalArtworkImageState extends State<LocalArtworkImage> {
 
     // 加载中或无封面：显示占位符
     return Container(
-      width: isFill ? double.infinity : widget.size,
-      height: isFill ? double.infinity : widget.size,
+      width: isFill ? double.infinity : size,
+      height: isFill ? double.infinity : size,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(widget.borderRadius),
+        borderRadius: BorderRadius.circular(radius),
       ),
       child: Icon(
         _loaded ? Icons.music_note : Icons.hourglass_empty,
-        size: isFill ? 40 : widget.size * 0.4,
+        size: isFill ? 40 : size * 0.4,
+        // size 已按封面缩放过，这里再跟随字号会二次放大
+        applyTextScaling: false,
         color: colorScheme.onSurfaceVariant,
       ),
     );

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/layout/page_title_alignment.dart';
 import '../../core/utils/app_toast.dart';
+import '../../core/utils/ui_scale.dart';
 import '../../data/repositories/collected_playlist_store.dart';
 import '../../data/repositories/favorite_lists_cache.dart';
 import '../../data/repositories/settings_repository.dart';
@@ -983,13 +984,13 @@ class _FavoritesPageState extends State<FavoritesPage>
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
-                  width: 52,
-                  height: 52,
+                  width: context.scaledSize(52),
+                  height: context.scaledSize(52),
                   child: playlist.coverUrl != null
                       ? CachedNetworkImage(
                           imageUrl: playlist.coverUrl!,
-                          memCacheWidth: 156,
-                          memCacheHeight: 156,
+                          memCacheWidth: context.scaledCache(156),
+                          memCacheHeight: context.scaledCache(156),
                           fit: BoxFit.cover,
                           placeholder: (_, _) => Container(
                             color: colorScheme.surfaceContainerHighest,
@@ -1163,13 +1164,13 @@ class _FavoritesPageState extends State<FavoritesPage>
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: SizedBox(
-                width: 52,
-                height: 52,
+                width: context.scaledSize(52),
+                height: context.scaledSize(52),
                 child: album.coverUrl != null
                     ? CachedNetworkImage(
                         imageUrl: album.coverUrl!,
-                        memCacheWidth: 156,
-                        memCacheHeight: 156,
+                        memCacheWidth: context.scaledCache(156),
+                        memCacheHeight: context.scaledCache(156),
                         fit: BoxFit.cover,
                         placeholder: (_, _) => Container(
                           color: colorScheme.surfaceContainerHighest,
@@ -1325,7 +1326,7 @@ class _FavoritesPageState extends State<FavoritesPage>
         child: Row(
           children: [
             CircleAvatar(
-              radius: 26,
+              radius: context.scaledSize(26),
               backgroundColor: colorScheme.surfaceContainerHighest,
               backgroundImage: avatar != null
                   ? CachedNetworkImageProvider(avatar)

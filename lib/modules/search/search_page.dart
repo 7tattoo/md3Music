@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:m3e_core/m3e_core.dart';
 
+import '../../core/utils/ui_scale.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
 import '../../providers/kugou_provider.dart';
@@ -995,7 +996,7 @@ class _ArtistAvatarState extends State<_ArtistAvatar> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final size = widget.size;
+    final size = context.scaledSize(widget.size);
 
     Widget placeholder() => Container(
       width: size,
@@ -1008,6 +1009,8 @@ class _ArtistAvatarState extends State<_ArtistAvatar> {
         Icons.person,
         color: colorScheme.onSurfaceVariant,
         size: size * 0.5,
+        // size 已按头像缩放过，这里再跟随字号会二次放大
+        applyTextScaling: false,
       ),
     );
 
@@ -1021,8 +1024,8 @@ class _ArtistAvatarState extends State<_ArtistAvatar> {
     return ClipOval(
       child: CachedNetworkImage(
         imageUrl: url,
-        memCacheWidth: 144,
-        memCacheHeight: 144,
+        memCacheWidth: context.scaledCache(144),
+        memCacheHeight: context.scaledCache(144),
         width: size,
         height: size,
         fit: BoxFit.cover,
@@ -1136,7 +1139,7 @@ class _LyricSearchResultItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    const imgSize = 52.0;
+    final imgSize = context.scaledSize(52);
 
     return InkWell(
       onTap: onTap,
@@ -1149,8 +1152,8 @@ class _LyricSearchResultItem extends StatelessWidget {
               child: song.artworkUri != null
                   ? CachedNetworkImage(
                       imageUrl: song.artworkUri!,
-                      memCacheWidth: 144,
-                      memCacheHeight: 144,
+                      memCacheWidth: context.scaledCache(144),
+                      memCacheHeight: context.scaledCache(144),
                       width: imgSize,
                       height: imgSize,
                       fit: BoxFit.cover,
@@ -1201,14 +1204,20 @@ class _LyricSearchResultItem extends StatelessWidget {
   }
 
   Widget _buildPlaceholder(ColorScheme colorScheme) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+    return Builder(
+      builder: (context) => Container(
+        width: context.scaledSize(52),
+        height: context.scaledSize(52),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          Icons.music_note,
+          size: 26,
+          color: colorScheme.onSurfaceVariant,
+        ),
       ),
-      child: Icon(Icons.music_note, size: 26, color: colorScheme.onSurfaceVariant),
     );
   }
 }
