@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 12+（API 31+）暗色模式系统启动画面：背景同样用壁纸平均色，
-         避免白色闪烁。 -->
+    <!-- Android 12+（API 31+）暗色模式系统启动画面：背景用纯黑，
+         与深色模式 Flutter 首帧（深色 surface）衔接，避免白→黑闪变。 -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">#262729</item>
-        <item name="android:windowSplashScreenBackground">#8B8A89</item>
+        <item name="android:windowBackground">#000000</item>
+        <item name="android:windowSplashScreenBackground">#000000</item>
         <!-- 空矢量图标隐藏大图标，圆底背景同时置透明，完全不可见 -->
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_transparent</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>

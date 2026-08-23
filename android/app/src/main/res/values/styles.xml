@@ -4,7 +4,7 @@
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->
-        <item name="android:windowBackground">#8B8A89</item>
+        <item name="android:windowBackground">#FFFFFF</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your
@@ -17,7 +17,7 @@
              一开始就把主题切到 NormalTheme，若此处透明会露出系统白色背景导致白屏。
              首帧渲染前 FlutterSurfaceView 透明透出此纯色；退出动画前由
              MethodChannel 把窗口背景改为透明以露出系统桌面。 -->
-        <item name="android:windowBackground">#8B8A89</item>
+        <item name="android:windowBackground">#FFFFFF</item>
     </style>
 
     <!-- 锁屏歌词主题：暗色全屏无标题栏，不透明遮住锁屏时钟，作为纯展示层 -->
