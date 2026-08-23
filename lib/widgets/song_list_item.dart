@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/utils/app_toast.dart';
+import '../core/utils/ui_scale.dart';
 import '../data/models/song.dart';
 import '../modules/player/comments_view.dart';
 import '../modules/player/mv_player_page.dart';
@@ -102,7 +103,7 @@ class SongListItem extends StatelessWidget {
           children: [
             // 多选模式：圆形复选框；普通模式：封面图
             if (isSelectMode)
-              _buildCheckbox(colorScheme, imgSize)
+              _buildCheckbox(context, colorScheme, imgSize)
             else
               // 封面图：智能选择 Image.network（在线/content://）或 LocalArtworkImage（文件路径）
               SmartArtworkImage(
@@ -210,10 +211,17 @@ class SongListItem extends StatelessWidget {
   }
 
   /// 多选模式下的圆形复选框，与封面同等大小。
-  Widget _buildCheckbox(ColorScheme colorScheme, double size) {
+  /// 封面在 [SmartArtworkImage] 内部按「调整全局界面大小」缩放，这里同步缩放，
+  /// 否则放大后的对勾图标会撑破未缩放的圆框。
+  Widget _buildCheckbox(
+    BuildContext context,
+    ColorScheme colorScheme,
+    double size,
+  ) {
+    final scaledSize = context.scaledSize(size);
     return SizedBox(
-      width: size,
-      height: size,
+      width: scaledSize,
+      height: scaledSize,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 150),
         child: isSelected

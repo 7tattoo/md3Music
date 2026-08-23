@@ -16,6 +16,7 @@ import '../../core/services/spectrum_service.dart';
 import '../../core/services/usb_audio_service.dart';
 import '../../core/utils/audio_scanner.dart';
 import '../../core/utils/app_toast.dart';
+import '../../core/utils/ui_scale.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/settings_repository.dart';
@@ -904,13 +905,14 @@ class _FullPlayerState extends State<FullPlayer>
             child: Container(
               color: Colors.black.withValues(alpha: 0.6),
               alignment: Alignment.center,
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(context.scaledSize(8)),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    width: 40,
-                    height: 40,
+                    // 进度环容器随图标一起缩放
+                    width: context.scaledSize(40),
+                    height: context.scaledSize(40),
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -2225,8 +2227,10 @@ class _FullPlayerState extends State<FullPlayer>
     ColorScheme colorScheme, {
     bool isExpanded = false,
   }) {
-    final spacing = isExpanded ? 4.0 : 8.0;
-    final sideButtonSize = isExpanded ? 48.0 : 56.0;
+    // 按钮容器与间距随图标一起缩放：控件里的 Icon 走全局 textScaler，
+    // 容器写死时放大的图标会溢出圆底
+    final spacing = context.scaledSize(isExpanded ? 4.0 : 8.0);
+    final sideButtonSize = context.scaledSize(isExpanded ? 48.0 : 56.0);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -2255,7 +2259,7 @@ class _FullPlayerState extends State<FullPlayer>
         MD3ETransportRow(
           isPlaying: playerProvider.isPlaying,
           sideButtonSize: sideButtonSize,
-          playButtonSize: isExpanded ? 64.0 : 72.0,
+          playButtonSize: context.scaledSize(isExpanded ? 64.0 : 72.0),
           spacing: spacing,
           onPrevious: () => playerProvider.previous(),
           onPlayPause: () {
@@ -3149,7 +3153,8 @@ class _FullPlayerState extends State<FullPlayer>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               CircleAvatar(
-                                radius: 12,
+                                // 圆底随头像图标一起缩放
+                                radius: context.scaledSize(12),
                                 backgroundColor: colorScheme.primary.withValues(
                                   alpha: 0.15,
                                 ),
@@ -3202,7 +3207,8 @@ class _FullPlayerState extends State<FullPlayer>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 CircleAvatar(
-                                  radius: 10,
+                                  // 圆底随头像图标一起缩放
+                                  radius: context.scaledSize(10),
                                   backgroundColor: colorScheme.primary
                                       .withValues(alpha: 0.15),
                                   child: const Icon(

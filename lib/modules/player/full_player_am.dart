@@ -18,6 +18,7 @@ import '../../core/services/spectrum_service.dart';
 import '../../core/services/usb_audio_service.dart';
 import '../../core/utils/audio_scanner.dart';
 import '../../core/utils/app_toast.dart';
+import '../../core/utils/ui_scale.dart';
 import '../../core/utils/artwork_color_extractor.dart';
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
@@ -641,13 +642,14 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
             child: Container(
               color: Colors.black.withValues(alpha: 0.6),
               alignment: Alignment.center,
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(context.scaledSize(8)),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    width: 40,
-                    height: 40,
+                    // 进度环容器随图标一起缩放
+                    width: context.scaledSize(40),
+                    height: context.scaledSize(40),
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -2526,7 +2528,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     required bool shuffleEnabled,
   }) {
     // Apple Music HIG 风格：大按钮居中，白色图标，圆形白色播放按钮
-    final spacing = isExpanded ? 4.0 : 8.0;
+    // 间距随图标一起缩放（IconButton 自身容器会跟着 iconSize 自适应）
+    final spacing = context.scaledSize(isExpanded ? 4.0 : 8.0);
     final skipIconSize = isExpanded ? 28.0 : 36.0;
     final playIconSize = isExpanded ? 40.0 : 48.0;
 
@@ -3446,7 +3449,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               CircleAvatar(
-                                radius: 12,
+                                // 圆底随头像图标一起缩放
+                                radius: context.scaledSize(12),
                                 backgroundColor: colorScheme.primary.withValues(
                                   alpha: 0.15,
                                 ),
@@ -3498,7 +3502,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 CircleAvatar(
-                                  radius: 10,
+                                  // 圆底随头像图标一起缩放
+                                  radius: context.scaledSize(10),
                                   backgroundColor: colorScheme.primary
                                       .withValues(alpha: 0.15),
                                   child: const Icon(

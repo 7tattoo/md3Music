@@ -2589,7 +2589,16 @@ class _SettingsPageState extends State<SettingsPage>
                 child: SizedBox(
                   height: 140,
                   width: double.infinity,
-                  child: preview,
+                  // 预览是按 1.0x 画的迷你界面示意图：高度固定 140、宽度受
+                  // Expanded 约束，内部元素没法随「调整全局界面大小」等比放大
+                  // （图标一放大就撑破 28dp 顶栏、24dp 图标块）。这里豁免缩放，
+                  // 让预览恒按真实比例呈现，与歌词界面的 noScaling 同一手法。
+                  child: MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(textScaler: TextScaler.noScaling),
+                    child: preview,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
