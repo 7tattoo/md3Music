@@ -4,8 +4,10 @@ import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
+import '../core/utils/ui_scale.dart';
 import '../providers/kugou_provider.dart';
 import '../providers/comment_display_provider.dart';
+import '../services/kugou_api/comment_thread.dart';
 import '../services/kugou_api/kugou_api_client.dart';
 import '../services/kugou_api/kugou_models.dart';
 
@@ -27,7 +29,8 @@ class _FloorState {
 ///
 /// **功能**：
 /// - 歌手评论/歌手评论置顶展示，带徽章标识
-/// - 楼层评论（楼中楼），点击"查看N条回复"展开
+/// - 楼层评论（楼中楼），点击"查看N条回复"展开；回复按时间倒序（新的在前），
+///   对回复的回复按层级嵌套缩进
 /// - 长评论展开/收起（超过 120 字）
 /// - 点赞数格式化（10000+ → "1w"）
 /// - 滚动到底部自动加载下一页
@@ -53,6 +56,10 @@ class PlaylistCommentsView extends StatefulWidget {
 }
 
 class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
+  /// 楼层评论每页条数。上游硬上限 50，取满可减少翻页次数，
+  /// 让楼中楼的父子关系更早在同一批数据里凑齐。
+  static const int _floorPageSize = 50;
+
   List<KugouComment> _comments = [];
   List<KugouComment> _hotComments = [];
   bool _isLoading = false;
@@ -250,15 +257,18 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
         mixSongId: comment.mixSongId,
         code: comment.code,
         page: state.page,
+        pagesize: _floorPageSize,
       );
 
       if (result != null) {
         final replies = result.comments;
         state.replies = reset ? replies : [...state.replies, ...replies];
-        state.total = result.total;
-        state.hasMore = state.total > 0
-            ? state.replies.length < state.total
-            : replies.length >= 30;
+        if (result.total > 0) state.total = result.total;
+        // 不足一页即到底（翻过末页时上游连 list 字段都不返回）。
+        // 只按 total 判断是不够的：被删除或风控过滤的回复取不到，
+        // 那样「加载更多回复」会永远停不下来。
+        state.hasMore = replies.length >= _floorPageSize &&
+            (state.total <= 0 || state.replies.length < state.total);
         if (state.hasMore) state.page++;
         if (state.replies.isEmpty) {
           state.message = '暂无回复';
@@ -813,9 +823,9 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 回复列表
-          for (final reply in state.replies)
-            _buildFloorReplyItem(reply, colorScheme, replyFontSize, comment.username),
+          // 回复列表：按 pid 嵌套，同层按时间倒序（新的在前）
+          for (final node in buildReplyTree(state.replies))
+            _buildFloorReplyItem(node, colorScheme, replyFontSize),
           // 加载中
           if (state.loading)
             Padding(
@@ -875,30 +885,31 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
     );
   }
 
-  /// 清理楼中楼回复的引用后缀。
+  /// 楼中楼嵌套的每级缩进量与最大缩进级数。
   ///
-  /// 酷狗楼中楼回复内容形如「回复正文//@被回复用户名:被回复内容」。
-  /// 仅当被回复用户是楼主（[ownerName]）时去掉引用后缀、只显示回复正文；
-  /// 楼中楼用户互相回复时保留引用，便于看出回复对象。
-  String _cleanFloorReplyContent(String content, String ownerName) {
-    final idx = content.lastIndexOf('//@');
-    if (idx <= 0) return content;
-    final ref = content.substring(idx + 3);
-    final colon = ref.indexOf(':');
-    if (colon <= 0) return content;
-    if (ref.substring(0, colon).trim() != ownerName) return content;
-    final text = content.substring(0, idx).trim();
-    return text.isEmpty ? content : text;
-  }
+  /// 层级很深时继续缩进会把正文挤成窄条，超过 [_maxReplyIndentDepth] 级后
+  /// 不再增加缩进，只靠排列顺序体现从属关系。
+  static const double _replyIndentPerDepth = 16.0;
+  static const int _maxReplyIndentDepth = 4;
 
   Widget _buildFloorReplyItem(
-    KugouComment reply,
+    CommentReplyNode node,
     ColorScheme colorScheme,
     double fontSize,
-    String ownerName,
   ) {
+    final reply = node.reply;
+    // 嵌套渲染后被回复的那条就在上方，引用后缀是重复信息；父级不在已加载数据
+    // 里（孤儿）时保留原文，否则看不出在回复谁。
+    final content = node.isOrphan
+        ? reply.content
+        : stripReplyQuote(reply.content);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.only(
+        top: 6,
+        bottom: 6,
+        left:
+            node.depth.clamp(0, _maxReplyIndentDepth) * _replyIndentPerDepth,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -934,7 +945,7 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _cleanFloorReplyContent(reply.content, ownerName),
+                  content,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurface,
                     height: 1.3,
@@ -956,15 +967,15 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
 
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       return CircleAvatar(
-        radius: 18,
+        radius: context.scaledSize(18),
         backgroundColor: colorScheme.primary.withValues(alpha: 0.15),
         child: ClipOval(
           child: CachedNetworkImage(
             imageUrl: avatarUrl,
-            memCacheWidth: 108,
-            memCacheHeight: 108,
-            width: 36,
-            height: 36,
+            memCacheWidth: context.scaledCache(108),
+            memCacheHeight: context.scaledCache(108),
+            width: context.scaledSize(36),
+            height: context.scaledSize(36),
             fit: BoxFit.cover,
             placeholder: (_, _) => _buildTextAvatar(comment, colorScheme),
             errorWidget: (_, _, _) => _buildTextAvatar(comment, colorScheme),
@@ -980,15 +991,15 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
     final avatarUrl = _fixAvatarUrl(comment.avatar);
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       return CircleAvatar(
-        radius: 12,
+        radius: context.scaledSize(12),
         backgroundColor: colorScheme.primary.withValues(alpha: 0.15),
         child: ClipOval(
           child: CachedNetworkImage(
             imageUrl: avatarUrl,
-            memCacheWidth: 72,
-            memCacheHeight: 72,
-            width: 24,
-            height: 24,
+            memCacheWidth: context.scaledCache(72),
+            memCacheHeight: context.scaledCache(72),
+            width: context.scaledSize(24),
+            height: context.scaledSize(24),
             fit: BoxFit.cover,
             placeholder: (_, _) => _buildSmallTextAvatar(comment, colorScheme),
             errorWidget: (_, _, _) =>
@@ -1002,7 +1013,7 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
 
   Widget _buildTextAvatar(KugouComment comment, ColorScheme colorScheme) {
     return CircleAvatar(
-      radius: 18,
+      radius: context.scaledSize(18),
       backgroundColor: colorScheme.primary.withValues(alpha: 0.15),
       child: Text(
         comment.username.isNotEmpty ? comment.username[0] : '?',
@@ -1015,7 +1026,7 @@ class _PlaylistCommentsViewState extends State<PlaylistCommentsView> {
 
   Widget _buildSmallTextAvatar(KugouComment comment, ColorScheme colorScheme) {
     return CircleAvatar(
-      radius: 12,
+      radius: context.scaledSize(12),
       backgroundColor: colorScheme.primary.withValues(alpha: 0.15),
       child: Text(
         comment.username.isNotEmpty ? comment.username[0] : '?',

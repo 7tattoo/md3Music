@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../core/utils/ui_scale.dart';
 import 'local_artwork_image.dart';
 
 /// 智能封面图组件：根据 artworkUri 类型选择不同的加载策略。
@@ -11,6 +12,10 @@ import 'local_artwork_image.dart';
 /// - **content://** MediaStore 封面：通过 fallbackFilePath 读内嵌封面
 /// - **local://<filePath>** 本地文件：使用 [LocalArtworkCache] 懒加载
 /// - **null** 或未知：显示占位符
+///
+/// [size] 与 [borderRadius] 按「调整全局界面大小」缩放；`double.infinity`
+/// （网格里由 cell 决定尺寸）不缩放。转交 [LocalArtworkImage] 的那几条分支
+/// 传原始值，由它自己缩放一次，避免两层组件重复放大。
 class SmartArtworkImage extends StatefulWidget {
   final String? artworkUri;
   final String? fallbackFilePath;
@@ -38,6 +43,8 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final uri = widget.artworkUri;
+    final size = context.scaledSize(widget.size);
+    final radius = context.scaledSize(widget.borderRadius);
 
     Widget child;
     if (uri == null) {
@@ -49,7 +56,7 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
           borderRadius: widget.borderRadius,
         );
         return ClipRRect(
-          borderRadius: BorderRadius.circular(widget.borderRadius),
+          borderRadius: BorderRadius.circular(radius),
           child: child,
         );
       } else {
@@ -64,7 +71,7 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
         borderRadius: widget.borderRadius,
       );
       return ClipRRect(
-        borderRadius: BorderRadius.circular(widget.borderRadius),
+        borderRadius: BorderRadius.circular(radius),
         child: child,
       );
     } else if (uri.startsWith('content://')) {
@@ -77,7 +84,7 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
           borderRadius: widget.borderRadius,
         );
         return ClipRRect(
-          borderRadius: BorderRadius.circular(widget.borderRadius),
+          borderRadius: BorderRadius.circular(radius),
           child: child,
         );
       }
@@ -88,8 +95,8 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
       final isFill = widget.size == double.infinity;
       child = Image.network(
         uri,
-        width: isFill ? double.infinity : widget.size,
-        height: isFill ? double.infinity : widget.size,
+        width: isFill ? double.infinity : size,
+        height: isFill ? double.infinity : size,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) {
           if (widget.fallbackFilePath != null) {
@@ -104,12 +111,14 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
           return Container(
-            width: isFill ? double.infinity : widget.size,
-            height: isFill ? double.infinity : widget.size,
+            width: isFill ? double.infinity : size,
+            height: isFill ? double.infinity : size,
             color: colorScheme.surfaceContainerHighest,
             child: Icon(
               Icons.hourglass_empty,
-              size: isFill ? 40 : widget.size * 0.4,
+              size: isFill ? 40 : size * 0.4,
+              // size 已按封面缩放过，这里再跟随字号会二次放大
+              applyTextScaling: false,
               color: colorScheme.onSurfaceVariant,
             ),
           );
@@ -122,8 +131,8 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
       if (file.existsSync()) {
         child = Image.file(
           file,
-          width: isFill ? double.infinity : widget.size,
-          height: isFill ? double.infinity : widget.size,
+          width: isFill ? double.infinity : size,
+          height: isFill ? double.infinity : size,
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => _placeholder(colorScheme),
         );
@@ -134,30 +143,35 @@ class _SmartArtworkImageState extends State<SmartArtworkImage> {
       // 兜底：当作普通 URL 处理
       child = Image.network(
         uri,
-        width: widget.size,
-        height: widget.size,
+        width: size,
+        height: size,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _placeholder(colorScheme),
       );
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(widget.borderRadius),
+      borderRadius: BorderRadius.circular(radius),
       child: child,
     );
   }
 
   Widget _placeholder(ColorScheme colorScheme) {
+    final size = context.scaledSize(widget.size);
     return Container(
-      width: widget.size,
-      height: widget.size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(widget.borderRadius),
+        borderRadius: BorderRadius.circular(
+          context.scaledSize(widget.borderRadius),
+        ),
       ),
       child: Icon(
         Icons.music_note,
-        size: widget.size * 0.4,
+        size: size * 0.4,
+        // size 已按封面缩放过，这里再跟随字号会二次放大
+        applyTextScaling: false,
         color: colorScheme.onSurfaceVariant,
       ),
     );

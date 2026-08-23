@@ -4,6 +4,7 @@ import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/utils/app_toast.dart';
+import '../../core/utils/ui_scale.dart';
 import '../../data/models/kugou_account.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
@@ -151,12 +152,17 @@ class _UserCenterPageState extends State<UserCenterPage> {
   Widget _buildUserAvatar(KugouProvider kugou, ColorScheme cs) {
     final avatarUrl = kugou.userInfo?.avatar;
     final userId = kugou.userid ?? 'default';
+    final radius = context.scaledSize(32);
 
     if (avatarUrl == null || avatarUrl.isEmpty) {
       return CircleAvatar(
-        radius: 32,
+        radius: radius,
         backgroundColor: cs.primary.withValues(alpha: 0.2),
-        child: Icon(Icons.person, size: 32, color: cs.onPrimaryContainer),
+        child: Icon(
+          Icons.person,
+          size: 32,
+          color: cs.onPrimaryContainer,
+        ),
       );
     }
 
@@ -168,16 +174,16 @@ class _UserCenterPageState extends State<UserCenterPage> {
     final cacheKey = 'avatar_$safeUserId';
 
     return CircleAvatar(
-      radius: 32,
+      radius: radius,
       backgroundColor: cs.primary.withValues(alpha: 0.2),
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: avatarUrl,
-          memCacheWidth: 192,
-          memCacheHeight: 192,
+          memCacheWidth: context.scaledCache(192),
+          memCacheHeight: context.scaledCache(192),
           cacheKey: cacheKey,
-          width: 64,
-          height: 64,
+          width: radius * 2,
+          height: radius * 2,
           fit: BoxFit.cover,
           placeholder: (context, url) =>
               Icon(Icons.person, size: 32, color: cs.onPrimaryContainer),
@@ -188,58 +194,216 @@ class _UserCenterPageState extends State<UserCenterPage> {
     );
   }
 
+  // ── 用户卡片版式基准值（未缩放的设计值）──
+  // 头像：直径 64 + 3 描边 = 70，左上角外移 (-8, -18)，圆心落在卡片内 (27, 17)。
+  // 头像随「调整全局界面大小」缩放，这几个与头像绑定的量必须同比缩放，
+  // 否则让位宽度和光环圆心会跟头像脱开。
+  static const double _kAvatarRadius = 32;
+  static const double _kAvatarOverhangX = 8;
+  static const double _kAvatarOverhangY = 18;
+  static const double _kAvatarRing = 3;
+  /// 头像让位宽度：内容左缘 = 20 + 52 = 72，与头像右缘（62）留 10 呼吸位。
+  /// 这条线同时是 LV 文字与进度条的左对齐基准。
+  static const double _kAvatarGutter = 52;
+  /// 卡片内边距：不跟头像缩放
+  static const double _kCardPadH = 20;
+
   Widget _buildUserHeader(ColorScheme cs, TextTheme tt, KugouProvider kugou) {
+    final grade = kugou.gradeInfo;
+    final ring = context.scaledSize(_kAvatarRing);
+    final overhangX = context.scaledSize(_kAvatarOverhangX);
+    final overhangY = context.scaledSize(_kAvatarOverhangY);
+    final gutter = context.scaledSize(_kAvatarGutter);
+    // 头像圆心（相对卡片左上角），供光环定位
+    final haloCx = context.scaledSize(_kAvatarRadius) + ring - overhangX;
+    final haloCy = context.scaledSize(_kAvatarRadius) + ring - overhangY;
+
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Material(
-          color: cs.primaryContainer,
-          borderRadius: BorderRadius.circular(20),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () => _showAccountManager(context, kugou),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
+        // 顶部留出空间容纳超出卡片的头像
+        padding: EdgeInsets.fromLTRB(16, context.scaledSize(28), 16, 16),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Material(
+              color: cs.primaryContainer,
+              clipBehavior: Clip.antiAlias,
+              // 对角加大圆角：左上让位圆形头像，右下承接昵称块，四角不等而对角自洽
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(32),
+                topRight: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(32),
+              ),
+              child: Stack(
                 children: [
-                  _buildUserAvatar(kugou, cs),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          kugou.userInfo?.nickname ?? '用户',
-                          style: tt.titleLarge?.copyWith(
-                            color: cs.onPrimaryContainer,
+                  // 与头像同心的两道弧，被卡片裁去大半，只在左上留下扩散感
+                  _buildAvatarHalo(
+                    cs,
+                    cx: haloCx,
+                    cy: haloCy,
+                    radius: context.scaledSize(98),
+                    alpha: 0.11,
+                  ),
+                  _buildAvatarHalo(
+                    cs,
+                    cx: haloCx,
+                    cy: haloCy,
+                    radius: context.scaledSize(146),
+                    alpha: 0.06,
+                  ),
+                  InkWell(
+                    onTap: () => _showAccountManager(context, kugou),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        _kCardPadH,
+                        18,
+                        _kCardPadH,
+                        12,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(width: gutter),
+                              Expanded(
+                                // 无等级数据时占住等级行的高度，避免卡片塌到头像里
+                                child: grade == null
+                                    ? SizedBox(height: context.scaledSize(38))
+                                    : _buildGradeInfo(
+                                        cs,
+                                        tt,
+                                        grade,
+                                        kugou.unreportedSeconds,
+                                      ),
+                              ),
+                              Padding(
+                                // 下移至与等级数字视觉中心齐平
+                                padding: const EdgeInsets.only(top: 7),
+                                child: Icon(
+                                  Icons.chevron_right,
+                                  size: 20,
+                                  color: cs.onPrimaryContainer.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'ID: ${kugou.userid ?? ''}',
-                          style: tt.labelSmall?.copyWith(
-                            color: cs.onPrimaryContainer.withValues(alpha: 0.7),
+                          if (grade != null) ...[
+                            const SizedBox(height: 14),
+                            // 进度条故意不满宽：左缘咬住等级文字，右缘咬住昵称，
+                            // 成为左上与右下两块之间的一道横向连接
+                            Padding(
+                              padding: EdgeInsets.only(left: gutter),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(99),
+                                child: M3ELinearProgressIndicator(
+                                  value: _gradeProgress(grade),
+                                  minHeight: 6,
+                                  backgroundColor: cs.onPrimaryContainer
+                                      .withValues(alpha: 0.15),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    cs.primary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          Text(
+                            kugou.userInfo?.nickname ?? '用户',
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              height: 1.15,
+                              color: cs.onPrimaryContainer,
+                            ),
                           ),
-                        ),
-                      ],
+                          Text(
+                            'ID: ${kugou.userid ?? ''}',
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.labelSmall?.copyWith(
+                              letterSpacing: 0.4,
+                              color: cs.onPrimaryContainer.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  if (kugou.gradeInfo != null) ...[
-                    const SizedBox(width: 12),
-                    _buildGradePill(cs, tt, kugou.gradeInfo!, kugou.unreportedSeconds),
-                  ],
-                  Icon(Icons.chevron_right, color: cs.onPrimaryContainer),
                 ],
               ),
             ),
+            // 头像：左上角，略微超出卡片
+            Positioned(
+              left: -overhangX,
+              top: -overhangY,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.surface, width: ring),
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.shadow.withValues(alpha: 0.16),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: _buildUserAvatar(kugou, cs),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 与头像同心的装饰圆环，超出卡片的部分由卡片裁掉
+  Widget _buildAvatarHalo(
+    ColorScheme cs, {
+    required double cx,
+    required double cy,
+    required double radius,
+    required double alpha,
+  }) {
+    return Positioned(
+      left: cx - radius,
+      top: cy - radius,
+      width: radius * 2,
+      height: radius * 2,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: cs.onPrimaryContainer.withValues(alpha: alpha),
+            width: 1.5,
           ),
         ),
       ),
     );
   }
 
-  /// 听歌等级胶囊：LV + 累计时长 + 未上报时长（≥5分钟显示）+ 升级进度
-  Widget _buildGradePill(
+  /// 升级进度：当前经验 / 下一等级经验
+  double _gradeProgress(KugouGradeInfo grade) {
+    final cur = (grade.pCurrentPoint ?? 0).toDouble();
+    final next = (grade.pNextGradePoint ?? 1).toDouble();
+    return next > 0 ? (cur / next).clamp(0.0, 1.0) : 0.0;
+  }
+
+  /// 听歌等级信息：LV + 累计时长 + 未上报时长（≥5分钟显示）。
+  /// 三种字号共用同一条基线：层级刻意拉开，落点仍然统一。
+  Widget _buildGradeInfo(
     ColorScheme cs,
     TextTheme tt,
     KugouGradeInfo grade,
@@ -247,68 +411,52 @@ class _UserCenterPageState extends State<UserCenterPage> {
   ) {
     final sec = grade.dSec ?? grade.duration ?? 0;
     final gradeNum = grade.pGrade ?? 0;
-    final cur = (grade.pCurrentPoint ?? 0).toDouble();
-    final next = (grade.pNextGradePoint ?? 1).toDouble();
-    final progress = next > 0 ? (cur / next).clamp(0.0, 1.0) : 0.0;
     final showUnreported = unreportedSec >= 300; // 5 分钟
-    return Container(
-      width: 116,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.graphic_eq, size: 13, color: cs.onPrimaryContainer),
-              const SizedBox(width: 3),
-              Text(
-                'LV.$gradeNum',
-                style: tt.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: cs.onPrimaryContainer,
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              'LV',
+              style: tt.labelSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.6,
+                color: cs.onPrimaryContainer.withValues(alpha: 0.55),
               ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            _formatGradeSeconds(sec),
-            style: tt.labelSmall?.copyWith(
-              color: cs.onPrimaryContainer.withValues(alpha: 0.75),
             ),
+            const SizedBox(width: 3),
+            Text(
+              '$gradeNum',
+              style: tt.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: cs.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                _formatGradeSeconds(sec),
+                style: tt.labelMedium?.copyWith(
+                  color: cs.onPrimaryContainer.withValues(alpha: 0.75),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        if (showUnreported)
+          Text(
+            '未上报 ${_formatGradeSeconds(unreportedSec)}',
+            style: tt.labelSmall?.copyWith(color: cs.error),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          if (showUnreported) ...[
-            const SizedBox(height: 2),
-            Text(
-              '未上报 ${_formatGradeSeconds(unreportedSec)}',
-              style: tt.labelSmall?.copyWith(
-                fontSize: 10,
-                color: cs.error,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: M3ELinearProgressIndicator(
-              value: progress,
-              minHeight: 3,
-              backgroundColor: cs.onPrimaryContainer.withValues(alpha: 0.15),
-              valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -535,21 +683,23 @@ class _UserCenterPageState extends State<UserCenterPage> {
     );
     if (avatarUrl == null || avatarUrl.isEmpty) {
       return CircleAvatar(
+        radius: context.scaledSize(20),
         backgroundColor: cs.primary.withValues(alpha: 0.15),
         child: fallback,
       );
     }
     final safeUserId = account.userid.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     return CircleAvatar(
+      radius: context.scaledSize(20),
       backgroundColor: cs.primary.withValues(alpha: 0.15),
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: avatarUrl,
-          memCacheWidth: 96,
-          memCacheHeight: 96,
+          memCacheWidth: context.scaledCache(96),
+          memCacheHeight: context.scaledCache(96),
           cacheKey: 'avatar_$safeUserId',
-          width: 40,
-          height: 40,
+          width: context.scaledSize(40),
+          height: context.scaledSize(40),
           fit: BoxFit.cover,
           errorWidget: (c, u, e) => fallback,
         ),

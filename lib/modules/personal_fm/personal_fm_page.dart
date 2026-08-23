@@ -54,10 +54,13 @@ class _PersonalFmPageState extends State<PersonalFmPage>
       duration: const Duration(milliseconds: 300),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final player = Provider.of<PlayerProvider>(context, listen: false);
-      player.addListener(_onPlayerChanged);
+      if (!mounted) return;
+      _player = Provider.of<PlayerProvider>(context, listen: false)
+        ..addListener(_onPlayerChanged);
     });
   }
+
+  PlayerProvider? _player;
 
   int _lastPrefetchIndex = -1;
 
@@ -81,10 +84,16 @@ class _PersonalFmPageState extends State<PersonalFmPage>
 
   @override
   void dispose() {
-    try {
-      final player = Provider.of<PlayerProvider>(context, listen: false);
+    final player = _player;
+    if (player != null) {
       player.removeListener(_onPlayerChanged);
-    } catch (_) {}
+      // 交还补货槽位。留着一个指向已销毁 State 的回调有两重害处：队列播完时
+      // PlayerProvider 只看槽位非空就把「播完」整个交给它（自己的「回到第一首」
+      // 兜底被跳过），而它第一句就要 context —— 抛出来的异常没人接。
+      if (player.onPlaylistEnd == _onPlaylistEnd) {
+        player.onPlaylistEnd = null;
+      }
+    }
     _vinylRotationController.dispose();
     _slideController.dispose();
     _scrollController.dispose();
@@ -120,6 +129,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
   }
 
   Future<void> _onPlaylistEnd() async {
+    if (!mounted) return;
     final prevLength = Provider.of<PlayerProvider>(
       context,
       listen: false,
@@ -145,7 +155,7 @@ class _PersonalFmPageState extends State<PersonalFmPage>
   }
 
   Future<void> _appendFmSongs() async {
-    if (_isAppending) return;
+    if (_isAppending || !mounted) return;
     setState(() => _isAppending = true);
     try {
       final kugou = Provider.of<KugouProvider>(context, listen: false);

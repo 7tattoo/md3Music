@@ -11,6 +11,8 @@ import 'package:audio_session/audio_session.dart';
 ///   避免覆盖用户主动的暂停。
 /// - 区分临时中断（pause / unknown → 之后会自动恢复）和永久丢失
 ///   （如电话来电、强制中断），后者由 audio_session 标记 `dispose` 状态。
+/// - 与其他媒体共存：其他应用播放媒体时本应用既不暂停也不改变音量，
+///   见 [_activateSession] 与中断处理里的 [AudioInterruptionType.duck] 分支。
 class AudioService {
   static final AudioService _instance = AudioService._internal();
 
@@ -30,6 +32,12 @@ class AudioService {
         bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
       ),
     ),
+    // 中断处理全部由本类接管：just_audio 自带的处理器会无条件在中断时
+    // pause、并在 duck 结束时把音量翻倍，与「与其他媒体共存」的行为冲突。
+    handleInterruptions: false,
+    // 音频焦点申请也由本类接管，见 [_activateSession]：需要显式传
+    // androidWillPauseWhenDucked，just_audio 内部的 setActive 不传该参数。
+    handleAudioSessionActivation: false,
   );
   final ConcatenatingAudioSource _playlistSource = ConcatenatingAudioSource(
     children: [],
@@ -73,12 +81,12 @@ class AudioService {
   /// 用该标志防止重复进入 [play]，避免恢复瞬间的状态抖动。
   bool _resumeInProgress = false;
 
-  /// 是否响应 duck 压低音量（导航 / 游戏等会短暂压低背景音乐的场景）。
-  /// 默认关闭：荣耀平板 V8 Pro 在频繁 duck/unduck 时音量忽高忽低，
-  /// 开启后 duck 会把音量压到 [_duckVolume]，结束恢复 [1.0]。
-  bool _duckEnabled = false;
-  final double _duckVolume = 0.5;
-  void setDuckEnabled(bool value) => _duckEnabled = value;
+  /// 焦点已归还、但当时播放器还没 ready，需要等 ready 后再恢复。
+  ///
+  /// [_setupResumeOnReady] 必须同时检查这个标志：被中断暂停时 `pause()` 会
+  /// 立刻推出一条 `(playing: false, ready)` 状态，若只看 [_pausedByInterruption]，
+  /// 兜底监听会在暂停的同一瞬间就把播放恢复回去，来电暂停与拔耳机暂停都会失效。
+  bool _pendingResumeOnReady = false;
 
   /// 各事件流的订阅句柄，dispose 时统一取消，避免单例长期持有泄漏。
   StreamSubscription<PlayerState>? _resumeSub;
@@ -95,7 +103,8 @@ class AudioService {
   /// 监听播放器状态变为 ready 后自动尝试恢复。
   void _setupResumeOnReady() {
     _resumeSub = _player.playerStateStream.listen((state) {
-      if (_pausedByInterruption &&
+      if (_pendingResumeOnReady &&
+          _pausedByInterruption &&
           state.processingState == ProcessingState.ready) {
         // ignore: discarded_futures
         tryResumeAfterFocusLoss();
@@ -109,17 +118,14 @@ class AudioService {
       await session.configure(const AudioSessionConfiguration.music());
       _interruptionSub = session.interruptionEventStream.listen((event) {
         if (event.begin) {
+          _pendingResumeOnReady = false;
           switch (event.type) {
             case AudioInterruptionType.duck:
-              if (_duckEnabled && _player.playing) {
-                // 仅在显式开启 duck 时压低音量；默认忽略以
-                // 避免荣耀平板 V8 Pro 频繁 duck/unduck 音量波动。
-                // ignore: discarded_futures
-                _player.setVolume(_duckVolume);
-              }
+              // 其他应用播放媒体（申请「可压低」焦点）：共存，音量与播放状态都不动。
               break;
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
+              // 来电等独占型中断：仍然暂停。
               if (_player.playing) {
                 _pausedByInterruption = true;
                 pause();
@@ -127,24 +133,13 @@ class AudioService {
               break;
           }
         } else {
-          switch (event.type) {
-            case AudioInterruptionType.duck:
-              if (_duckEnabled) {
-                // ignore: discarded_futures
-                _player.setVolume(1.0);
-              }
-              break;
-            case AudioInterruptionType.pause:
-              // 焦点恢复：仅在是被动暂停时尝试恢复（不覆盖用户主动暂停）
-              tryResumeAfterFocusLoss();
-              break;
-            case AudioInterruptionType.unknown:
-              // 修复：unknown 型中断（部分游戏引擎 / 游戏内通话上报）结束时
-              // 也尝试恢复播放，否则音乐被动暂停后无法自动恢复。
-              // ignore: discarded_futures
-              tryResumeAfterFocusLoss();
-              break;
-          }
+          // 中断结束。焦点恢复：仅在是被动暂停时尝试恢复（不覆盖用户主动暂停）。
+          // unknown 型中断（部分游戏引擎 / 游戏内通话上报）同样需要恢复，
+          // 否则音乐被动暂停后无法自动恢复。
+          // 置位后若播放器还没 ready，由 [_setupResumeOnReady] 兜底重试。
+          _pendingResumeOnReady = true;
+          // ignore: discarded_futures
+          tryResumeAfterFocusLoss();
         }
       });
       // 拔耳机 / 蓝牙断开：通常伴随系统焦点变更，但 just_audio 也会收到
@@ -156,6 +151,27 @@ class AudioService {
         }
       });
     } catch (e) {}
+  }
+
+  /// 申请音频焦点（替代 just_audio 内部的会话激活）。
+  ///
+  /// 显式传 `androidWillPauseWhenDucked: true`，让原生 AudioFocusRequest 声明
+  /// 「被压低时我自己处理」，从而关掉 Android 8.0+ 的系统自动压音——否则系统会
+  /// 直接把本应用音量压到约 20%、且不派发任何回调，App 既感知不到也无法恢复
+  /// （只有再次申请焦点才会解除，表现为「暂停重播才恢复」）。这是「与其他媒体
+  /// 共存」得以成立的前提：系统交出压音控制权后，本类选择什么都不做。
+  ///
+  /// 会话配置仍使用 [AudioSessionConfiguration.music]（其
+  /// androidWillPauseWhenDucked 为 null）：audio_session 用**配置**里的值决定
+  /// 事件类型映射，保持 null/false 才能把「其他媒体压低」映射成
+  /// [AudioInterruptionType.duck]、把「来电等独占中断」映射成
+  /// [AudioInterruptionType.pause]，前者放行、后者暂停才分得开；原生请求参数
+  /// 则由这里的入参覆盖。改动 audio_session 版本时需要复核这两处取值来源。
+  Future<void> _activateSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.setActive(true, androidWillPauseWhenDucked: true);
+    } catch (_) {}
   }
 
   /// 焦点恢复时尝试自动恢复播放。
@@ -183,8 +199,10 @@ class AudioService {
   Future<void> play() async {
     // 主动 play 不影响 _pausedByInterruption 标志；
     // 若是被动恢复（_pausedByInterruption=true），play 后清掉标志。
+    await _activateSession();
     await _player.play();
     _pausedByInterruption = false;
+    _pendingResumeOnReady = false;
   }
 
   Future<void> pause() async {
@@ -196,6 +214,7 @@ class AudioService {
   Future<void> stop() async {
     await _player.stop();
     _pausedByInterruption = false;
+    _pendingResumeOnReady = false;
   }
 
   Future<void> seek(Duration position) async {

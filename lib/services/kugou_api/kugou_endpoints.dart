@@ -44,6 +44,7 @@ class KugouEndpoints {
   static const String commentMusic = '/comment/music';
   static const String commentMusicClassify = '/comment/music/classify';
   static const String commentMusicHotword = '/comment/music/hotword';
+  static const String commentMusicTopliked = '/comment/music/topliked';
   static const String commentFloor = '/comment/floor';
   static const String commentPlaylist = '/comment/playlist';
   static const String commentAlbum = '/comment/album';

@@ -770,10 +770,17 @@ class KugouCommentList {
   final List<KugouComment> hotComments;
   final int total;
 
+  /// 评论区 id（响应顶层 `childrenid`）。
+  ///
+  /// 「最热」接口（/comment/music/topliked）必传它，上游不接受用 mixsongid 代替，
+  /// 因此只能先请求 /comment/music 拿到这个值。
+  final String childrenId;
+
   const KugouCommentList({
     this.comments = const [],
     this.hotComments = const [],
     this.total = 0,
+    this.childrenId = '',
   });
 
   factory KugouCommentList.fromJson(Map<String, dynamic> json) {
@@ -812,9 +819,16 @@ class KugouCommentList {
           .map((e) => KugouComment.fromJson(e as Map<String, dynamic>))
           .toList(),
       hotComments: hot,
+      // 楼层评论（replylist）不返回 total/count，回复总数在 comments_num 里，
+      // 补进降级链才能判断楼中楼是否已全部加载完。
       total: _parseInt(
-        data['total'] ?? data['count'] ?? data['comment_count'] ?? 0,
+        data['total'] ??
+            data['count'] ??
+            data['comment_count'] ??
+            data['comments_num'] ??
+            0,
       ),
+      childrenId: _str(data['childrenid'] ?? ''),
     );
   }
 }
@@ -829,6 +843,12 @@ class KugouComment {
   final int replyCount;
   final bool isHot;
   final bool isStar;
+
+  /// 楼中楼回复的父级回复 ID（原始 JSON 的 `pid`）。
+  ///
+  /// null 或 '0' 表示直接回复楼主；非 0 时指向同一楼内另一条回复的 ID，
+  /// 楼中楼的嵌套层级由此还原（见 buildReplyTree）。
+  final String? parentId;
 
   /// 楼层评论所需字段
   final String? specialId;
@@ -846,6 +866,7 @@ class KugouComment {
     this.replyCount = 0,
     this.isHot = false,
     this.isStar = false,
+    this.parentId,
     this.specialId,
     this.tid,
     this.code,
@@ -900,8 +921,8 @@ class KugouComment {
         ),
       ),
       content: _str(json['content'] ?? json['comment_text'] ?? ''),
-      time: _parseInt(
-        json['createtime'] ?? json['addtime'] ?? json['time'] ?? 0,
+      time: _parseCommentTime(
+        json['createtime'] ?? json['addtime'] ?? json['time'],
       ),
       likes: _parseInt(
         likeRecord?['count'] ??
@@ -914,13 +935,20 @@ class KugouComment {
       replyCount: _parseInt(json['reply_num'] ?? json['reply_count'] ?? 0),
       isHot: parseBool(json['is_hot'] ?? json['isHot'] ?? isHot),
       isStar: parseBool(json['is_star'] ?? json['isStar'] ?? isStar),
+      parentId: _strNull(json['pid']),
       specialId: _strNull(
         json['special_child_id'] ??
             json['special_id'] ??
             json['specialId'] ??
             json['childrenid'],
       ),
-      tid: _strNull(json['tid'] ?? json['id'] ?? json['comment_id']),
+      // 顶级评论的楼层 id 就是它自己的 id。cmtlist 干脆不返回 tid 字段，
+      // 但「最热」接口（rank/topliked）会给部分评论带上 tid: 0——`??` 只在 null
+      // 时降级，这个占位 0 会让 tid 变成 "0" 而不是降级到 id，带着它请求楼层
+      // 评论必然失败（表现为「楼层评论暂不可用」），所以 0 要和缺失同样对待。
+      tid: _strNull(
+        _zeroAsNull(json['tid']) ?? json['id'] ?? json['comment_id'],
+      ),
       code: _strNull(json['code']),
       mixSongId: _strNull(
         json['mixsongid'] ?? json['audio_id'] ?? json['album_audio_id'],
@@ -1278,12 +1306,50 @@ String _cleanName(dynamic v) {
 }
 
 String? _strNull(dynamic v) => v?.toString();
+
+/// 把 0 / "0" 视作「字段缺失」返回 null，让 `??` 降级链能继续往后取。
+///
+/// 上游部分接口用 0 当占位值而不是省略字段，直接写 `json['x'] ?? json['y']`
+/// 会把这个 0 当成有效值。
+dynamic _zeroAsNull(dynamic v) {
+  if (v == null) return null;
+  final text = v.toString().trim();
+  return text.isEmpty || text == '0' ? null : v;
+}
+
 int _parseInt(dynamic v) {
   if (v == null) return 0;
   if (v is int) return v;
   if (v is double) return v.toInt();
   return int.tryParse(v.toString()) ?? 0;
 }
+
+/// 解析评论时间为秒级 Unix 时间戳。
+///
+/// 酷狗评论接口的 `addtime` 是 "2024-09-11 08:38:13" 这样的日期时间字符串而非
+/// 时间戳，[_parseInt] 对它只能得到 0，时间戳因此完全渲染不出来。这里先按数字
+/// （秒级时间戳）解析，失败再按日期时间字符串解析。
+///
+/// 字符串不带时区，实测是北京时间（UTC+8），按 UTC+8 而非设备本地时区解析，
+/// 否则其他时区算出的「x 小时前」会整体偏移、甚至变成未来时间。
+int _parseCommentTime(dynamic v) {
+  if (v == null) return 0;
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  final text = v.toString().trim();
+  if (text.isEmpty) return 0;
+  final asTimestamp = int.tryParse(text);
+  if (asTimestamp != null) return asTimestamp;
+  var iso = text.replaceFirst(' ', 'T');
+  if (!iso.endsWith('Z') && !_isoOffsetPattern.hasMatch(iso)) {
+    iso = '$iso+08:00';
+  }
+  final parsed = DateTime.tryParse(iso);
+  return parsed == null ? 0 : parsed.millisecondsSinceEpoch ~/ 1000;
+}
+
+/// ISO 8601 尾部时区偏移（如 +08:00 / -0500），用于判断是否需要补 UTC+8。
+final RegExp _isoOffsetPattern = RegExp(r'[+-]\d{2}:?\d{2}$');
 
 /// 与 [_parseInt] 相同，但解析失败/缺失时返回 null（用于可选数字字段）。
 int? _parseIntOrNull(dynamic v) {

@@ -110,4 +110,30 @@ void main() {
       expect(a3.avatar, isNull);
     });
   });
+
+  group('KugouComment.fromJson 的 tid', () {
+    test('缺少 tid 字段时降级到 id（cmtlist 的形状）', () {
+      final c = KugouComment.fromJson({'id': '613046466', 'reply_num': 25});
+      expect(c.tid, '613046466');
+    });
+
+    test('tid 为占位 0 时同样降级到 id（topliked 的形状）', () {
+      // rank/topliked 会给部分评论带上 tid: 0，若当成有效值会拼出 tid=0 的
+      // 楼层评论请求，上游必然失败，UI 显示「楼层评论暂不可用」。
+      final c = KugouComment.fromJson({
+        'id': '613046466',
+        'tid': 0,
+        'reply_num': 25,
+      });
+      expect(c.tid, '613046466');
+
+      final s = KugouComment.fromJson({'id': '613046466', 'tid': '0'});
+      expect(s.tid, '613046466');
+    });
+
+    test('tid 非 0 时按原值使用', () {
+      final c = KugouComment.fromJson({'id': '111', 'tid': '678433417'});
+      expect(c.tid, '678433417');
+    });
+  });
 }

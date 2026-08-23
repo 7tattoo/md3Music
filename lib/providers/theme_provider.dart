@@ -390,9 +390,9 @@ class ThemeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 设置 UI 缩放倍率（0.5 ~ 2.0）。
+  /// 设置 UI 缩放倍率（0.5 ~ 5.0）。
   Future<void> setUiScale(double scale) async {
-    final clamped = scale.clamp(0.5, 2.0);
+    final clamped = scale.clamp(0.5, 5.0);
     if (_uiScale == clamped) return;
     _uiScale = clamped;
     notifyListeners();
