@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/utils/app_toast.dart';
-import '../core/utils/ui_scale.dart';
 import '../data/models/song.dart';
 import '../modules/player/comments_view.dart';
 import '../modules/player/mv_player_page.dart';
@@ -211,17 +210,14 @@ class SongListItem extends StatelessWidget {
   }
 
   /// 多选模式下的圆形复选框，与封面同等大小。
-  /// 封面在 [SmartArtworkImage] 内部按「调整全局界面大小」缩放，这里同步缩放，
-  /// 否则放大后的对勾图标会撑破未缩放的圆框。
   Widget _buildCheckbox(
     BuildContext context,
     ColorScheme colorScheme,
     double size,
   ) {
-    final scaledSize = context.scaledSize(size);
     return SizedBox(
-      width: scaledSize,
-      height: scaledSize,
+      width: size,
+      height: size,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 150),
         child: isSelected

@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import '../../core/services/desktop_lyric_service.dart';
 import '../../core/services/media_notification_service.dart';
 import '../../core/theme/motion_constants.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../data/repositories/settings_repository.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/player_provider.dart';
@@ -411,12 +410,11 @@ class _MiniPlayerState extends State<MiniPlayer>
                               children: [
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(
-                                    context.scaledSize(6),
+                                    6,
                                   ),
-                                  // 外框与封面同步缩放，避免放大后被裁切
                                   child: SizedBox(
-                                    width: context.scaledSize(44),
-                                    height: context.scaledSize(44),
+                                    width: 44,
+                                    height: 44,
                                     child: SmartArtworkImage(
                                       artworkUri: currentSong.artworkUri,
                                       fallbackFilePath: currentSong.localPath,

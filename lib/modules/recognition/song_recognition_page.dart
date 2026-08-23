@@ -11,7 +11,6 @@ import 'package:record/record.dart';
 
 import '../../core/layout/page_title_alignment.dart';
 import '../../core/utils/app_toast.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../player/mini_player.dart';
 import 'floating_recognition_service.dart';
@@ -601,9 +600,8 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
   }
 
   /// 识别结果卡片左侧的歌曲封面（96x96 圆角，带加载中/失败占位）。
-  /// 尺寸随「调整全局界面大小」缩放。
   Widget _buildCover(String coverUrl, ColorScheme colorScheme) {
-    final size = context.scaledSize(96);
+    const double size = 96;
     Widget placeholder() => Container(
       width: size,
       height: size,
@@ -621,8 +619,8 @@ class _SongRecognitionPageState extends State<SongRecognitionPage>
         width: size,
         height: size,
         fit: BoxFit.cover,
-        memCacheWidth: context.scaledCache(288),
-        memCacheHeight: context.scaledCache(288),
+        memCacheWidth: 288,
+        memCacheHeight: 288,
         placeholder: (_, _) => placeholder(),
         errorWidget: (_, _, _) => placeholder(),
       ),

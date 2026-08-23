@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:material_color_utilities/material_color_utilities.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/layout/ui_density.dart';
 import '../core/services/custom_font_loader.dart';
 import '../core/theme/app_theme.dart';
 
@@ -13,7 +14,10 @@ class ThemeProvider extends ChangeNotifier {
   static const String _amStylePlayerKey = 'use_am_style_player';
   static const String _manualSeedKey = 'manual_seed_color';
   static const String _oledBlackKey = 'use_oled_black';
-  static const String _uiScaleKey = 'ui_scale';
+  // 「显示大小」档位（安卓系统同名设置的语义，见 core/layout/ui_density.dart）
+  static const String _displayScaleKey = 'ui_display_scale';
+  // 已废弃的逐元素缩放键，加载时清理（见 _loadDisplayScale）
+  static const String _legacyUiScaleKey = 'ui_scale';
   // 底部导航栏文字显示行为：始终显示 / 仅当前页 / 始终不显示
   static const String _navLabelBehaviorKey = 'nav_label_behavior';
   static const String _fontSourceKey = 'font_source';
@@ -43,7 +47,7 @@ class ThemeProvider extends ChangeNotifier {
   bool _useAmStylePlayer = false;
   Color? _manualSeedColor;
   bool _useOledBlack = false;
-  double _uiScale = 1.0;
+  double _displayScale = kDefaultDisplayScale;
   // 底部导航栏文字显示行为（默认始终不显示）
   NavigationDestinationLabelBehavior _navLabelBehavior =
       NavigationDestinationLabelBehavior.alwaysHide;
@@ -81,7 +85,7 @@ class ThemeProvider extends ChangeNotifier {
   bool get useAmStylePlayer => _useAmStylePlayer;
   Color? get manualSeedColor => _manualSeedColor;
   bool get useOledBlack => _useOledBlack;
-  double get uiScale => _uiScale;
+  double get displayScale => _displayScale;
   NavigationDestinationLabelBehavior get navLabelBehavior => _navLabelBehavior;
   FontSource get fontSource => _fontSource;
   String? get customFontPath => _customFontPath;
@@ -147,7 +151,7 @@ class ThemeProvider extends ChangeNotifier {
     _loadAmStylePlayer();
     _loadManualSeedColor();
     _loadOledBlack();
-    _loadUiScale();
+    _loadDisplayScale();
     _loadNavLabelBehavior();
     _loadFontSource();
     _loadArtistPhotoBackground();
@@ -383,21 +387,26 @@ class ThemeProvider extends ChangeNotifier {
     await prefs.setBool(_oledBlackKey, enabled);
   }
 
-  /// 加载 UI 缩放倍率持久化值，默认 1.0。
-  Future<void> _loadUiScale() async {
+  /// 加载「显示大小」档位，默认 [kDefaultDisplayScale]（设备真实 dp）。
+  ///
+  /// 顺带清掉旧键 `ui_scale`：那是已删除的逐元素缩放实现留下的，值域 0.5~5.0，
+  /// 沿用会让存了 3.0 的用户拿到 131dp 宽的视口。不做值迁移，一律从 1.00 起。
+  Future<void> _loadDisplayScale() async {
     final prefs = await SharedPreferences.getInstance();
-    _uiScale = prefs.getDouble(_uiScaleKey) ?? 1.0;
+    _displayScale = (prefs.getDouble(_displayScaleKey) ?? kDefaultDisplayScale)
+        .clamp(kMinDisplayScale, kMaxDisplayScale);
     notifyListeners();
+    await prefs.remove(_legacyUiScaleKey);
   }
 
-  /// 设置 UI 缩放倍率（0.5 ~ 5.0）。
-  Future<void> setUiScale(double scale) async {
-    final clamped = scale.clamp(0.5, 5.0);
-    if (_uiScale == clamped) return;
-    _uiScale = clamped;
+  /// 设置「显示大小」档位（[kMinDisplayScale] ~ [kMaxDisplayScale]）。
+  Future<void> setDisplayScale(double scale) async {
+    final clamped = scale.clamp(kMinDisplayScale, kMaxDisplayScale);
+    if (_displayScale == clamped) return;
+    _displayScale = clamped;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_uiScaleKey, clamped);
+    await prefs.setDouble(_displayScaleKey, clamped);
   }
 
   /// 加载底部导航栏文字显示行为的持久化值，默认始终不显示。

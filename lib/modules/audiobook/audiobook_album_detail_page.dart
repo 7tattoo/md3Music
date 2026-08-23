@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/song.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
@@ -550,8 +549,8 @@ class _AudiobookAlbumDetailPageState extends State<AudiobookAlbumDetailPage> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: SizedBox(
-                      width: context.scaledSize(140),
-                      height: context.scaledSize(140),
+                      width: 140,
+                      height: 140,
                       child: SmartArtworkImage(
                         artworkUri: widget.album.coverUrl,
                         size: 140,

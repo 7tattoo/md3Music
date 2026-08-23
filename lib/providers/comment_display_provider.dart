@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 评论显示设置 Provider。
 ///
 /// 集中管理评论区的字号、楼中楼缩进等视觉相关设置，避免污染
-/// [ThemeProvider]（主题/UI 缩放）和其他领域 Provider。
+/// [ThemeProvider]（主题）和其他领域 Provider。
 ///
 /// 字号单位：物理像素（logical pixels），与 TextTheme 的 `fontSize` 一致。
 /// 默认楼主 17.0，楼中楼回复自动比楼主小 1 号（16.0）。

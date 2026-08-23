@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/utils/ui_scale.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -171,13 +170,13 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
-              width: context.scaledSize(120),
-              height: context.scaledSize(120),
+              width: 120,
+              height: 120,
               child: widget.scene.coverUrl != null
                   ? CachedNetworkImage(
                       imageUrl: widget.scene.coverUrl!,
-                      memCacheWidth: context.scaledCache(360),
-                      memCacheHeight: context.scaledCache(360),
+                      memCacheWidth: 360,
+                      memCacheHeight: 360,
                       fit: BoxFit.cover,
                       errorWidget: (_, _, _) => Container(
                         color: cs.surfaceContainerHighest,
@@ -230,8 +229,7 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
           ),
         ),
         SizedBox(
-          // 区块高度随封面一起缩放
-          height: context.scaledSize(130),
+          height: 130,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -357,7 +355,7 @@ class _TagCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
-      width: context.scaledSize(110),
+      width: 110,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         clipBehavior: Clip.antiAlias,
@@ -371,8 +369,8 @@ class _TagCard extends StatelessWidget {
                   child: tag.picUrl != null
                       ? CachedNetworkImage(
                           imageUrl: tag.picUrl!,
-                          memCacheWidth: context.scaledCache(330),
-                          memCacheHeight: context.scaledCache(330),
+                          memCacheWidth: 330,
+                          memCacheHeight: 330,
                           fit: BoxFit.cover,
                           errorWidget: (_, _, _) => _fallback(cs),
                         )
@@ -441,7 +439,7 @@ class _DiscussCard extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                radius: context.scaledSize(16),
+                radius: 16,
                 backgroundColor: cs.surfaceContainerHighest,
                 backgroundImage: discuss.avatar != null
                     ? NetworkImage(discuss.avatar!)
@@ -492,13 +490,13 @@ class _DiscussCard extends StatelessWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
-                          width: context.scaledSize(40),
-                          height: context.scaledSize(40),
+                          width: 40,
+                          height: 40,
                           child: song.artworkUri != null
                               ? CachedNetworkImage(
                                   imageUrl: song.artworkUri!,
-                                  memCacheWidth: context.scaledCache(120),
-                                  memCacheHeight: context.scaledCache(120),
+                                  memCacheWidth: 120,
+                                  memCacheHeight: 120,
                                   fit: BoxFit.cover,
                                   errorWidget: (_, _, _) => Icon(
                                     Icons.music_note,
@@ -555,13 +553,13 @@ class _DiscussCard extends StatelessWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
-                          width: context.scaledSize(40),
-                          height: context.scaledSize(40),
+                          width: 40,
+                          height: 40,
                           child: collection.coverUrl != null
                               ? CachedNetworkImage(
                                   imageUrl: collection.coverUrl!,
-                                  memCacheWidth: context.scaledCache(120),
-                                  memCacheHeight: context.scaledCache(120),
+                                  memCacheWidth: 120,
+                                  memCacheHeight: 120,
                                   fit: BoxFit.cover,
                                   errorWidget: (_, _, _) => Icon(
                                     Icons.queue_music,

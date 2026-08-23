@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/utils/ui_scale.dart';
 import '../../providers/kugou_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
 import '../../widgets/scroll_aware_app_bar.dart';
@@ -154,8 +153,7 @@ class _AlbumSection extends StatelessWidget {
           child: Text(title, style: tt.titleLarge),
         ),
         SizedBox(
-          // 区块高度随封面一起缩放
-          height: context.scaledSize(188),
+          height: 188,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -165,7 +163,7 @@ class _AlbumSection extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: SizedBox(
-                  width: context.scaledSize(130),
+                  width: 130,
                   child: Material(
                     color: cs.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(16),

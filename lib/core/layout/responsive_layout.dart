@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../utils/ui_scale.dart';
+import '../../providers/device_provider.dart';
 
 enum ScreenType { compact, medium, expanded }
 
+/// 断点值 600dp。[getScreenType] 量的是**可用宽度**（横屏手机也会越过它），
+/// [isPadLayout] 量的是**最短边**（只有真正的大屏设备才越过）。
 const double _compactBreakpoint = 600;
 const double _mediumBreakpoint = 900;
 
@@ -15,6 +18,23 @@ ScreenType getScreenType(double width) {
 
 ScreenType getScreenTypeFromContext(BuildContext context) {
   return getScreenType(MediaQuery.sizeOf(context).width);
+}
+
+/// 当前是否使用 Pad（大屏）布局：分栏播放器、网格列数偏好、居中大弹窗等。
+///
+/// [DeviceType.auto] 按**有效视口**最短边判定，而不是设备物理 dp：
+/// 「显示大小」（[DisplayScaleScope]）调大后可用逻辑区随之变小，原生同样会跌出
+/// sw600dp 资源桶、切回手机布局。两边一致才不会出现"Pad 分栏挤在手机大小的
+/// 视口里"。用户在设置里手动选了手机/平板时直接服从该选择。
+bool isPadLayout(BuildContext context) {
+  switch (context.read<DeviceProvider>().deviceType) {
+    case DeviceType.auto:
+      return MediaQuery.sizeOf(context).shortestSide >= _compactBreakpoint;
+    case DeviceType.phone:
+      return false;
+    case DeviceType.pad:
+      return true;
+  }
 }
 
 class ResponsiveLayout extends StatelessWidget {
@@ -198,8 +218,8 @@ class CompactNavigationRail extends StatelessWidget {
         right: false,
         bottom: false,
         child: SizedBox(
-          // 栏宽随「调整全局界面大小」缩放：图标容器同比放大后 34 装不下
-          width: context.scaledSize(34),
+          // 仅容纳 24dp 图标 + 28dp 指示器胶囊（AGENTS.md §8.6）
+          width: 34,
           child: Column(
             children: [
               if (leading != null) ...[leading!, const SizedBox(height: 8)],
@@ -262,14 +282,13 @@ class _CompactRailDestination extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(context.scaledSize(17)),
+      borderRadius: BorderRadius.circular(17),
       child: Padding(
         // 上下各 3 → 相邻图标间距 6dp（M3 默认 12dp 的一半）
-        padding: EdgeInsets.symmetric(vertical: context.scaledSize(3)),
+        padding: EdgeInsets.symmetric(vertical: 3),
         child: Container(
-          // 指示器容器随图标一起缩放，否则放大后的图标会溢出胶囊底色
-          width: context.scaledSize(28),
-          height: context.scaledSize(28),
+          width: 28,
+          height: 28,
           alignment: Alignment.center,
           decoration: selected
               ? ShapeDecoration(

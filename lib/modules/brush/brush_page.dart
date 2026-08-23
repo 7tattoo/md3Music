@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
 import '../../core/layout/page_title_alignment.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/song.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_api_client.dart';
@@ -392,8 +391,8 @@ class _BrushPageState extends State<BrushPage> {
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: SizedBox(
-          width: context.scaledSize(56),
-          height: context.scaledSize(56),
+          width: 56,
+          height: 56,
           child: card.coverUrl != null
               ? CachedNetworkImage(
                   imageUrl: card.coverUrl!,

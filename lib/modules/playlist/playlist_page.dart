@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
 import '../../core/utils/app_toast.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/collected_playlist_store.dart';
@@ -1086,17 +1085,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
                                       child: SizedBox(
-                                        width: context.scaledSize(140),
-                                        height: context.scaledSize(140),
+                                        width: 140,
+                                        height: 140,
                                         child:
                                             displayPlaylist.artworkUri != null
                                             ? CachedNetworkImage(
                                                 imageUrl:
                                                     displayPlaylist.artworkUri!,
-                                                memCacheWidth: context
-                                                    .scaledCache(420),
-                                                memCacheHeight: context
-                                                    .scaledCache(420),
+                                                memCacheWidth: 420,
+                                                memCacheHeight: 420,
                                                 fit: BoxFit.cover,
                                                 placeholder: (_, _) => Container(
                                                   color: colorScheme
@@ -1779,8 +1776,8 @@ class _SimilarPlaylistsViewState extends State<_SimilarPlaylistsView> {
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: SizedBox(
-              width: context.scaledSize(48),
-              height: context.scaledSize(48),
+              width: 48,
+              height: 48,
               child: pl.coverUrl != null
                   ? CachedNetworkImage(
                       imageUrl: pl.coverUrl!,

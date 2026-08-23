@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/layout/page_title_alignment.dart';
+import '../../core/layout/ui_density.dart';
 import '../../core/services/background_image_loader.dart';
 import '../../core/widgets/app_background.dart' show kDefaultWallpaperAsset;
 import '../../core/services/custom_font_loader.dart';
@@ -97,7 +98,8 @@ class _SettingsPageState extends State<SettingsPage>
   // 锁屏歌词独立字号/粗细（默认跟随 AM 歌词偏好）
   double _lockScreenLyricFontSize = 22;
   int _lockScreenLyricFontWeight = 400;
-  double _uiScale = 1.0;
+  // 「显示大小」档位（安卓同名设置语义），滑块拖动期间的本地值
+  double _displayScale = kDefaultDisplayScale;
   // 暂停淡入淡出开关
   bool _pauseFadeEnabled = false;
   // 播放时保持屏幕常亮开关
@@ -267,8 +269,8 @@ class _SettingsPageState extends State<SettingsPage>
     final useBackgroundMonet = context.read<ThemeProvider>().useBackgroundMonet;
     final useTextShadow = context.read<ThemeProvider>().useTextShadow;
     final textShadowBlur = context.read<ThemeProvider>().textShadowBlur;
-    // 从 ThemeProvider 同步 UI 缩放
-    final uiScale = context.read<ThemeProvider>().uiScale;
+    // 从 ThemeProvider 同步「显示大小」档位
+    final displayScale = context.read<ThemeProvider>().displayScale;
     // 读取蓝牙歌词开关
     final bluetoothLyricEnabled = await _settingsRepository
         .getBluetoothLyricEnabled();
@@ -319,7 +321,7 @@ class _SettingsPageState extends State<SettingsPage>
       _useDuetLayout = LyricPreferences.instance.useDuetLayout;
       _lyricEcoMode = LyricPreferences.instance.ecoMode;
       _lyricDynamicColor = LyricPreferences.instance.useDynamicLyricColor;
-      _uiScale = uiScale;
+      _displayScale = displayScale;
       _bluetoothLyricEnabled = bluetoothLyricEnabled;
       _lockScreenLyricEnabled = lockScreenLyricEnabled;
       _lockScreenLyricFontSize = lockScreenLyricFontSize;
@@ -1226,33 +1228,34 @@ class _SettingsPageState extends State<SettingsPage>
               : null,
         ),
         const Divider(),
-        // UI 缩放滑块
+        // 「显示大小」滑块（语义同安卓系统设置，见 core/layout/ui_density.dart）
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
           child: Row(
             children: [
-              Icon(Icons.format_size, color: colorScheme.onSurfaceVariant),
+              Icon(Icons.fit_screen, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 12),
               Expanded(
                 child: M3ESlider(
                   decoration: const M3ESliderDecoration(haptic: M3EHapticFeedback.medium),
-                  value: _uiScale,
-                  min: 0.5,
-                  max: 5.0,
-                  divisions: 45,
-                  label: '${_uiScale.toStringAsFixed(1)}x',
+                  value: _displayScale,
+                  min: kMinDisplayScale,
+                  max: kMaxDisplayScale,
+                  divisions: kDisplayScaleDivisions,
+                  label: '${_displayScale.toStringAsFixed(2)}x',
                   onChanged: (v) {
-                    setState(() => _uiScale = v);
+                    setState(() => _displayScale = v);
                   },
+                  // 只在松手时落盘：每格都重排整个 App 太重
                   onChangeEnd: (v) {
-                    context.read<ThemeProvider>().setUiScale(v);
+                    context.read<ThemeProvider>().setDisplayScale(v);
                   },
                 ),
               ),
               SizedBox(
-                width: 40,
+                width: 48,
                 child: Text(
-                  '${_uiScale.toStringAsFixed(1)}x',
+                  '${_displayScale.toStringAsFixed(2)}x',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.primary,
@@ -1266,7 +1269,7 @@ class _SettingsPageState extends State<SettingsPage>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            '调整全局界面大小，含专辑封面与头像（歌词界面不受影响）',
+            '显示大小：与系统同名设置一致，整体等比放大或缩小界面，一屏能显示的内容随之增减',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
@@ -2609,10 +2612,10 @@ class _SettingsPageState extends State<SettingsPage>
                 child: SizedBox(
                   height: 140,
                   width: double.infinity,
-                  // 预览是按 1.0x 画的迷你界面示意图：高度固定 140、宽度受
-                  // Expanded 约束，内部元素没法随「调整全局界面大小」等比放大
-                  // （图标一放大就撑破 28dp 顶栏、24dp 图标块）。这里豁免缩放，
-                  // 让预览恒按真实比例呈现，与歌词界面的 noScaling 同一手法。
+                  // 迷你界面示意图：高度固定 140、宽度受 Expanded 约束，
+                  // 内部元素（28dp 顶栏、24dp 图标块）没有余量跟随系统字号，
+                  // 字一放大就撑破。这里豁免系统字号，让预览恒按真实比例呈现。
+                  // 「显示大小」不在此列 —— 它整页等比变化，预览随之整体缩放。
                   child: MediaQuery(
                     data: MediaQuery.of(
                       context,

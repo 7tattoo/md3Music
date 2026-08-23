@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../modules/user/favorites_page.dart';
 import '../../providers/kugou_provider.dart';
-import '../utils/ui_scale.dart';
 
 class Sidebar extends StatelessWidget {
   final int selectedIndex;
@@ -72,9 +71,8 @@ class Sidebar extends StatelessWidget {
                   child: Row(
                     children: [
                       Container(
-                        // 头像圆底随图标一起缩放
-                        width: context.scaledSize(34),
-                        height: context.scaledSize(34),
+                        width: 34,
+                        height: 34,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: cs.primary.withValues(alpha: 0.1),
@@ -194,18 +192,17 @@ class Sidebar extends StatelessWidget {
                       }
                     },
                     borderRadius: BorderRadius.circular(
-                      context.scaledSize(14),
+                      14,
                     ),
                     child: Container(
-                      // 内边距与圆角随图标一起缩放，保持与 1.0x 相同的视觉比例
                       padding: EdgeInsets.symmetric(
-                        horizontal: context.scaledSize(14),
-                        vertical: context.scaledSize(8),
+                        horizontal: 14,
+                        vertical: 8,
                       ),
                       decoration: isActive
                           ? BoxDecoration(
                               borderRadius: BorderRadius.circular(
-                                context.scaledSize(14),
+                                14,
                               ),
                               color: cs.primary.withValues(alpha: 0.12),
                             )

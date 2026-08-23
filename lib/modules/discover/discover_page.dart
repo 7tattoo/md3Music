@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:m3e_core/m3e_core.dart';
 
-import '../../core/utils/ui_scale.dart';
 import '../../data/models/album.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
@@ -451,7 +450,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             ),
             child: SizedBox(
               // 130 封面 + 文字块（8 上 + 20 行高 + 8 下）
-              height: context.scaledSize(166),
+              height: 166,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -459,7 +458,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 itemBuilder: (context, i) => Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: SizedBox(
-                    width: context.scaledSize(130),
+                    width: 130,
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
@@ -473,8 +472,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             aspectRatio: 1,
                             child: CachedNetworkImage(
                               imageUrl: themes[i].coverUrl ?? '',
-                              memCacheWidth: context.scaledCache(390),
-                              memCacheHeight: context.scaledCache(390),
+                              memCacheWidth: 390,
+                              memCacheHeight: 390,
                               fit: BoxFit.cover,
                               placeholder: (_, _) => Container(
                                 color: cs.surfaceContainerHighest,
@@ -611,7 +610,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             child: SizedBox(
               // 150 封面（正方）+ 40 文字块。原来是 200，多出的 10dp 让
               // AlbumCard 把封面拉成 150×160 后裁掉了上下各 5dp。
-              height: context.scaledSize(190),
+              height: 190,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -619,7 +618,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 itemBuilder: (context, i) => Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: SizedBox(
-                    width: context.scaledSize(150),
+                    width: 150,
                     child: AlbumCard(
                       album: Album(
                         id: plist[i].id,

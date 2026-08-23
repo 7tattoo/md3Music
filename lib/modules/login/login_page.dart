@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:provider/provider.dart';
-import '../../core/utils/ui_scale.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/kugou_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -565,7 +564,7 @@ class _LoginPageState extends State<LoginPage> {
                     final a = accounts[index];
                     return ListTile(
                       leading: CircleAvatar(
-                        radius: context.scaledSize(20),
+                        radius: 20,
                         backgroundColor: cs.primary.withValues(alpha: 0.15),
                         child: Text(
                           (a.nickname != null && a.nickname!.isNotEmpty)

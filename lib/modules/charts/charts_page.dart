@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:m3e_core/m3e_core.dart';
 
-import '../../core/utils/ui_scale.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/kugou_api/kugou_models.dart';
@@ -159,13 +158,13 @@ class _ChartsPageState extends State<ChartsPage> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: SizedBox(
-                              width: context.scaledSize(52),
-                              height: context.scaledSize(52),
+                              width: 52,
+                              height: 52,
                               child: rank.coverUrl != null
                                   ? CachedNetworkImage(
                                       imageUrl: rank.coverUrl!,
-                                      memCacheWidth: context.scaledCache(156),
-                                      memCacheHeight: context.scaledCache(156),
+                                      memCacheWidth: 156,
+                                      memCacheHeight: 156,
                                       fit: BoxFit.cover,
                                     )
                                   : Container(
