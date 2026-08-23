@@ -99,8 +99,6 @@ class _SettingsPageState extends State<SettingsPage>
   // 锁屏歌词独立字号/粗细（默认跟随 AM 歌词偏好）
   double _lockScreenLyricFontSize = 22;
   int _lockScreenLyricFontWeight = 400;
-  // 「显示大小」档位（安卓同名设置语义），滑块拖动期间的本地值
-  double _displayScale = kDefaultDisplayScale;
   // 暂停淡入淡出开关
   bool _pauseFadeEnabled = false;
   // 播放时保持屏幕常亮开关
@@ -270,8 +268,6 @@ class _SettingsPageState extends State<SettingsPage>
     final useBackgroundMonet = context.read<ThemeProvider>().useBackgroundMonet;
     final useTextShadow = context.read<ThemeProvider>().useTextShadow;
     final textShadowBlur = context.read<ThemeProvider>().textShadowBlur;
-    // 从 ThemeProvider 同步「显示大小」档位
-    final displayScale = context.read<ThemeProvider>().displayScale;
     // 读取蓝牙歌词开关
     final bluetoothLyricEnabled = await _settingsRepository
         .getBluetoothLyricEnabled();
@@ -322,7 +318,6 @@ class _SettingsPageState extends State<SettingsPage>
       _useDuetLayout = LyricPreferences.instance.useDuetLayout;
       _lyricEcoMode = LyricPreferences.instance.ecoMode;
       _lyricDynamicColor = LyricPreferences.instance.useDynamicLyricColor;
-      _displayScale = displayScale;
       _bluetoothLyricEnabled = bluetoothLyricEnabled;
       _lockScreenLyricEnabled = lockScreenLyricEnabled;
       _lockScreenLyricFontSize = lockScreenLyricFontSize;
@@ -1229,59 +1224,11 @@ class _SettingsPageState extends State<SettingsPage>
               : null,
         ),
         const Divider(),
-        // 「显示大小」滑块（语义同安卓系统设置，见 core/layout/ui_density.dart）
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Row(
-            children: [
-              Icon(Icons.fit_screen, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 12),
-              Expanded(
-                child: M3ESlider(
-                  decoration: const M3ESliderDecoration(haptic: M3EHapticFeedback.medium),
-                  value: _displayScale,
-                  min: kMinDisplayScale,
-                  max: kMaxDisplayScale,
-                  // divisions 不传 = 无极调节（M3ESlider.divisions 为 int?）
-                  label: '${_displayScale.toStringAsFixed(2)}x',
-                  onChanged: (v) {
-                    setState(() => _displayScale = v);
-                  },
-                  // 只在松手时落盘：每格都重排整个 App 太重。
-                  // 落盘后弹确认框，10 秒内不确认自动还原 —— 极端档位可能让
-                  // 界面难以操作（滑块自身也被放大），必须留一条自动退路。
-                  onChangeEnd: (v) {
-                    final previous =
-                        context.read<ThemeProvider>().displayScale;
-                    if (v == previous) return;
-                    context.read<ThemeProvider>().setDisplayScale(v);
-                    _confirmDisplayScale(previous);
-                  },
-                ),
-              ),
-              SizedBox(
-                width: 48,
-                child: Text(
-                  '${_displayScale.toStringAsFixed(2)}x',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            '显示大小：与系统同名设置一致，整体等比放大或缩小界面，一屏能显示的内容随之增减',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
+        // 「显示大小」滑块单独抽成 StatefulWidget：拖动中的中间值只重建这一小块。
+        // 若放在设置页里用 setState 承接，每个 drag update 都会重建整页三千余行的
+        // 元素树，滑块自身的手势识别器可能被连带重建 → 拖动中途"断触"、
+        // onChangeEnd 提前触发（手还没抬就应用并弹确认框）。
+        const _DisplayScaleTile(),
         const Divider(height: 16),
         // 底部导航栏文字显示行为：始终显示 / 仅当前页 / 始终不显示
         Padding(
@@ -2344,23 +2291,6 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  /// 「显示大小」调整后的确认弹窗：10 秒内未点「保留」则自动还原到 [previous]。
-  ///
-  /// 极端档位下滑块与按钮自身也被放大/缩小，可能已经难以再操作，所以必须有
-  /// 一条不依赖用户交互的退路。弹窗本身在缩放后的树里渲染，用户看到的就是
-  /// 新档位的真实效果。
-  Future<void> _confirmDisplayScale(double previous) async {
-    final keep = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const _DisplayScaleConfirmDialog(),
-    );
-    if (!mounted || keep == true) return;
-    await context.read<ThemeProvider>().setDisplayScale(previous);
-    if (!mounted) return;
-    setState(() => _displayScale = previous);
-  }
-
   Future<void> _showDataMigrationDialog() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -3301,6 +3231,105 @@ class _LyricTimeOffsetTileState extends State<_LyricTimeOffsetTile> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 「显示大小」设置项：无极滑块 + 抬手应用 + 10 秒超时自动还原。
+///
+/// 单独成 widget 而非留在设置页里：拖动过程中的中间值只需要重建这一小块，
+/// 放在设置页会让每个 drag update 重建整页元素树，进而在拖动中途打断手势。
+class _DisplayScaleTile extends StatefulWidget {
+  const _DisplayScaleTile();
+
+  @override
+  State<_DisplayScaleTile> createState() => _DisplayScaleTileState();
+}
+
+class _DisplayScaleTileState extends State<_DisplayScaleTile> {
+  /// 拖动中的临时值；null 表示显示 [ThemeProvider.displayScale] 的已应用档位。
+  double? _pending;
+
+  /// 抬手（onChangeEnd）才应用：落盘后弹确认框，10 秒内不点「保留」自动还原。
+  /// 极端档位下滑块与按钮自身也被放大/缩小，可能已无法再操作，必须留一条
+  /// 不依赖用户交互的退路。
+  Future<void> _apply(double value, double previous) async {
+    final theme = context.read<ThemeProvider>();
+    await theme.setDisplayScale(value);
+    if (!mounted) return;
+    final keep = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DisplayScaleConfirmDialog(),
+    );
+    if (!mounted) return;
+    if (keep != true) {
+      await theme.setDisplayScale(previous);
+      if (!mounted) return;
+    }
+    setState(() => _pending = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final applied = context.watch<ThemeProvider>().displayScale;
+    final value = (_pending ?? applied).clamp(kMinDisplayScale, kMaxDisplayScale);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Row(
+            children: [
+              Icon(Icons.fit_screen, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Expanded(
+                child: M3ESlider(
+                  decoration: const M3ESliderDecoration(
+                    haptic: M3EHapticFeedback.medium,
+                  ),
+                  value: value,
+                  min: kMinDisplayScale,
+                  max: kMaxDisplayScale,
+                  // divisions 不传 = 无极调节（M3ESlider.divisions 为 int?）
+                  label: '${value.toStringAsFixed(2)}x',
+                  // 拖动中只更新本地值，界面不缩放
+                  onChanged: (v) => setState(() => _pending = v),
+                  onChangeEnd: (v) {
+                    if (v == applied) {
+                      setState(() => _pending = null);
+                      return;
+                    }
+                    // ignore: discarded_futures
+                    _apply(v, applied);
+                  },
+                ),
+              ),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  '${value.toStringAsFixed(2)}x',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            '显示大小：与系统同名设置一致，整体等比放大或缩小界面，一屏能显示的内容随之增减',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
