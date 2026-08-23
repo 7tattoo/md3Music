@@ -3250,7 +3250,32 @@ class _DisplayScaleTileState extends State<_DisplayScaleTile> {
   /// 拖动中的临时值；null 表示显示 [ThemeProvider.displayScale] 的已应用档位。
   double? _pending;
 
-  /// 抬手（onChangeEnd）才应用：落盘后弹确认框，10 秒内不点「保留」自动还原。
+  /// 手指是否还按在滑块上。
+  ///
+  /// **不能把 M3ESlider 的 onChangeEnd 当作「抬手」信号**：它的 GestureDetector
+  /// 同时挂了 tap 与 horizontalDrag。手指按下停留超过 kPressTimeout(100ms) 会先
+  /// 触发 onTapDown（值跳到触点），随后一移动 tap 就输掉手势竞技场 → onTapCancel；
+  /// 而 onTapCancel 的守卫是 `if (!_isDragging)`，竞技场是「先 reject 其他成员、
+  /// 再 accept 胜者」，此刻 _isDragging 仍为 false，于是在 divisions == null
+  /// （无极，无吸附动画）下 onChangeEnd 被立即调用 —— 手还没抬就应用了档位并弹出
+  /// 模态确认框，弹窗吃掉后续指针事件，手感就是拖动途中"断触"。
+  /// 因此提交时机改由 Listener 的真实 pointer up / cancel 决定。
+  bool _pointerDown = false;
+
+  /// 抬手提交：值真的变了才应用，否则只清掉临时值。
+  void _commit() {
+    _pointerDown = false;
+    final pending = _pending;
+    final applied = context.read<ThemeProvider>().displayScale;
+    if (pending == null || pending == applied) {
+      if (pending != null) setState(() => _pending = null);
+      return;
+    }
+    // ignore: discarded_futures
+    _apply(pending, applied);
+  }
+
+  /// 应用档位：落盘后弹确认框，10 秒内不点「保留」自动还原。
   /// 极端档位下滑块与按钮自身也被放大/缩小，可能已无法再操作，必须留一条
   /// 不依赖用户交互的退路。
   Future<void> _apply(double value, double previous) async {
@@ -3285,25 +3310,35 @@ class _DisplayScaleTileState extends State<_DisplayScaleTile> {
               Icon(Icons.fit_screen, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 12),
               Expanded(
-                child: M3ESlider(
-                  decoration: const M3ESliderDecoration(
-                    haptic: M3EHapticFeedback.medium,
+                // Listener 在 GestureDetector 之上，指针事件按 hit-test 路径原样
+                // 送达、不参与手势竞技场，所以 up / cancel 是可靠的「抬手」信号。
+                child: Listener(
+                  onPointerDown: (_) => _pointerDown = true,
+                  onPointerUp: (_) => _commit(),
+                  onPointerCancel: (_) => _commit(),
+                  child: M3ESlider(
+                    // 显式给 hapticConfig：M3ESlider 在 divisions == null 时默认取
+                    // M3EHapticConfig.continuous()（minimumDragInterval 10ms +
+                    // 2% 阈值），拖动中会以最高约 100 次/秒走 MethodChannel 触发
+                    // vibrate，真机上马达饱和 + 通道洪泛。discrete() 关掉
+                    // dragTexture，只保留首尾端点反馈。
+                    decoration: const M3ESliderDecoration(
+                      haptic: M3EHapticFeedback.medium,
+                      hapticConfig: M3EHapticConfig.discrete(),
+                    ),
+                    value: value,
+                    min: kMinDisplayScale,
+                    max: kMaxDisplayScale,
+                    // divisions 不传 = 无极调节（M3ESlider.divisions 为 int?）
+                    label: '${value.toStringAsFixed(2)}x',
+                    // 拖动中只更新本地值，界面不缩放
+                    onChanged: (v) => setState(() => _pending = v),
+                    // 指针交互一律等 Listener 的 pointer up（见 _pointerDown 注释）；
+                    // 这里只兜住键盘方向键那条没有指针的路径。
+                    onChangeEnd: (_) {
+                      if (!_pointerDown) _commit();
+                    },
                   ),
-                  value: value,
-                  min: kMinDisplayScale,
-                  max: kMaxDisplayScale,
-                  // divisions 不传 = 无极调节（M3ESlider.divisions 为 int?）
-                  label: '${value.toStringAsFixed(2)}x',
-                  // 拖动中只更新本地值，界面不缩放
-                  onChanged: (v) => setState(() => _pending = v),
-                  onChangeEnd: (v) {
-                    if (v == applied) {
-                      setState(() => _pending = null);
-                      return;
-                    }
-                    // ignore: discarded_futures
-                    _apply(v, applied);
-                  },
                 ),
               ),
               SizedBox(
