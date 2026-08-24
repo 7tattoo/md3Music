@@ -6,6 +6,7 @@ import 'package:m3e_core/m3e_core.dart';
 
 import '../../data/models/album.dart';
 import '../../data/models/song.dart';
+import '../../core/widgets/no_text_shadow.dart';
 import '../../providers/kugou_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -158,31 +159,51 @@ class _SearchPageState extends State<SearchPage>
                   SliverAppBar(
                     floating: true,
                     pinned: true,
-                    // 无壁纸时不透明，避免滚动时透出下方搜索结果列表；
-                    // 有壁纸时透明（主题 appBarTheme 已透明，此处原本显式
-                    // 写死 surface 覆盖了它，导致顶部不透出壁纸）
-                    backgroundColor: useBackgroundImage
-                        ? Colors.transparent
-                        : colorScheme.surface,
+                    // 顶部固定纯色不透明，跟发现页等一级页面顶栏一致：
+                    // 不做滚动渐变、不叠模糊壁纸，文字清晰不发虚
+                    backgroundColor: colorScheme.surface,
                     surfaceTintColor: Colors.transparent,
-                    title: SizedBox(
-                      height: 40,
+                    // 实色底上剥掉全局文字阴影（壁纸+文字阴影开启时
+                    // textTheme 全局带光晕，实色底上光晕只会让文字发虚）
+                    title: NoTextShadow(
+                      child: SizedBox(
+                      height: 36,
                       child: TextField(
                         controller: _searchController,
+                        // 输入文字显式 13sp：不设 style 时 TextField 默认走
+                        // bodyLarge(16sp)，比提示语还大一圈、撑高搜索框
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 13,
+                          color: colorScheme.onSurface,
+                        ),
                         decoration: InputDecoration(
                           hintText: '搜索歌曲、歌手、专辑',
-                          hintStyle: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            size: 20,
-                            color: colorScheme.onSurfaceVariant,
+                          hintStyle: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                fontSize: 13,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                          prefixIcon: Padding(
+                            // 收紧搜索图标默认 12 前置内边距，框内文字更宽松
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Icon(
+                              Icons.search,
+                              size: 18,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                           ),
                           suffixIcon: _searchController.text.isNotEmpty
                               ? IconButton(
+                                  // 收缩默认 48 最小点击目标，避免撑大框
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size(32, 32),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    padding: EdgeInsets.zero,
+                                  ),
                                   icon: Icon(
                                     Icons.clear,
-                                    size: 18,
+                                    size: 16,
                                     color: colorScheme.onSurfaceVariant,
                                   ),
                                   onPressed: () {
@@ -195,6 +216,7 @@ class _SearchPageState extends State<SearchPage>
                                 )
                               : null,
                           filled: true,
+                          constraints: const BoxConstraints(minHeight: 36),
                           // 有壁纸时低透明度 surface 透出壁纸（与标签按钮/
                           // MiniPlayer 的 alpha 0.2 偏好一致）；无壁纸时实心
                           fillColor:
@@ -202,11 +224,12 @@ class _SearchPageState extends State<SearchPage>
                               ? colorScheme.surface.withValues(alpha: 0.2)
                               : colorScheme.surfaceContainerHighest,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(18),
                             borderSide: BorderSide.none,
                           ),
                           contentPadding: const EdgeInsets.symmetric(
                             vertical: 0,
+                            horizontal: 12,
                           ),
                           isDense: true,
                         ),
@@ -222,6 +245,7 @@ class _SearchPageState extends State<SearchPage>
                         },
                       ),
                     ),
+                    ),
                   ),
                   if (_hasSearched)
                     SliverPersistentHeader(
@@ -229,6 +253,11 @@ class _SearchPageState extends State<SearchPage>
                       delegate: _TabBarDelegate(
                         TabBar(
                           controller: _tabController,
+                          // 整行标签用深色（不用默认灰 onSurfaceVariant）：
+                          // 14sp 小字 + 灰色 + 抗锯齿在浅色背景上视觉发虚，
+                          // 选中/未选中靠下划线指示器区分即可
+                          labelColor: colorScheme.onSurface,
+                          unselectedLabelColor: colorScheme.onSurface,
                           tabs: const [
                             Tab(text: '歌曲'),
                             Tab(text: '专辑'),
@@ -238,10 +267,8 @@ class _SearchPageState extends State<SearchPage>
                             Tab(text: '歌词'),
                           ],
                         ),
-                        // 有壁纸时容器透明，壁纸透出与页面主体一致
-                        backgroundColor: useBackgroundImage
-                            ? null
-                            : colorScheme.surface,
+                        // 顶部固定纯色不透明，文字清晰不发虚
+                        backgroundColor: colorScheme.surface,
                       ),
                     ),
                 ];
@@ -1221,7 +1248,7 @@ class _LyricSearchResultItem extends StatelessWidget {
 
 class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
-  // null = 透明（壁纸模式），非 null = 无壁纸时的 surface
+  // null/transparent = 透明（壁纸模式），非 null = 无壁纸时的 surface
   final Color? backgroundColor;
 
   _TabBarDelegate(this.tabBar, {this.backgroundColor});
@@ -1244,9 +1271,12 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(
-      color: backgroundColor,
-      child: tabBar,
+    // 实色 surface 底：剥掉全局文字阴影（壁纸+阴影开启时光晕在实色底上发虚）
+    return NoTextShadow(
+      child: Container(
+        color: backgroundColor,
+        child: tabBar,
+      ),
     );
   }
 }
