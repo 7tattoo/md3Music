@@ -339,6 +339,19 @@ class SettingsRepository {
     await prefs.setBool(_keyBluetoothLyricEnabled, v);
   }
 
+  // 车机歌词开关（uCar 双通道：metadata.lyric.* + setExtras）
+  static const String _keyCarLyricEnabled = 'settings_car_lyric_enabled';
+
+  Future<bool> getCarLyricEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyCarLyricEnabled) ?? false;
+  }
+
+  Future<void> setCarLyricEnabled(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyCarLyricEnabled, v);
+  }
+
   // ===== LyricInfo 歌词转发 =====
   // 通过 MediaSession 元数据 extras.lyricInfo 发布整首歌词（LRC/ELRC），
   // 供 ColorOS 桌面歌词 / LyricInfo 模块等第三方系统读取。

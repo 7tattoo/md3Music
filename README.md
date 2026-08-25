@@ -167,52 +167,52 @@
 ### 手机 · Material Design 3
 
 <p align="center">
-  <img src="img/phone/md3/Screenshot_2026-08-05-11-56-02-028_com.md3music.md3music.jpg" width="220" alt="手机 MD3 界面 1" />
-  <img src="img/phone/md3/Screenshot_2026-08-05-11-56-16-017_com.md3music.md3music.jpg" width="220" alt="手机 MD3 界面 2" />
-  <img src="img/phone/md3/Screenshot_2026-08-05-11-57-14-315_com.md3music.md3music.jpg" width="220" alt="手机 MD3 界面 3" />
+  <img src="img/phone/md3/Screenshot_2026-08-05-11-56-02-028_com.tencent.wecarflow.jpg" width="220" alt="手机 MD3 界面 1" />
+  <img src="img/phone/md3/Screenshot_2026-08-05-11-56-16-017_com.tencent.wecarflow.jpg" width="220" alt="手机 MD3 界面 2" />
+  <img src="img/phone/md3/Screenshot_2026-08-05-11-57-14-315_com.tencent.wecarflow.jpg" width="220" alt="手机 MD3 界面 3" />
 </p>
 
 ### 手机 · Apple Music 风格
 
 <p align="center">
-  <img src="img/phone/applemusic/Screenshot_2026-08-05-11-59-23-080_com.md3music.md3music.jpg" width="220" alt="手机 Apple Music 风格 1" />
-  <img src="img/phone/applemusic/Screenshot_2026-08-05-11-59-44-053_com.md3music.md3music.jpg" width="220" alt="手机 Apple Music 风格 2" />
-  <img src="img/phone/applemusic/Screenshot_2026-08-05-12-02-41-551_com.md3music.md3music-edit.jpg" width="220" alt="手机 Apple Music 风格 3" />
+  <img src="img/phone/applemusic/Screenshot_2026-08-05-11-59-23-080_com.tencent.wecarflow.jpg" width="220" alt="手机 Apple Music 风格 1" />
+  <img src="img/phone/applemusic/Screenshot_2026-08-05-11-59-44-053_com.tencent.wecarflow.jpg" width="220" alt="手机 Apple Music 风格 2" />
+  <img src="img/phone/applemusic/Screenshot_2026-08-05-12-02-41-551_com.tencent.wecarflow-edit.jpg" width="220" alt="手机 Apple Music 风格 3" />
 </p>
 
 ### 手机 · 更多界面
 
 <p align="center">
-  <img src="img/phone/other/Screenshot_2026-08-05-11-56-45-374_com.md3music.md3music.jpg" width="500" alt="手机更多界面 1" />
-  <img src="img/phone/other/Screenshot_2026-08-05-12-03-39-192_com.md3music.md3music.jpg" width="500" alt="手机更多界面 2" />
+  <img src="img/phone/other/Screenshot_2026-08-05-11-56-45-374_com.tencent.wecarflow.jpg" width="500" alt="手机更多界面 1" />
+  <img src="img/phone/other/Screenshot_2026-08-05-12-03-39-192_com.tencent.wecarflow.jpg" width="500" alt="手机更多界面 2" />
 </p>
 
 
 ### 平板 · Apple Music 风格
 
 <p align="center">
-  <img src="img/pad/applemusic/Screenshot_20260805_121938_com.md3music.md3music.jpg" width="420" alt="平板 Apple Music 风格 1" />
-  <img src="img/pad/applemusic/Screenshot_20260805_121945_com.md3music.md3music.jpg" width="420" alt="平板 Apple Music 风格 2" />
+  <img src="img/pad/applemusic/Screenshot_20260805_121938_com.tencent.wecarflow.jpg" width="420" alt="平板 Apple Music 风格 1" />
+  <img src="img/pad/applemusic/Screenshot_20260805_121945_com.tencent.wecarflow.jpg" width="420" alt="平板 Apple Music 风格 2" />
 </p>
 
 
 ### 平板 · Material Design 3
 
 <p align="center">
-  <img src="img/pad/md3/Screenshot_20260805_121929_com.md3music.md3music.jpg" width="420" alt="平板 MD3 界面 1" />
-  <img src="img/pad/md3/Screenshot_20260805_122006_com.md3music.md3music.jpg" width="420" alt="平板 MD3 界面 2" />
+  <img src="img/pad/md3/Screenshot_20260805_121929_com.tencent.wecarflow.jpg" width="420" alt="平板 MD3 界面 1" />
+  <img src="img/pad/md3/Screenshot_20260805_122006_com.tencent.wecarflow.jpg" width="420" alt="平板 MD3 界面 2" />
 </p>
 
 ### 平板 · 更多界面
 
 <p align="center">
-  <img src="img/pad/other/Screenshot_20260805_121010_com.md3music.md3music.jpg" width="560" alt="平板更多界面 1" />
+  <img src="img/pad/other/Screenshot_20260805_121010_com.tencent.wecarflow.jpg" width="560" alt="平板更多界面 1" />
 </p>
 <p align="center">
-  <img src="img/pad/other/Screenshot_20260805_121025_com.md3music.md3music.jpg" width="560" alt="平板更多界面 2" />
+  <img src="img/pad/other/Screenshot_20260805_121025_com.tencent.wecarflow.jpg" width="560" alt="平板更多界面 2" />
 </p>
 <p align="center">
-  <img src="img/pad/other/Screenshot_20260805_121030_com.md3music.md3music.jpg" width="560" alt="平板更多界面 3" />
+  <img src="img/pad/other/Screenshot_20260805_121030_com.tencent.wecarflow.jpg" width="560" alt="平板更多界面 3" />
 </p>
 
 

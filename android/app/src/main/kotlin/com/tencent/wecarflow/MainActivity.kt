@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.tencent.wecarflow
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,21 +16,21 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
-import com.md3music.md3music.AudioPlaybackService
-import com.md3music.md3music.FloatingLyricService
+import com.tencent.wecarflow.AudioPlaybackService
+import com.tencent.wecarflow.FloatingLyricService
 import java.io.File
 
 class MainActivity : FlutterActivity() {
-    private val FLOATING_CHANNEL = "com.md3music.md3music/floating_lyric"
-    private val FOLDER_PICKER_CHANNEL = "com.md3music.md3music/folder_picker"
-    private val FONT_PICKER_CHANNEL = "com.md3music.md3music/font_picker"
-    private val BACKGROUND_PICKER_CHANNEL = "com.md3music.md3music/background_picker"
-    private val MEDIA_STORE_CHANNEL = "com.md3music.md3music/media_store"
-    private val HOME_WIDGET_CHANNEL = "com.md3music.md3music/home_widget"
-    private val RECOGNITION_CHANNEL = "com.md3music.md3music/floating_recognition"
-    private val PIP_CHANNEL = "com.md3music.md3music/pip"
-    private val MIUIX_DISCOVER_CHANNEL = "com.md3music.md3music/miuix_discover"
-    private val TASK_CHANNEL = "com.md3music.md3music/task"
+    private val FLOATING_CHANNEL = "com.tencent.wecarflow/floating_lyric"
+    private val FOLDER_PICKER_CHANNEL = "com.tencent.wecarflow/folder_picker"
+    private val FONT_PICKER_CHANNEL = "com.tencent.wecarflow/font_picker"
+    private val BACKGROUND_PICKER_CHANNEL = "com.tencent.wecarflow/background_picker"
+    private val MEDIA_STORE_CHANNEL = "com.tencent.wecarflow/media_store"
+    private val HOME_WIDGET_CHANNEL = "com.tencent.wecarflow/home_widget"
+    private val RECOGNITION_CHANNEL = "com.tencent.wecarflow/floating_recognition"
+    private val PIP_CHANNEL = "com.tencent.wecarflow/pip"
+    private val MIUIX_DISCOVER_CHANNEL = "com.tencent.wecarflow/miuix_discover"
+    private val TASK_CHANNEL = "com.tencent.wecarflow/task"
     private var pendingDesktopLyricAction: String? = null
     private var folderPickerResult: MethodChannel.Result? = null
     private var fontPickerResult: MethodChannel.Result? = null
@@ -388,6 +388,34 @@ class MainActivity : FlutterActivity() {
                     startService(intent)
                     result.success(true)
                 }
+                // 车机歌词：开关切换（通过发送 Intent 到 AudioPlaybackService）
+                "setCarLyricEnabled" -> {
+                    val intent = Intent(this, AudioPlaybackService::class.java).apply {
+                        action = AudioPlaybackService.ACTION_SET_CAR_LYRIC_ENABLED
+                        putExtra(
+                            AudioPlaybackService.EXTRA_CAR_LYRIC_ENABLED,
+                            call.argument<Boolean>("enabled") ?: false
+                        )
+                    }
+                    startService(intent)
+                    result.success(true)
+                }
+                // 车机歌词：推送当前行与整首歌词（经 MediaSession 发布）
+                "updateCarLyric" -> {
+                    val intent = Intent(this, AudioPlaybackService::class.java).apply {
+                        action = AudioPlaybackService.ACTION_UPDATE_CAR_LYRIC
+                        putExtra(
+                            AudioPlaybackService.EXTRA_CAR_LYRIC_LINE,
+                            call.argument<String>("line") ?: ""
+                        )
+                        putExtra(
+                            AudioPlaybackService.EXTRA_CAR_LYRIC_WHOLE,
+                            call.argument<String>("whole") ?: ""
+                        )
+                    }
+                    startService(intent)
+                    result.success(true)
+                }
                 // 锁屏歌词：开关 / 数据推送（headless 唤醒场景由 AudioPlaybackService 兜底）
                 "showLockScreenLyric" -> {
                     result.success(true)
@@ -694,7 +722,7 @@ class MainActivity : FlutterActivity() {
         // 注册屏幕常亮 MethodChannel：Dart 端 WakelockService 调用，开关 FLAG_KEEP_SCREEN_ON
         val wakelockChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "com.md3music.md3music/wakelock"
+            "com.tencent.wecarflow/wakelock"
         )
         wakelockChannel.setMethodCallHandler { call, result ->
             when (call.method) {

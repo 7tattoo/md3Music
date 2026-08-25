@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.tencent.wecarflow
 
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
@@ -61,17 +61,17 @@ class FloatingRecognitionService : Service() {
         const val TAG = "FloatingRecognition"
         const val CHANNEL_ID = "floating_recognition_channel"
         const val NOTIFICATION_ID = 2001
-        const val ACTION_START = "com.md3music.md3music.RECOG_START"
-        const val ACTION_STOP = "com.md3music.md3music.RECOG_STOP"
-        const val ACTION_CONTINUE = "com.md3music.md3music.RECOG_CONTINUE"
-        const val ACTION_STOP_CAPTURE = "com.md3music.md3music.RECOG_STOP_CAPTURE"
-        const val ACTION_SET_RESULT = "com.md3music.md3music.RECOG_SET_RESULT"
-        const val ACTION_SET_STATUS = "com.md3music.md3music.RECOG_SET_STATUS"
-        const val ACTION_SET_THEME = "com.md3music.md3music.RECOG_SET_THEME"
+        const val ACTION_START = "com.tencent.wecarflow.RECOG_START"
+        const val ACTION_STOP = "com.tencent.wecarflow.RECOG_STOP"
+        const val ACTION_CONTINUE = "com.tencent.wecarflow.RECOG_CONTINUE"
+        const val ACTION_STOP_CAPTURE = "com.tencent.wecarflow.RECOG_STOP_CAPTURE"
+        const val ACTION_SET_RESULT = "com.tencent.wecarflow.RECOG_SET_RESULT"
+        const val ACTION_SET_STATUS = "com.tencent.wecarflow.RECOG_SET_STATUS"
+        const val ACTION_SET_THEME = "com.tencent.wecarflow.RECOG_SET_THEME"
         const val EXTRA_RESULT = "result"
         const val EXTRA_STATUS = "status"
         const val EXTRA_THEME_COLORS = "themeColors"
-        const val DART_CHANNEL = "com.md3music.md3music/floating_recognition"
+        const val DART_CHANNEL = "com.tencent.wecarflow/floating_recognition"
 
         // 采集参数：8000Hz / 16bit / mono，8s = 128KB
         const val SAMPLE_RATE = 8000

@@ -74,7 +74,7 @@ md3Music/
 
 | 边界 | 说明 |
 |------|------|
-| `lib/` ↔ `kugou_api_server/rust/` | Dart 前端通过 HTTP `127.0.0.1:<随机端口>` 调用 API（端口由 `startServer`/`start_server` 返回，写入 `KugouEndpoints.baseUrl`）；启动/停止走 `KugouApiService` 的 MethodChannel（`com.md3music.md3music/kugou_api`：startServer/isRunning/stopServer），`dart:ffi` 直连 `start_server` 作为兜底 |
+| `lib/` ↔ `kugou_api_server/rust/` | Dart 前端通过 HTTP `127.0.0.1:<随机端口>` 调用 API（端口由 `startServer`/`start_server` 返回，写入 `KugouEndpoints.baseUrl`）；启动/停止走 `KugouApiService` 的 MethodChannel（`com.tencent.wecarflow/kugou_api`：startServer/isRunning/stopServer），`dart:ffi` 直连 `start_server` 作为兜底 |
 | `kugou_api_server/rust/` ↔ `networkapi/` | 两者代码完全独立，不再共享 util；networkapi 已退役（登录已改由 Rust 直连酷狗），仅作 JS 参考 |
 | `kugou_api_server/module/` 等 JS 文件 | 旧 Node 方案遗留，已被 Rust 取代，**不要**再修改 JS 版模块或重新打包 |
 | `android/app/src/main/jniLibs/` | 原生库目录，`libkugou_server.so` **已提交进 Git**（从 `rust/target/*/release/` 复制），无需下载 |
@@ -159,7 +159,7 @@ env CC_aarch64_linux_android=$BIN/aarch64-linux-android21-clang \
 - CC/AR 用小写目标名（cc-rs 读取 `CC_<target>`，target 用下划线）；cargo 的 linker 变量**必须大写**（`CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER`），小写会被静默忽略。
 - 各 target 对应 linker：`aarch64-linux-android21-clang` / `armv7a-linux-androideabi21-clang` / `i686-linux-android21-clang` / `x86_64-linux-android21-clang`，AR 统一用 `llvm-ar`。
 - 验证产物：`file target/{target}/release/libkugou_server.so` 应为 `for Android 21`。
-- 导出符号核对：`llvm-nm -D --defined-only libkugou_server.so` 应含 `start_server`/`stop_server`/`is_server_running`/`get_server_port` + 3 个 `Java_com_md3music_md3music_KugouApiService_*`。
+- 导出符号核对：`llvm-nm -D --defined-only libkugou_server.so` 应含 `start_server`/`stop_server`/`is_server_running`/`get_server_port` + 3 个 `Java_com_tencent_wecarflow_KugouApiService_*`。
 
 ### 4.2 RSA PEM 常量必须能被 rsa crate 解析
 
@@ -305,7 +305,7 @@ flutter analyze                           # Dart 静态分析
 - 新增 `kugou_api_server/rust/` crate（tiny_http + ureq），编译为 `libkugou_server.so` cdylib，覆盖 160+ 酷狗 API 端点
 - 修复 AES-192/256 CBC 密文错误（cbc crate 输出异常，改为在 `BlockEncrypt`/`BlockDecrypt` 上手动实现 CBC + PKCS7，与 JS CryptoJS 逐字节一致）；新增 smoke 测试中的 AES-CBC 对照回归
 - 修复关注/取消关注歌手 userid 读取（`param_or_cookie_num`），Rust 与旧 Node 行为对齐
-- Kotlin：`NodeJsService` → `KugouApiService`；Dart：`nodejs_server` → `kugou_server`（MethodChannel `com.md3music.md3music/kugou_api` + dart:ffi 兜底）
+- Kotlin：`NodeJsService` → `KugouApiService`；Dart：`nodejs_server` → `kugou_server`（MethodChannel `com.tencent.wecarflow/kugou_api` + dart:ffi 兜底）
 - jniLibs 提交 4 ABI（arm64-v8a、armeabi-v7a、x86、x86_64）的 `libkugou_server.so`；移除 `cpp/` CMake 原生构建
 - 新增一键交叉编译脚本 `kugou_api_server/rust/build_android.sh`
 - 附带前端改动：`apple_lyrics_view.dart` / `word_renderer.dart` 重构、`full_player.dart` 精简、登录页/收藏页小改
@@ -355,7 +355,7 @@ flutter analyze                           # Dart 静态分析
 - ✅ 仅保留必需权限：通知（POST_NOTIFICATIONS）、麦克风/媒体音频（RECORD_AUDIO / READ_MEDIA_AUDIO）、悬浮窗（SYSTEM_ALERT_WINDOW，浮窗识曲用）等
 
 ### 8.2 包名与平台
-- ✅ 保持 `com.md3music.md3music`（applicationId/namespace/JNI 符号 `Java_com_md3music_md3music_*`/MethodChannel 名）
+- ✅ 保持 `com.tencent.wecarflow`（applicationId/namespace/JNI 符号 `Java_com_tencent_wecarflow_*`/MethodChannel 名）
 - ❌ 不采用私有库的 `com.md3music.premium` 改名
 - ❌ 不支持 Windows（公开版仅 Android）；不移植 `windows/`、`just_audio_windows`、`video_player_win`、`build_windows.ps1` 等
 

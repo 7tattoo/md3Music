@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.tencent.wecarflow
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -49,15 +49,15 @@ class AudioPlaybackService : Service() {
     companion object {
         const val CHANNEL_ID = "md3music_audio_playback"
         const val NOTIFICATION_ID = 1002
-        const val ACTION_PREV = "com.md3music.md3music.ACTION_PREV"
-        const val ACTION_PLAY_PAUSE = "com.md3music.md3music.ACTION_PLAY_PAUSE"
-        const val ACTION_NEXT = "com.md3music.md3music.ACTION_NEXT"
-        const val ACTION_STOP = "com.md3music.md3music.ACTION_STOP"
-        const val ACTION_TOGGLE_DESKTOP_LYRIC = "com.md3music.md3music.ACTION_TOGGLE_DESKTOP_LYRIC"
-        const val ACTION_TOGGLE_FAVORITE = "com.md3music.md3music.ACTION_TOGGLE_FAVORITE"
+        const val ACTION_PREV = "com.tencent.wecarflow.ACTION_PREV"
+        const val ACTION_PLAY_PAUSE = "com.tencent.wecarflow.ACTION_PLAY_PAUSE"
+        const val ACTION_NEXT = "com.tencent.wecarflow.ACTION_NEXT"
+        const val ACTION_STOP = "com.tencent.wecarflow.ACTION_STOP"
+        const val ACTION_TOGGLE_DESKTOP_LYRIC = "com.tencent.wecarflow.ACTION_TOGGLE_DESKTOP_LYRIC"
+        const val ACTION_TOGGLE_FAVORITE = "com.tencent.wecarflow.ACTION_TOGGLE_FAVORITE"
         // 蓝牙歌词：通过修改 MediaSession 元数据模拟 AVRCP 歌词显示
-        const val ACTION_UPDATE_BT_LYRIC = "com.md3music.md3music.ACTION_UPDATE_BT_LYRIC"
-        const val ACTION_SET_BT_LYRIC_ENABLED = "com.md3music.md3music.ACTION_SET_BT_LYRIC_ENABLED"
+        const val ACTION_UPDATE_BT_LYRIC = "com.tencent.wecarflow.ACTION_UPDATE_BT_LYRIC"
+        const val ACTION_SET_BT_LYRIC_ENABLED = "com.tencent.wecarflow.ACTION_SET_BT_LYRIC_ENABLED"
         const val EXTRA_TITLE = "title"
         const val EXTRA_ARTIST = "artist"
         const val EXTRA_ART_URL = "artUrl"
@@ -70,16 +70,33 @@ class AudioPlaybackService : Service() {
         const val EXTRA_BT_LYRIC_TEXT = "btLyricText"
         const val EXTRA_BT_LYRIC_ENABLED = "btLyricEnabled"
         // LyricInfo 歌词转发：通过 MediaSession 元数据 extras.lyricInfo 发布整首歌词
-        const val ACTION_UPDATE_LYRIC_INFO = "com.md3music.md3music.ACTION_UPDATE_LYRIC_INFO"
+        const val ACTION_UPDATE_LYRIC_INFO = "com.tencent.wecarflow.ACTION_UPDATE_LYRIC_INFO"
         const val EXTRA_LYRIC_INFO = "lyricInfo"
+        // 车机（uCar 协议）歌词：通过 MediaSession 元数据 ucar.media.metadata.lyric.* +
+        // MediaSession.setExtras(ucar.media.extras.*) 双通道发布，供车机主页识别播放状态与歌词。
+        const val ACTION_SET_CAR_LYRIC_ENABLED = "com.tencent.wecarflow.ACTION_SET_CAR_LYRIC_ENABLED"
+        const val EXTRA_CAR_LYRIC_ENABLED = "carLyricEnabled"
+        const val ACTION_UPDATE_CAR_LYRIC = "com.tencent.wecarflow.ACTION_UPDATE_CAR_LYRIC"
+        const val EXTRA_CAR_LYRIC_LINE = "carLyricLine"
+        const val EXTRA_CAR_LYRIC_WHOLE = "carLyricWhole"
         // 桌面小组件按钮动作（由 MusicWidgetProvider 转发）
-        const val ACTION_WIDGET_PLAY_PAUSE = "com.md3music.md3music.ACTION_WIDGET_PLAY_PAUSE"
-        const val ACTION_WIDGET_NEXT = "com.md3music.md3music.ACTION_WIDGET_NEXT"
+        const val ACTION_WIDGET_PLAY_PAUSE = "com.tencent.wecarflow.ACTION_WIDGET_PLAY_PAUSE"
+        const val ACTION_WIDGET_NEXT = "com.tencent.wecarflow.ACTION_WIDGET_NEXT"
         // 线控耳机媒体键（由 MediaButtonReceiver 转发，唤醒播放）
-        const val ACTION_MEDIA_BUTTON = "com.md3music.md3music.ACTION_MEDIA_BUTTON"
+        const val ACTION_MEDIA_BUTTON = "com.tencent.wecarflow.ACTION_MEDIA_BUTTON"
         const val EXTRA_MEDIA_COMMAND = "mediaCommand"
 
         private const val TAG = "AudioPlaybackService"
+
+        // 车机 uCar 歌词字段（依据真机验证通过的 Spotify 参考实现）
+        private const val CAR_LYRICS_LINE = "ucar.media.metadata.lyric.line_content"
+        private const val CAR_LYRICS_WHOLE = "ucar.media.metadata.lyric.lyric_whole"
+        private const val CAR_LYRICS_STATUS = "ucar.media.metadata.lyric.lyric_status"
+        private const val CAR_LYRICS_STATUS_HAS_LYRICS = 1L
+        private const val CAR_LYRICS_STATUS_NO_LYRICS = 0L
+        private const val CAR_EXTRAS_LYRIC = "ucar.media.extras.lyric"
+        private const val CAR_EXTRAS_LYRIC_ALLOWED = "ucar.media.extras.lyric.allowed"
+        private const val CAR_EXTRAS_NOTICE_CAR = "ucar.media.extras.notice_car"
 
         // 静态变量用于跨组件传递 FlutterEngine
         private var staticFlutterEngine: FlutterEngine? = null
@@ -289,7 +306,7 @@ class AudioPlaybackService : Service() {
         fun registerLyriconChannel(engine: FlutterEngine) {
             val channel = MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/lyricon"
+                "com.tencent.wecarflow/lyricon"
             )
             setLyriconChannel(channel)
             channel.setMethodCallHandler { call, result ->
@@ -433,7 +450,7 @@ class AudioPlaybackService : Service() {
         fun registerSuperLyricChannel(engine: FlutterEngine) {
             val channel = MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/super_lyric"
+                "com.tencent.wecarflow/super_lyric"
             )
             channel.setMethodCallHandler { call, result ->
                 if (call.method != "sendLyric") {
@@ -505,6 +522,15 @@ class AudioPlaybackService : Service() {
     private var currentLyricInfo = ""
     // 上次已写入元数据的 lyricInfo，用于 refreshMetadata 判断是否需强制刷新
     private var lastShownLyricInfo = ""
+    // 车机歌词状态：开关 + 缓存当前行与整首歌词
+    @Volatile
+    private var carLyricEnabled = false
+    @Volatile
+    private var currentCarLyricLine = ""
+    @Volatile
+    private var currentCarLyricWhole = ""
+    private var lastShownCarLyricLine: String? = null
+    private var lastShownCarLyricWhole: String? = null
     // 封面缓存：后台封面线程写入，主线程 refreshMetadata（蓝牙歌词）读取，
     // 必须 @Volatile 保证跨线程可见性
     @Volatile
@@ -620,6 +646,8 @@ class AudioPlaybackService : Service() {
         } catch (_: Exception) {}
         // 恢复蓝牙歌词开关：避免冷启动后开关丢失（Flutter 端也会再推一次，幂等）
         restoreBluetoothLyricState()
+        // 恢复车机歌词开关：headless 唤醒 / 冷启动后保持开关状态
+        restoreCarLyricState()
     }
 
     /// 从 SharedPreferences 恢复蓝牙歌词开关状态。
@@ -628,6 +656,15 @@ class AudioPlaybackService : Service() {
         try {
             val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             bluetoothLyricEnabled = prefs.getBoolean("flutter.settings_bluetooth_lyric_enabled", false)
+        } catch (_: Exception) {}
+    }
+
+    /// 从 SharedPreferences 恢复车机歌词开关状态。
+    /// Flutter 端 key 为 settings_car_lyric_enabled，原生端读取需加 flutter. 前缀。
+    private fun restoreCarLyricState() {
+        try {
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            carLyricEnabled = prefs.getBoolean("flutter.settings_car_lyric_enabled", false)
         } catch (_: Exception) {}
     }
 
@@ -712,6 +749,17 @@ class AudioPlaybackService : Service() {
                 refreshMetadata()
                 return START_STICKY
             }
+            ACTION_SET_CAR_LYRIC_ENABLED -> {
+                carLyricEnabled = intent?.getBooleanExtra(EXTRA_CAR_LYRIC_ENABLED, false) ?: false
+                refreshMetadata()
+                return START_STICKY
+            }
+            ACTION_UPDATE_CAR_LYRIC -> {
+                currentCarLyricLine = intent?.getStringExtra(EXTRA_CAR_LYRIC_LINE) ?: ""
+                currentCarLyricWhole = intent?.getStringExtra(EXTRA_CAR_LYRIC_WHOLE) ?: ""
+                refreshMetadata()
+                return START_STICKY
+            }
         }
 
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: ""
@@ -753,7 +801,7 @@ class AudioPlaybackService : Service() {
                 ACTION_TOGGLE_FAVORITE -> "toggleFavorite"
                 else -> return
             }
-            MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
+            MethodChannel(engine.dartExecutor.binaryMessenger, "com.tencent.wecarflow/floating_lyric")
                 .invokeMethod(method, null)
         } else {
             sendFlutterCommand(action)
@@ -769,7 +817,7 @@ class AudioPlaybackService : Service() {
             ACTION_TOGGLE_FAVORITE -> "toggleFavorite"
             else -> return
         }
-        val intent = Intent("com.md3music.md3music.FLUTTER_COMMAND").apply {
+        val intent = Intent("com.tencent.wecarflow.FLUTTER_COMMAND").apply {
             putExtra("method", method)
         }
         sendBroadcast(intent)
@@ -936,7 +984,7 @@ class AudioPlaybackService : Service() {
             try {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
-                    "com.md3music.md3music/floating_lyric"
+                    "com.tencent.wecarflow/floating_lyric"
                 ).invokeMethod(method, null, object : MethodChannel.Result {
                     override fun success(result: Any?) {
                         dispatched[0] = true
@@ -977,7 +1025,7 @@ class AudioPlaybackService : Service() {
         try {
             MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/floating_lyric"
+                "com.tencent.wecarflow/floating_lyric"
             ).setMethodCallHandler { call, result ->
                 when (call.method) {
                     "playerReady" -> {
@@ -1013,6 +1061,17 @@ class AudioPlaybackService : Service() {
                     }
                     "setBluetoothLyricEnabled" -> {
                         bluetoothLyricEnabled = call.argument<Boolean>("enabled") ?: false
+                        refreshMetadata()
+                        result.success(true)
+                    }
+                    "updateCarLyric" -> {
+                        currentCarLyricLine = call.argument<String>("line") ?: ""
+                        currentCarLyricWhole = call.argument<String>("whole") ?: ""
+                        refreshMetadata()
+                        result.success(true)
+                    }
+                    "setCarLyricEnabled" -> {
+                        carLyricEnabled = call.argument<Boolean>("enabled") ?: false
                         refreshMetadata()
                         result.success(true)
                     }
@@ -1065,7 +1124,7 @@ class AudioPlaybackService : Service() {
                 override fun onStop() = handleAction(ACTION_STOP)
                 override fun onSeekTo(pos: Long) {
                     val engine = flutterEngine ?: staticFlutterEngine ?: return
-                    MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
+                    MethodChannel(engine.dartExecutor.binaryMessenger, "com.tencent.wecarflow/floating_lyric")
                         .invokeMethod("seekTo", pos.toInt())
                 }
                 override fun onCustomAction(action: String?, extras: android.os.Bundle?) {
@@ -1388,6 +1447,41 @@ class AudioPlaybackService : Service() {
         } catch (_: Exception) {}
     }
 
+    /// 向 MediaMetadata 构建器写入车机 uCar 歌词字段（开关开启时）。
+    /// 字段语义遵循已验证的 Spotify 参考实现：
+    /// - line_content：当前歌词行（实时刷新）
+    /// - lyric_whole：整首歌词（无内容时置 "-1" 表示无）
+    /// - lyric_status：1=有歌词，0=无歌词
+    private fun applyCarLyricFields(builder: MediaMetadataCompat.Builder) {
+        if (!carLyricEnabled) return
+        builder.putString(CAR_LYRICS_LINE, currentCarLyricLine)
+        val whole = if (currentCarLyricWhole.isEmpty()) "-1" else currentCarLyricWhole
+        builder.putString(CAR_LYRICS_WHOLE, whole)
+        builder.putLong(
+            CAR_LYRICS_STATUS,
+            if (currentCarLyricWhole.isEmpty()) CAR_LYRICS_STATUS_NO_LYRICS else CAR_LYRICS_STATUS_HAS_LYRICS
+        )
+    }
+
+    /// 刷新 MediaSession.setExtras 中的车机字段。
+    /// ucar.media.extras.notice_car=true 是车机识别「已连接的媒体应用且正在播放」的关键标记，
+    /// 必须随每次元数据刷新重新设置，否则车机主页识别不到播放状态。
+    private fun refreshCarLyricExtras() {
+        val bundle = android.os.Bundle()
+        if (carLyricEnabled) {
+            bundle.putBoolean(CAR_EXTRAS_LYRIC_ALLOWED, true)
+            if (currentCarLyricLine.isNotEmpty()) {
+                bundle.putString(CAR_EXTRAS_LYRIC, currentCarLyricLine)
+            }
+            bundle.putBoolean(CAR_EXTRAS_NOTICE_CAR, true)
+        } else {
+            bundle.putBoolean(CAR_EXTRAS_LYRIC_ALLOWED, false)
+        }
+        try {
+            mediaSession?.setExtras(bundle)
+        } catch (_: Exception) {}
+    }
+
     /// 统一更新 MediaSession 元数据。每次新建 Builder 重建，
     /// 避免封面缺失/加载失败时残留上一首歌曲的封面 bitmap。
     /// [artwork] 为 null 时仅同步 title/artist（封面留给异步线程补充）。
@@ -1414,7 +1508,16 @@ class AudioPlaybackService : Service() {
         if (currentLyricInfo.isNotEmpty()) {
             metaBuilder.putString(EXTRA_LYRIC_INFO, currentLyricInfo)
         }
+        // 车机歌词：写入 ucar.metadata.lyric.* 字段
+        applyCarLyricFields(metaBuilder)
         mediaSession?.setMetadata(metaBuilder.build())
+        // 车机歌词：刷新 setExtras（notice_car 提示播放状态），切歌时同步告知车机
+        refreshCarLyricExtras()
+        // 记录最后写入的车联歌词，供 refreshMetadata 跳过无效刷新
+        if (carLyricEnabled) {
+            lastShownCarLyricLine = currentCarLyricLine
+            lastShownCarLyricWhole = currentCarLyricWhole
+        }
     }
 
     /// 蓝牙歌词轻量刷新：歌词行变化或开关切换时，复用缓存的 bitmap 和播放状态
@@ -1437,11 +1540,24 @@ class AudioPlaybackService : Service() {
         // 但 LyricInfo 歌词转发（currentLyricInfo 变化）不依赖 title/artist 变化，
         // 即使 title/artist 未变也需要更新 MediaSession 元数据以写入 extras.lyricInfo，
         // 因此本跳过逻辑仅在 lyricInfo 不变时生效。
+        // 车机歌词：无论元数据是否有变化，都必须刷新 setExtras（notice_car 提示播放状态），
+        // 保证车机主页能持续识别本应用为「正在播放的媒体应用」。
+        refreshCarLyricExtras()
+
+        // P0: 文本未变化（歌词行未变 / 开关未切换）时直接跳过，避免无效刷新。
+        // 但 LyricInfo 歌词转发（currentLyricInfo 变化）与车机歌词行（currentCarLyricLine）
+        // 变化不依赖 title/artist 变化，即使 title/artist 未变也需要更新 MediaSession 元数据，
+        // 因此本跳过逻辑仅在 lyricInfo 与车机歌词均不变时生效。
         val lyricInfoChanged = currentLyricInfo != lastShownLyricInfo
-        if (displayTitle == lastShownBtLyricTitle && displayArtist == lastShownBtLyricArtist && !lyricInfoChanged) return
+        val carLyricChanged = currentCarLyricLine != lastShownCarLyricLine ||
+                currentCarLyricWhole != lastShownCarLyricWhole
+        if (displayTitle == lastShownBtLyricTitle && displayArtist == lastShownBtLyricArtist &&
+                !lyricInfoChanged && !carLyricChanged) return
         lastShownBtLyricTitle = displayTitle
         lastShownBtLyricArtist = displayArtist
         lastShownLyricInfo = currentLyricInfo
+        lastShownCarLyricLine = currentCarLyricLine
+        lastShownCarLyricWhole = currentCarLyricWhole
 
         // P0: 通知重建节流：逐字歌词每句（50-100ms）都会走到这里，
         // 通知栏重建限制为最少 500ms 一次（车机 AVRCP 歌词读的是 MediaSession，不受节流影响）
@@ -1498,6 +1614,8 @@ class AudioPlaybackService : Service() {
         if (currentLyricInfo.isNotEmpty()) {
             metaBuilder.putString(EXTRA_LYRIC_INFO, currentLyricInfo)
         }
+        // 车机歌词：写入 ucar.metadata.lyric.* 字段
+        applyCarLyricFields(metaBuilder)
         mediaSession?.setMetadata(metaBuilder.build())
     }
 

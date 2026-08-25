@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.tencent.wecarflow
 
 import android.content.BroadcastReceiver
 import android.content.Context

@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 class MediaNotificationService {
   static const MethodChannel _channel = MethodChannel(
-    'com.md3music.md3music/floating_lyric',
+    'com.tencent.wecarflow/floating_lyric',
   );
 
   static void Function()? onPrevious;
@@ -173,6 +173,24 @@ class MediaNotificationService {
     try {
       await _channel.invokeMethod('setBluetoothLyricEnabled', {
         'enabled': enabled,
+      });
+    } catch (_) {}
+  }
+
+  // 车机歌词（uCar 双通道）：开关切换 + 推送当前行/整首歌词
+  static Future<void> setCarLyricEnabled(bool enabled) async {
+    try {
+      await _channel.invokeMethod('setCarLyricEnabled', {
+        'enabled': enabled,
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> updateCarLyric({String line = '', String whole = ''}) async {
+    try {
+      await _channel.invokeMethod('updateCarLyric', {
+        'line': line,
+        'whole': whole,
       });
     } catch (_) {}
   }

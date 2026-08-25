@@ -94,6 +94,8 @@ class _SettingsPageState extends State<SettingsPage>
       _androidSdkVersion == null || _androidSdkVersion! >= 26;
   // 蓝牙歌词开关：通过 MediaSession 元数据替换在车机等设备显示歌词
   bool _bluetoothLyricEnabled = false;
+  // 车机歌词开关：uCar 双通道（metadata.lyric.* + setExtras）在车机主页显示歌词
+  bool _carLyricEnabled = false;
   // 锁屏歌词开关：锁屏时全屏显示逐字歌词（覆盖在系统锁屏上方），默认关闭
   bool _lockScreenLyricEnabled = false;
   // 锁屏歌词独立字号/粗细（默认跟随 AM 歌词偏好）
@@ -271,6 +273,8 @@ class _SettingsPageState extends State<SettingsPage>
     // 读取蓝牙歌词开关
     final bluetoothLyricEnabled = await _settingsRepository
         .getBluetoothLyricEnabled();
+    // 读取车机歌词开关
+    final carLyricEnabled = await _settingsRepository.getCarLyricEnabled();
     // 读取锁屏歌词开关
     final lockScreenLyricEnabled = await _settingsRepository
         .getLockScreenLyricEnabled();
@@ -319,6 +323,7 @@ class _SettingsPageState extends State<SettingsPage>
       _lyricEcoMode = LyricPreferences.instance.ecoMode;
       _lyricDynamicColor = LyricPreferences.instance.useDynamicLyricColor;
       _bluetoothLyricEnabled = bluetoothLyricEnabled;
+      _carLyricEnabled = carLyricEnabled;
       _lockScreenLyricEnabled = lockScreenLyricEnabled;
       _lockScreenLyricFontSize = lockScreenLyricFontSize;
       _lockScreenLyricFontWeight = lockScreenLyricFontWeight;
@@ -808,6 +813,20 @@ class _SettingsPageState extends State<SettingsPage>
             // 同步到歌词服务（启停定时器）和原生端（元数据替换开关）
             DesktopLyricService.instance.setBluetoothLyricEnabled(value);
             MediaNotificationService.setBluetoothLyricEnabled(value);
+          },
+        ),
+        // 车机歌词（独立开关）：uCar 双通道在车机主页识别播放状态并显示歌词
+        SwitchListTile(
+          title: const Text('车机歌词'),
+          subtitle: const Text('通过 uCar 双通道（MediaSession 元数据 lyric.* + setExtras）在车机主页识别播放状态并显示歌词，需配合车机 uCar 协议使用'),
+          value: _carLyricEnabled,
+          onChanged: (value) async {
+            HapticFeedback.lightImpact();
+            setState(() => _carLyricEnabled = value);
+            await _settingsRepository.setCarLyricEnabled(value);
+            // 同步到歌词服务（启停定时器）和原生端（车机字段发布开关）
+            DesktopLyricService.instance.setCarLyricEnabled(value);
+            MediaNotificationService.setCarLyricEnabled(value);
           },
         ),
         // 锁屏歌词（独立开关）：锁屏时全屏显示逐字歌词
@@ -2423,7 +2442,7 @@ class _SettingsPageState extends State<SettingsPage>
   /// 并把本地 Rust API 服务器当前端口传过去（原生页据此直连取数）。
   // ignore: unused_element
   Future<void> _openMiuixDiscover() async {
-    const channel = MethodChannel('com.md3music.md3music/miuix_discover');
+    const channel = MethodChannel('com.tencent.wecarflow/miuix_discover');
     try {
       await channel.invokeMethod('open', {'port': KugouApiServer.currentPort});
     } catch (e) {

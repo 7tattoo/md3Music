@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 class BackgroundImageLoader {
   BackgroundImageLoader._();
 
-  static const String _channel = 'com.md3music.md3music/background_picker';
+  static const String _channel = 'com.tencent.wecarflow/background_picker';
 
   /// 打开系统图片选择器，返回拷贝到 filesDir 后的图片路径。
   ///

@@ -38,10 +38,10 @@ class FloatingRecognitionService {
   FloatingRecognitionService._();
 
   static const MethodChannel _channel = MethodChannel(
-    'com.md3music.md3music/floating_recognition',
+    'com.tencent.wecarflow/floating_recognition',
   );
   static const MethodChannel _sdkChannel = MethodChannel(
-    'com.md3music.md3music/media_store',
+    'com.tencent.wecarflow/media_store',
   );
 
   /// 每段录制时长（秒，与原生侧 SEGMENT_BYTES 一致：8000Hz×2字节×8s）

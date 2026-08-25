@@ -45,6 +45,10 @@ class DesktopLyricService {
   // 不弹出悬浮窗。元数据替换（title→歌词，artist→「作者 - 标题」）由原生端处理。
   bool _bluetoothLyricEnabled = false;
   bool get bluetoothLyricEnabled => _bluetoothLyricEnabled;
+  bool _carLyricEnabled = false;
+  bool get carLyricEnabled => _carLyricEnabled;
+  String? _carLyricWhole;
+  String? _lastCarWholeLrc;
 
   // LyricInfo 歌词转发开关：通过 MediaSession extras.lyricInfo 发布整首歌词
   // （LRC/ELRC），供 ColorOS 桌面歌词 / LyricInfo 模块等第三方系统读取。
@@ -296,6 +300,27 @@ class DesktopLyricService {
     }
   }
 
+  /// 车机歌词开关：独立于悬浮窗/蓝牙歌词。开启后用 uCar 双通道（metadata.lyric.* +
+  /// setExtras）推送当前行与整首歌词，供车机主页识别播放状态并显示歌词。
+  Future<void> setCarLyricEnabled(bool enabled) async {
+    if (_carLyricEnabled == enabled) return;
+    _carLyricEnabled = enabled;
+    _bindProvidersFromContext();
+    if (enabled) {
+      // 启用时重置切歌检测状态，让下个 tick 重新拉取歌词并推送
+      _currentSongId = null;
+      _currentLrcText = null;
+      _lines = const [];
+      _currentLineIndex = -1;
+      _awaitingLyric = false;
+      _carLyricWhole = null;
+      _lastCarWholeLrc = null;
+    } else {
+      // 关闭时清空车机歌词，让原生端清除 ucar 字段
+      await MediaNotificationService.updateCarLyric(line: '', whole: '');
+    }
+  }
+
   /// LyricInfo 歌词转发开关：独立于悬浮窗/蓝牙歌词。开启后定时器运行以获取
   /// 当前歌词并构造 JSON 推送（写入 MediaSession extras）；关闭时移除 lyricInfo。
   Future<void> setLyricInfoEnabled(bool enabled) async {
@@ -485,9 +510,9 @@ class DesktopLyricService {
     } catch (_) {}
   }
 
-  static const _channel = MethodChannel('com.md3music.md3music/floating_lyric');
+  static const _channel = MethodChannel('com.tencent.wecarflow/floating_lyric');
   static const _superLyricChannel =
-      MethodChannel('com.md3music.md3music/super_lyric');
+      MethodChannel('com.tencent.wecarflow/super_lyric');
 
   void _syncCurrentFromPlayer() {
     if (_player == null) return;
@@ -740,6 +765,22 @@ class DesktopLyricService {
       } catch (_) {}
     }
   }
+    // 车机歌词：仅在 _carLyricEnabled 时推送当前行 + 整首歌词（uCar 双通道）。
+    if (_carLyricEnabled) {
+      final carText = (current == '歌词加载中...' ||
+              current == '暂无歌词' ||
+              current == '歌词加载失败')
+          ? ''
+          : current;
+      final whole = _syncCarLyricWhole();
+      try {
+        await MediaNotificationService.updateCarLyric(
+          line: carText,
+          whole: whole,
+        );
+      } catch (_) {}
+    }
+  }
 
   /// 推送当前歌词行到 SuperLyric（基于 Binder 的系统级实时歌词 API）。
   ///
@@ -908,6 +949,38 @@ class DesktopLyricService {
       if (hasTranslation) 'translation': 'lrc',
     });
     MediaNotificationService.updateLyricInfo(json);
+  }
+
+  /// 同步车机整首歌词缓存（lrc 变化时重建，否则复用）。
+  String _syncCarLyricWhole() {
+    if (_currentLrcText == _lastCarWholeLrc && _carLyricWhole != null) {
+      return _carLyricWhole!;
+    }
+    _carLyricWhole = _buildCarLyricWhole();
+    _lastCarWholeLrc = _currentLrcText;
+    return _carLyricWhole!;
+  }
+
+  /// 构建车机整首歌词（ELRC 逐字，与 LyricInfo 同格式）。
+  String _buildCarLyricWhole() {
+    final buf = StringBuffer();
+    for (final line in _lines) {
+      if (line.text.isEmpty) continue;
+      buf.write(_lrcTagMs(line.startTime));
+      if (line.hasWordTiming) {
+        for (final w in line.words) {
+          buf
+            ..write(_elrcWordTag(w.startTime))
+            ..write(w.text);
+        }
+      } else {
+        buf
+          ..write(_elrcWordTag(line.startTime))
+          ..write(line.text);
+      }
+      buf.write('\n');
+    }
+    return buf.toString().trimRight();
   }
 
   /// 毫秒 → LRC 行级时间标签 [mm:ss.xxx]

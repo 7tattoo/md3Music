@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.tencent.wecarflow
 
 /**
  * USB 音频驱动抛出的异常。

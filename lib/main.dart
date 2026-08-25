@@ -143,6 +143,11 @@ Future<void> _restoreLyricPushPref() async {
     final btLyricEnabled = await settings.getBluetoothLyricEnabled();
     await DesktopLyricService.instance.setBluetoothLyricEnabled(btLyricEnabled);
 
+    // 车机歌词（uCar 双通道）
+    final carLyricEnabled = await settings.getCarLyricEnabled();
+    // ignore: discarded_futures
+    DesktopLyricService.instance.setCarLyricEnabled(carLyricEnabled);
+
     // 锁屏歌词（独立开关）：开启后歌词服务定时器运行以推送逐字数据
     final lockScreenLyricEnabled = await settings.getLockScreenLyricEnabled();
     // ignore: discarded_futures
