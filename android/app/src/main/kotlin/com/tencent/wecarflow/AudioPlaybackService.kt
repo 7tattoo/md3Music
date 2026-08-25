@@ -72,8 +72,8 @@ class AudioPlaybackService : Service() {
         // LyricInfo 歌词转发：通过 MediaSession 元数据 extras.lyricInfo 发布整首歌词
         const val ACTION_UPDATE_LYRIC_INFO = "com.tencent.wecarflow.ACTION_UPDATE_LYRIC_INFO"
         const val EXTRA_LYRIC_INFO = "lyricInfo"
-        // 车机（uCar 协议）歌词：通过 MediaSession 元数据 ucar.media.metadata.lyric.* +
-        // MediaSession.setExtras(ucar.media.extras.*) 双通道发布，供车机主页识别播放状态与歌词。
+        // 车机（uCar 协议）歌词：通过 MediaSession 元数据 ucar.media.metadata.LYRICS_* +
+        // MediaSession.setExtras(music.media.extras.*) 双通道发布，供车机主页识别播放状态与歌词。
         const val ACTION_SET_CAR_LYRIC_ENABLED = "com.tencent.wecarflow.ACTION_SET_CAR_LYRIC_ENABLED"
         const val EXTRA_CAR_LYRIC_ENABLED = "carLyricEnabled"
         const val ACTION_UPDATE_CAR_LYRIC = "com.tencent.wecarflow.ACTION_UPDATE_CAR_LYRIC"
@@ -88,15 +88,20 @@ class AudioPlaybackService : Service() {
 
         private const val TAG = "AudioPlaybackService"
 
-        // 车机 uCar 歌词字段（依据真机验证通过的 Spotify 参考实现）
-        private const val CAR_LYRICS_LINE = "ucar.media.metadata.lyric.line_content"
-        private const val CAR_LYRICS_WHOLE = "ucar.media.metadata.lyric.lyric_whole"
-        private const val CAR_LYRICS_STATUS = "ucar.media.metadata.lyric.lyric_status"
-        private const val CAR_LYRICS_STATUS_HAS_LYRICS = 1L
-        private const val CAR_LYRICS_STATUS_NO_LYRICS = 0L
-        private const val CAR_EXTRAS_LYRIC = "ucar.media.extras.lyric"
-        private const val CAR_EXTRAS_LYRIC_ALLOWED = "ucar.media.extras.lyric.allowed"
-        private const val CAR_EXTRAS_NOTICE_CAR = "ucar.media.extras.notice_car"
+        // 车机 uCar 歌词字段。关键：车机端 Launcher 按「大写字面量 LYRICS_*」去 MediaMetadata
+        // 里精确取值，之前用自定义小写串（lyric.line_content 等）车机匹配不到 → 判定无歌词，
+        // 主页显示「暂无歌词」且识别不到播放状态。故必须用固定大写字段名。
+        // 元数据通道字段前缀 ucar.media.metadata.，字段名固定为大写 LYRICS_LINE/WHOLE/STATUS。
+        // 状态值语义（勿反）：0 = 有歌词，1 = 无歌词。
+        private const val CAR_LYRICS_LINE = "ucar.media.metadata.LYRICS_LINE"
+        private const val CAR_LYRICS_WHOLE = "ucar.media.metadata.LYRICS_WHOLE"
+        private const val CAR_LYRICS_STATUS = "ucar.media.metadata.LYRICS_STATUS"
+        private const val CAR_LYRICS_STATUS_HAS_LYRICS = 0L
+        private const val CAR_LYRICS_STATUS_NO_LYRICS = 1L
+        // Extras 通道（手机端智能车载 App 读取后经车联协议转发），字段前缀 music.media.extras.
+        private const val CAR_EXTRAS_LYRIC = "music.media.extras.LYRIC"
+        private const val CAR_EXTRAS_LYRIC_ALLOWED = "music.media.extras.LYRIC_IS_ALLOWED"
+        private const val CAR_EXTRAS_NOTICE_CAR = "music.media.extras.NOTICE_CAR"
 
         // 静态变量用于跨组件传递 FlutterEngine
         private var staticFlutterEngine: FlutterEngine? = null
@@ -1448,13 +1453,15 @@ class AudioPlaybackService : Service() {
     }
 
     /// 向 MediaMetadata 构建器写入车机 uCar 歌词字段（开关开启时）。
-    /// 字段语义遵循已验证的 Spotify 参考实现：
-    /// - line_content：当前歌词行（实时刷新）
-    /// - lyric_whole：整首歌词（无内容时置 "-1" 表示无）
-    /// - lyric_status：1=有歌词，0=无歌词
+    /// 字段名必须为系统固定的大写字面量 LYRICS_*（车机端 Launcher 精确按此取值）：
+    /// - ucar.media.metadata.LYRICS_LINE：当前歌词行（实时刷新；空行写空串，勿写 "-1"）
+    /// - ucar.media.metadata.LYRICS_WHOLE：整首 LRC（无内容时置 "-1" 表示无）
+    /// - ucar.media.metadata.LYRICS_STATUS：歌词状态，0=有歌词，1=无歌词（勿反）
     private fun applyCarLyricFields(builder: MediaMetadataCompat.Builder) {
         if (!carLyricEnabled) return
-        builder.putString(CAR_LYRICS_LINE, currentCarLyricLine)
+        if (currentCarLyricLine.isNotEmpty()) {
+            builder.putString(CAR_LYRICS_LINE, currentCarLyricLine)
+        }
         val whole = if (currentCarLyricWhole.isEmpty()) "-1" else currentCarLyricWhole
         builder.putString(CAR_LYRICS_WHOLE, whole)
         builder.putLong(
@@ -1464,7 +1471,7 @@ class AudioPlaybackService : Service() {
     }
 
     /// 刷新 MediaSession.setExtras 中的车机字段。
-    /// ucar.media.extras.notice_car=true 是车机识别「已连接的媒体应用且正在播放」的关键标记，
+    /// music.media.extras.NOTICE_CAR=true 是车机识别「已连接的媒体应用且正在播放」的关键标记，
     /// 必须随每次元数据刷新重新设置，否则车机主页识别不到播放状态。
     private fun refreshCarLyricExtras() {
         val bundle = android.os.Bundle()
