@@ -2,7 +2,7 @@ name: CI Build
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, rust-local-two]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
