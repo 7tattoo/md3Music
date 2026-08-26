@@ -68,28 +68,30 @@ jobs:
             gradle-${{ runner.os }}-
 
       # 下载 native-libs（libnode.so + Node headers）
-      - name: Download native-libs.zip
+      - name: Prepare native libs (use in-repo, fallback to release)
         run: |
           set -e
-          echo "Downloading native-libs.zip..."
-          if ! curl -fL --retry 3 -o native-libs.zip \
-              "https://github.com/zzyoxml/md3Music/releases/download/native-libs/native-libs.zip"; then
-            echo "native-libs.zip 下载失败，尝试从本仓库下载..."
-            if ! curl -fL --retry 3 -o native-libs.zip \
+          JNI_DIR="android/app/src/main/jniLibs"
+          # 检查仓库内是否已经带有必要的 .so
+          if [ -f "$JNI_DIR/arm64-v8a/libkugou_server.so" ] && \
+             [ -f "$JNI_DIR/armeabi-v7a/libkugou_server.so" ]; then
+            echo "✓ 仓库内已包含 native libs，跳过下载"
+            ls -la "$JNI_DIR"/*/
+          else
+            echo "仓库内缺少 native libs，尝试下载 native-libs.zip..."
+            if curl -fL --retry 3 -o native-libs.zip \
+                "https://github.com/zzyoxml/md3Music/releases/download/native-libs/native-libs.zip" || \
+               curl -fL --retry 3 -o native-libs.zip \
                 "https://github.com/${GITHUB_REPOSITORY}/releases/download/native-libs/native-libs.zip"; then
-              echo "native-libs.zip 下载失败，构建可能失败"
+              unzip -q -o native-libs.zip -d .
+              rm native-libs.zip
+              echo "jniLibs/:"
+              ls -la "$JNI_DIR" 2>/dev/null || echo "  (missing)"
+            else
+              echo "❌ 下载失败且仓库内无 native libs"
               exit 1
             fi
           fi
-          ls -lh native-libs.zip
-
-      - name: Extract native libs
-        run: |
-          set -e
-          unzip -q -o native-libs.zip -d .
-          rm native-libs.zip
-          echo "jniLibs/:"
-          ls -la android/app/src/main/jniLibs/ 2>/dev/null || echo "  (missing)"
 
       # 构建嵌入式 Node.js 服务器 bundle
       - name: Install server dependencies
