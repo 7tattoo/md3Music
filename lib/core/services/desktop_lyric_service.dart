@@ -306,6 +306,9 @@ class DesktopLyricService {
     if (_carLyricEnabled == enabled) return;
     _carLyricEnabled = enabled;
     _bindProvidersFromContext();
+    // 启停定时器：车机歌词单独开启时也必须运行 ticker，
+    // 否则不会逐行推送歌词（车机主页只会显示歌曲名且不变）。
+    _updateTicker();
     if (enabled) {
       // 启用时重置切歌检测状态，让下个 tick 重新拉取歌词并推送
       _currentSongId = null;
@@ -315,6 +318,7 @@ class DesktopLyricService {
       _awaitingLyric = false;
       _carLyricWhole = null;
       _lastCarWholeLrc = null;
+      _lastPushedPosMs = null;
     } else {
       // 关闭时清空车机歌词，让原生端清除 ucar 字段
       await MediaNotificationService.updateCarLyric(line: '', whole: '');
@@ -433,10 +437,11 @@ class DesktopLyricService {
     }
   }
 
-  /// 定时器是否需要运行：悬浮窗、蓝牙歌词、LyricInfo、SuperLyric 或锁屏歌词任一开启即需运行
+  /// 定时器是否需要运行：悬浮窗、蓝牙歌词、车机歌词、LyricInfo、SuperLyric 或锁屏歌词任一开启即需运行
   bool _shouldTick() =>
       _enabled ||
       _bluetoothLyricEnabled ||
+      _carLyricEnabled ||
       _lyricInfoEnabled ||
       _superLyricEnabled ||
       _lockScreenLyricEnabled;
