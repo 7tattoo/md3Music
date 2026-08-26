@@ -88,20 +88,33 @@ class AudioPlaybackService : Service() {
 
         private const val TAG = "AudioPlaybackService"
 
-        // 车机 uCar 歌词字段。关键：车机端 Launcher 按「大写字面量 LYRICS_*」去 MediaMetadata
-        // 里精确取值，之前用自定义小写串（lyric.line_content 等）车机匹配不到 → 判定无歌词，
-        // 主页显示「暂无歌词」且识别不到播放状态。故必须用固定大写字段名。
-        // 元数据通道字段前缀 ucar.media.metadata.，字段名固定为大写 LYRICS_LINE/WHOLE/STATUS。
+        // 车机 uCar 歌词字段。关键（真机验证）：车机端 Launcher 是「按大写字面量
+        // LYRICS_LINE / LYRICS_WHOLE / LYRICS_STATUS 去 MediaMetadata 里精确取值」的，
+        // 无任何前缀。之前用自定义小写串（lyric.line_content 等）或带前缀的大写串
+        // （ucar.media.metadata.LYRICS_LINE）车机都匹配不到 → 判定无歌词，主页显示
+        // 「暂无歌词」且识别不到播放状态。故必须不加前缀直接写裸大写字面量。
+        // 为兼容不同车机版本，同时写入「裸键」与「带前缀键」两份。
         // 状态值语义（勿反）：0 = 有歌词，1 = 无歌词。
-        private const val CAR_LYRICS_LINE = "ucar.media.metadata.LYRICS_LINE"
-        private const val CAR_LYRICS_WHOLE = "ucar.media.metadata.LYRICS_WHOLE"
-        private const val CAR_LYRICS_STATUS = "ucar.media.metadata.LYRICS_STATUS"
+        private const val CAR_LYRICS_LINE = "LYRICS_LINE"
+        private const val CAR_LYRICS_WHOLE = "LYRICS_WHOLE"
+        private const val CAR_LYRICS_STATUS = "LYRICS_STATUS"
+        private const val CAR_LYRICS_LINE_PREFIXED = "ucar.media.metadata.LYRICS_LINE"
+        private const val CAR_LYRICS_WHOLE_PREFIXED = "ucar.media.metadata.LYRICS_WHOLE"
+        private const val CAR_LYRICS_STATUS_PREFIXED = "ucar.media.metadata.LYRICS_STATUS"
         private const val CAR_LYRICS_STATUS_HAS_LYRICS = 0L
         private const val CAR_LYRICS_STATUS_NO_LYRICS = 1L
+        // ucar.media.metadata.UCAR_TITLE / UCAR_ARTIST：车机专用标题/艺术家字段。
+        // 智能车载 App 优先读取这两个字段作为车机卡片显示内容，若缺失则回退到标准
+        // METADATA_KEY_TITLE / ARTIST。
+        private const val CAR_UCAR_TITLE = "ucar.media.metadata.UCAR_TITLE"
+        private const val CAR_UCAR_ARTIST = "ucar.media.metadata.UCAR_ARTIST"
         // Extras 通道（手机端智能车载 App 读取后经车联协议转发），字段前缀 music.media.extras.
         private const val CAR_EXTRAS_LYRIC = "music.media.extras.LYRIC"
         private const val CAR_EXTRAS_LYRIC_ALLOWED = "music.media.extras.LYRIC_IS_ALLOWED"
         private const val CAR_EXTRAS_NOTICE_CAR = "music.media.extras.NOTICE_CAR"
+        private const val CAR_EXTRAS_LYRIC_BARE = "LYRIC"
+        private const val CAR_EXTRAS_LYRIC_ALLOWED_BARE = "LYRIC_IS_ALLOWED"
+        private const val CAR_EXTRAS_NOTICE_CAR_BARE = "NOTICE_CAR"
 
         // 静态变量用于跨组件传递 FlutterEngine
         private var staticFlutterEngine: FlutterEngine? = null
@@ -546,6 +559,7 @@ class AudioPlaybackService : Service() {
     private var lastDesktopLyricEnabled = false
     private var lastIsFavorited = false
     private var lastDuration = 0L
+    private var lastPosition = 0L
     // 是否已调用过 startForeground（启动前台服务后必须尽快调用，Android 12+ 超时崩溃）
     private var foregroundStarted = false
     // 媒体键命令合并：唤醒期间连续按键只保留最新命令、只启动一个派发会话，
@@ -1320,6 +1334,14 @@ class AudioPlaybackService : Service() {
         lastDesktopLyricEnabled = desktopLyricEnabled
         lastIsFavorited = isFavorited
         lastDuration = duration
+        lastPosition = position
+        // P0: 切歌时清空车机歌词残留，避免新歌名+旧歌词错配写入 MediaSession。
+        // 车机主页卡片在切歌后不更新，是因为 LYRICS_WHOLE 仍含上一首的歌词内容，
+        // 新歌的 LYRICS_STATUS=0（有歌词）+ 旧歌词内容，导致车机认为数据无变化，
+        // 不刷新卡片。新歌的歌词由 desktop_lyric_service.dart 的 250ms 定时器
+        // 解析后通过 updateCarLyric 通道重新推送——届时 LYRICS_* 被正确写入。
+        currentCarLyricLine = ""
+        currentCarLyricWhole = ""
         // 通知会在下方所有分支中调用 startForeground，标记已进入前台
         foregroundStarted = true
         // 计算最终显示值：蓝牙歌词开启且有当前歌词时，title→歌词，artist→「作者 - 标题」
@@ -1414,7 +1436,7 @@ class AudioPlaybackService : Service() {
             PlaybackStateCompat.Builder()
                 .setState(
                     if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
-                    position, 1f
+                    position, if (isPlaying) 1f else 0f
                 )
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
@@ -1450,40 +1472,93 @@ class AudioPlaybackService : Service() {
                 buildLyriconPlaybackState(position, isPlaying)
             )
         } catch (_: Exception) {}
-    }
 
-    /// 向 MediaMetadata 构建器写入车机 uCar 歌词字段（开关开启时）。
-    /// 字段名必须为系统固定的大写字面量 LYRICS_*（车机端 Launcher 精确按此取值）：
-    /// - ucar.media.metadata.LYRICS_LINE：当前歌词行（实时刷新；空行写空串，勿写 "-1"）
-    /// - ucar.media.metadata.LYRICS_WHOLE：整首 LRC（无内容时置 "-1" 表示无）
-    /// - ucar.media.metadata.LYRICS_STATUS：歌词状态，0=有歌词，1=无歌词（勿反）
-    private fun applyCarLyricFields(builder: MediaMetadataCompat.Builder) {
-        if (!carLyricEnabled) return
-        if (currentCarLyricLine.isNotEmpty()) {
-            builder.putString(CAR_LYRICS_LINE, currentCarLyricLine)
-        }
-        val whole = if (currentCarLyricWhole.isEmpty()) "-1" else currentCarLyricWhole
-        builder.putString(CAR_LYRICS_WHOLE, whole)
-        builder.putLong(
-            CAR_LYRICS_STATUS,
-            if (currentCarLyricWhole.isEmpty()) CAR_LYRICS_STATUS_NO_LYRICS else CAR_LYRICS_STATUS_HAS_LYRICS
+        // PlaybackState bump：切歌后 metadata 已更新，但车机可能因状态未变化而忽略刷新。
+        // 先设 BUFFERING 再立即设回原状态，强制车机重新处理 MediaSession 元数据。
+        // 注意：此 bump 在 showNotification 末尾执行，不干扰上方 Lyricon 同步。
+        mediaSession?.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setState(PlaybackStateCompat.STATE_BUFFERING, position, 0f)
+                .setActions(0)
+                .build()
+        )
+        mediaSession?.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setState(
+                    if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
+                    position, if (isPlaying) 1f else 0f
+                )
+                .setActions(
+                    PlaybackStateCompat.ACTION_PLAY or
+                            PlaybackStateCompat.ACTION_PAUSE or
+                            PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                            PlaybackStateCompat.ACTION_STOP or
+                            PlaybackStateCompat.ACTION_SEEK_TO
+                )
+                .addCustomAction(
+                    PlaybackStateCompat.CustomAction.Builder(
+                        ACTION_TOGGLE_DESKTOP_LYRIC,
+                        "桌面歌词",
+                        if (desktopLyricEnabled) R.drawable.ic_lyric_on else R.drawable.ic_lyric_off
+                    ).build()
+                )
+                .addCustomAction(
+                    PlaybackStateCompat.CustomAction.Builder(
+                        ACTION_TOGGLE_FAVORITE,
+                        "收藏",
+                        if (isFavorited) R.drawable.ic_favorite_on else R.drawable.ic_favorite_off
+                    ).build()
+                )
+                .build()
         )
     }
 
-    /// 刷新 MediaSession.setExtras 中的车机字段。
-    /// music.media.extras.NOTICE_CAR=true 是车机识别「已连接的媒体应用且正在播放」的关键标记，
+    /// 向 MediaMetadata 构建器写入车机 uCar 歌词字段（开关开启时）。
+    /// 字段名必须为系统固定的大写字面量 LYRICS_*（车机端 Launcher 精确按此取值），
+    /// 既有裸键（LYRICS_LINE 等），也兼带 ucar.media.metadata. 前缀版，双写以提高命中：
+    /// - LYRICS_LINE：当前歌词行（实时刷新；空行写空串）
+    /// - LYRICS_WHOLE：整首 LRC（无内容时写空串，勿写 "-1"，车机直接显示该字段值到 UI）
+    /// - LYRICS_STATUS：歌词状态，0=有歌词，1=无歌词（勿反）
+    private fun applyCarLyricFields(builder: MediaMetadataCompat.Builder) {
+        if (!carLyricEnabled) return
+        val line = currentCarLyricLine
+        // 关键：LYRICS_WHOLE 无歌词时写空串，绝不写 "-1"。车机 Launcher 读此字段
+        // 后直接显示在 UI 上（进度区），"-1" 会导致车机显示异常数值。
+        val whole = currentCarLyricWhole
+        val status = if (currentCarLyricWhole.isEmpty())
+            CAR_LYRICS_STATUS_NO_LYRICS else CAR_LYRICS_STATUS_HAS_LYRICS
+        // 裸键（车机按大写字面量精确取值）
+        builder.putString(CAR_LYRICS_LINE, line)
+        builder.putString(CAR_LYRICS_WHOLE, whole)
+        builder.putLong(CAR_LYRICS_STATUS, status)
+        // 带前缀键（兼容部分车机版本）
+        builder.putString(CAR_LYRICS_LINE_PREFIXED, line)
+        builder.putString(CAR_LYRICS_WHOLE_PREFIXED, whole)
+        builder.putLong(CAR_LYRICS_STATUS_PREFIXED, status)
+    }
+
+    /// 刷新 MediaSession.setExtras 中的车机字段（裸键 + 带前缀键双写）。
+    /// NOTICE_CAR=true 是车机识别「已连接的媒体应用且正在播放」的关键标记，
     /// 必须随每次元数据刷新重新设置，否则车机主页识别不到播放状态。
+    /// 注意：NOTICE_CAR 不依赖 carLyricEnabled 开关——即使歌词未加载，
+    /// 车机也需要知道本应用正在播放，否则卡片显示为暂停状态。
     private fun refreshCarLyricExtras() {
         val bundle = android.os.Bundle()
+        // LYRIC_IS_ALLOWED / LYRIC 仅在 carLyricEnabled 时写入，避免污染 extras
         if (carLyricEnabled) {
             bundle.putBoolean(CAR_EXTRAS_LYRIC_ALLOWED, true)
+            bundle.putBoolean(CAR_EXTRAS_LYRIC_ALLOWED_BARE, true)
             if (currentCarLyricLine.isNotEmpty()) {
                 bundle.putString(CAR_EXTRAS_LYRIC, currentCarLyricLine)
+                bundle.putString(CAR_EXTRAS_LYRIC_BARE, currentCarLyricLine)
             }
-            bundle.putBoolean(CAR_EXTRAS_NOTICE_CAR, true)
-        } else {
-            bundle.putBoolean(CAR_EXTRAS_LYRIC_ALLOWED, false)
         }
+        // NOTICE_CAR 始终为 true：车机依赖此标记识别「正在播放的媒体应用」，
+        // 即使歌词未加载也要保持播放状态识别，否则车机主页卡片显示暂停图标。
+        bundle.putBoolean(CAR_EXTRAS_NOTICE_CAR, true)
+        bundle.putBoolean(CAR_EXTRAS_NOTICE_CAR_BARE, true)
         try {
             mediaSession?.setExtras(bundle)
         } catch (_: Exception) {}
@@ -1503,6 +1578,10 @@ class AudioPlaybackService : Service() {
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+            // 车机 uCar 协议：UCAR_TITLE / UCAR_ARTIST 是车机专用的标题/艺术家字段，
+            // 智能车载 App 优先读取这两个字段。与标准 TITLE/ARTIST 保持一致即可。
+            .putString(CAR_UCAR_TITLE, title)
+            .putString(CAR_UCAR_ARTIST, artist)
         if (artwork != null) {
             metaBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, artwork)
             metaBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork)
@@ -1610,6 +1689,9 @@ class AudioPlaybackService : Service() {
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, displayTitle)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, displayArtist)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, lastDuration)
+            // 车机 uCar 协议：UCAR_TITLE / UCAR_ARTIST
+            .putString(CAR_UCAR_TITLE, displayTitle)
+            .putString(CAR_UCAR_ARTIST, displayArtist)
         if (lastArtBitmap != null) {
             metaBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, lastArtBitmap)
             metaBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, lastArtBitmap)
@@ -1624,6 +1706,54 @@ class AudioPlaybackService : Service() {
         // 车机歌词：写入 ucar.metadata.lyric.* 字段
         applyCarLyricFields(metaBuilder)
         mediaSession?.setMetadata(metaBuilder.build())
+        // 车机歌词：刷新 setExtras（notice_car + 歌词状态），轻量刷新时也同步
+        refreshCarLyricExtras()
+
+        // PlaybackState bump：车机歌词变化后强制刷新车机 UI。
+        // 车机主页卡片在切歌后不更新，是因为 refreshMetadata 在 metadata 更新后
+        // 没有 PlaybackState 变化，车机认为数据无变化，不刷新卡片。
+        // 先设 BUFFERING 再立即设回原状态，强制车机重新处理 MediaSession 元数据。
+        // 仅在车机歌词实际变化时触发，避免歌词高频刷新时频繁 bump。
+        // 使用 lastPosition 保持真实播放进度，speed 与实际状态一致。
+        if (carLyricChanged) {
+            mediaSession?.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_BUFFERING, lastPosition, 0f)
+                    .setActions(0)
+                    .build()
+            )
+            mediaSession?.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(
+                        if (lastIsPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
+                        lastPosition, if (lastIsPlaying) 1f else 0f
+                    )
+                    .setActions(
+                        PlaybackStateCompat.ACTION_PLAY or
+                                PlaybackStateCompat.ACTION_PAUSE or
+                                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                                PlaybackStateCompat.ACTION_STOP or
+                                PlaybackStateCompat.ACTION_SEEK_TO
+                    )
+                    .addCustomAction(
+                        PlaybackStateCompat.CustomAction.Builder(
+                            ACTION_TOGGLE_DESKTOP_LYRIC,
+                            "桌面歌词",
+                            if (lastDesktopLyricEnabled) R.drawable.ic_lyric_on else R.drawable.ic_lyric_off
+                        ).build()
+                    )
+                    .addCustomAction(
+                        PlaybackStateCompat.CustomAction.Builder(
+                            ACTION_TOGGLE_FAVORITE,
+                            "收藏",
+                            if (lastIsFavorited) R.drawable.ic_favorite_on else R.drawable.ic_favorite_off
+                        ).build()
+                    )
+                    .build()
+            )
+        }
     }
 
     override fun onDestroy() {

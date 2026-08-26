@@ -764,7 +764,6 @@ class DesktopLyricService {
         await MediaNotificationService.updateBluetoothLyric(btText);
       } catch (_) {}
     }
-  }
     // 车机歌词：仅在 _carLyricEnabled 时推送当前行 + 整首歌词（uCar 双通道）。
     if (_carLyricEnabled) {
       final carText = (current == '歌词加载中...' ||
@@ -961,24 +960,21 @@ class DesktopLyricService {
     return _carLyricWhole!;
   }
 
-  /// 构建车机整首歌词（ELRC 逐字，与 LyricInfo 同格式）。
+  /// 构建车机整首歌词（标准 LRC 格式，供车机 LrcView 滚动显示）。
+  ///
+  /// ⚠️ 关键：车机端（vivo 车载 Launcher 的 LrcUtils）只识别标准 LRC
+  /// `[mm:ss.xx / .xxx]歌词`，**不认** ELRC 逐字 `<mm:ss.xxx>字` 标签。
+  /// 若推送 ELRC，`<mm:ss.xxx>` 逐字标签会被车机当作普通歌词文本原样显示，
+  /// 导致"歌词内容跟歌曲名**混在一起/错乱**"或解析失败回退显示歌曲标题。
+  /// 故这里必须生成标准 LRC：每行一个时间戳 + 该行歌词文本（去掉逐字部分）。
   String _buildCarLyricWhole() {
     final buf = StringBuffer();
     for (final line in _lines) {
       if (line.text.isEmpty) continue;
-      buf.write(_lrcTagMs(line.startTime));
-      if (line.hasWordTiming) {
-        for (final w in line.words) {
-          buf
-            ..write(_elrcWordTag(w.startTime))
-            ..write(w.text);
-        }
-      } else {
-        buf
-          ..write(_elrcWordTag(line.startTime))
-          ..write(line.text);
-      }
-      buf.write('\n');
+      buf
+        ..write(_lrcTagMs(line.startTime))
+        ..write(line.text.trim())
+        ..write('\n');
     }
     return buf.toString().trimRight();
   }

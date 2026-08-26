@@ -241,6 +241,17 @@ class AudioService {
     // pause() 由外部主动调用时不修改 _pausedByInterruption；
     // 中断引起的 pause 由 _configureAudioSession 内置 listener 设置标志。
     await _player.pause();
+    // 关键修复：主动暂停后应释放音频焦点（setActive(false)），否则本应用
+    // 一直占据媒体焦点，其它音乐 App 播放时会「抢不到焦点 / 被本应用抢占」。
+    // 释放焦点后，其它 App 可正常接管；本应用恢复播放时由 play() 重新激活。
+    // 因中断（来电等）被动暂停时，焦点交由系统在中断结束后自动归还，不在此释放，
+    // 避免破坏中断恢复逻辑。
+    if (!_pausedByInterruption) {
+      try {
+        final session = await AudioSession.instance;
+        await session.setActive(false);
+      } catch (_) {}
+    }
   }
 
   Future<void> stop() async {
