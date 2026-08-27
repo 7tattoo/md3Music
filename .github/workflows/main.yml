@@ -212,6 +212,10 @@ jobs:
             --dart-define=APP_VERSION=${{ steps.version.outputs.version }} \
             --build-name=${{ steps.version.outputs.version }} \
             --build-number=${{ steps.version.outputs.versionCode }}
+          # --target-platform 构建产物名为 app-release.apk（仅含 arm64 so），
+          # 重命名为 app-arm64-v8a-release.apk 便于用户识别
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
       - name: Verify APKs
         run: |
