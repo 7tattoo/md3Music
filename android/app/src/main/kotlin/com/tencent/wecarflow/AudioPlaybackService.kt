@@ -560,6 +560,11 @@ class AudioPlaybackService : Service() {
     private var lastIsFavorited = false
     private var lastDuration = 0L
     private var lastPosition = 0L
+    // 记录 lastPosition 对应的系统时钟（SystemClock.elapsedRealtime），
+    // 供 bump/PlaybackState 计算实时估算位置（lastPosition + 经过时间×speed）。
+    // 修复：bump 若直接用陈旧的 lastPosition，车机 PlaybackState 位置会回退，
+    // 导致 LrcView 时间轴滚动一两行后又跳回前面。
+    private var lastPositionTimeMs = 0L
     // 是否已调用过 startForeground（启动前台服务后必须尽快调用，Android 12+ 超时崩溃）
     private var foregroundStarted = false
     // 媒体键命令合并：唤醒期间连续按键只保留最新命令、只启动一个派发会话，
@@ -1335,6 +1340,7 @@ class AudioPlaybackService : Service() {
         lastIsFavorited = isFavorited
         lastDuration = duration
         lastPosition = position
+        lastPositionTimeMs = SystemClock.elapsedRealtime()
         // P0: 切歌时清空车机歌词残留，避免新歌名+旧歌词错配写入 MediaSession。
         // 车机主页卡片在切歌后不更新，是因为 LYRICS_WHOLE 仍含上一首的歌词内容，
         // 新歌的 LYRICS_STATUS=0（有歌词）+ 旧歌词内容，导致车机认为数据无变化，
@@ -1539,6 +1545,22 @@ class AudioPlaybackService : Service() {
         builder.putLong(CAR_LYRICS_STATUS_PREFIXED, status)
     }
 
+    /// 计算播放中的实时估算位置（毫秒）。
+    ///
+    /// lastPosition 只在 Dart 端 _updateNotification（约 30s 一次）或切歌时刷新，
+    /// 播放期间直接用它会得到陈旧位置。用「上次已知位置 + 经过时间×速度」估算，
+    /// 保证 PlaybackState 位置单调递增，车机 LrcView 时间轴不会跳回。
+    /// 暂停/停止时位置不变，直接返回 lastPosition。
+    private fun estimatedPlaybackPosition(): Long {
+        if (!lastIsPlaying) return lastPosition
+        val elapsedRealtime = SystemClock.elapsedRealtime()
+        val baseTime = if (lastPositionTimeMs > 0) lastPositionTimeMs else elapsedRealtime
+        val elapsedMs = (elapsedRealtime - baseTime).coerceAtLeast(0L)
+        var pos = lastPosition + elapsedMs
+        if (lastDuration > 0) pos = pos.coerceAtMost(lastDuration)
+        return pos
+    }
+
     /// 刷新 MediaSession.setExtras 中的车机字段（裸键 + 带前缀键双写）。
     /// NOTICE_CAR=true 是车机识别「已连接的媒体应用且正在播放」的关键标记，
     /// 必须随每次元数据刷新重新设置，否则车机主页识别不到播放状态。
@@ -1714,11 +1736,14 @@ class AudioPlaybackService : Service() {
         // 没有 PlaybackState 变化，车机认为数据无变化，不刷新卡片。
         // 先设 BUFFERING 再立即设回原状态，强制车机重新处理 MediaSession 元数据。
         // 仅在车机歌词实际变化时触发，避免歌词高频刷新时频繁 bump。
-        // 使用 lastPosition 保持真实播放进度，speed 与实际状态一致。
+        // 关键：bump 的 position 必须用实时估算位置（estimatedPlaybackPosition），
+        // 不能用陈旧的 lastPosition——否则车机 PlaybackState 位置被重置回旧值，
+        // 以位置驱动滚动轴的 LrcView 会把歌词拉回前面（滚动一两行后跳回）。
         if (carLyricChanged) {
+            val currentPos = estimatedPlaybackPosition()
             mediaSession?.setPlaybackState(
                 PlaybackStateCompat.Builder()
-                    .setState(PlaybackStateCompat.STATE_BUFFERING, lastPosition, 0f)
+                    .setState(PlaybackStateCompat.STATE_BUFFERING, currentPos, 0f)
                     .setActions(0)
                     .build()
             )
@@ -1726,7 +1751,7 @@ class AudioPlaybackService : Service() {
                 PlaybackStateCompat.Builder()
                     .setState(
                         if (lastIsPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
-                        lastPosition, if (lastIsPlaying) 1f else 0f
+                        currentPos, if (lastIsPlaying) 1f else 0f
                     )
                     .setActions(
                         PlaybackStateCompat.ACTION_PLAY or
@@ -1753,6 +1778,11 @@ class AudioPlaybackService : Service() {
                     )
                     .build()
             )
+            // 同步基准：bump 已按实时位置设置 PlaybackState，更新 lastPosition/
+            // lastPositionTimeMs，使后续 estimatedPlaybackPosition 从新基准继续推算，
+            // 避免基于旧基准重复叠加经过时间导致位置虚高。
+            lastPosition = currentPos
+            lastPositionTimeMs = SystemClock.elapsedRealtime()
         }
     }
 
