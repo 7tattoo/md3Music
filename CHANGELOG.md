@@ -4,6 +4,16 @@
 发布时 CI 会自动取当前版本对应的节作为 GitHub Release 正文，并补上标题、构建时间、下载链接与页脚；
 若某版本没有对应条目，则回退为自动生成的提交列表。
 
+## v5.3.4
+
+本次版本将 Android applicationId 切换为 `cn.kuwo.kwmusiccar`，用于 vivo JoviInCar 车联兼容性测试；继续使用正式签名，仅发布 arm64-v8a。
+
+### 变更
+
+- Android 包名改为 **`cn.kuwo.kwmusiccar`**
+- 保留 vivo JoviInCar 车联主页滚动歌词与时间轴修复
+- 仅构建并发布 **arm64-v8a** APK
+
 ## v5.3.3
 
 本次更新重点修复 vivo 智能车联（JoviInCar）投屏主页音乐卡片歌词显示问题，并首次发布正式签名版本（仅 arm64-v8a）。

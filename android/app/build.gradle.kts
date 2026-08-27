@@ -27,7 +27,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.tencent.wecarflow"
+        applicationId = "cn.kuwo.kwmusiccar"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutter.versionCode
