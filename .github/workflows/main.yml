@@ -206,9 +206,9 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Flutter build APK (split per ABI)
+      - name: Flutter build APK (arm64-v8a only)
         run: |
-          flutter build apk --release --split-per-abi \
+          flutter build apk --release --target-platform android-arm64 \
             --dart-define=APP_VERSION=${{ steps.version.outputs.version }} \
             --build-name=${{ steps.version.outputs.version }} \
             --build-number=${{ steps.version.outputs.versionCode }}
@@ -277,9 +277,7 @@ jobs:
             echo "_Built: $(date -u '+%Y-%m-%d %H:%M UTC')_"
             echo ""
             echo "### Downloads"
-            echo "- **app-arm64-v8a-release.apk** — 推荐：大多数现代 Android 设备"
-            echo "- **app-armeabi-v7a-release.apk** — 较旧的 32 位设备"
-            echo "- **app-x86_64-release.apk** — Android 模拟器"
+            echo "- **app-arm64-v8a-release.apk** — 推荐：大多数现代 Android 设备（arm64）"
             echo ""
             echo "### Commits (${RANGE:-最近 20 条})"
             echo ""
@@ -338,9 +336,7 @@ jobs:
               echo ""
               echo "### ⬇️ 下载"
               echo ""
-              echo "- **app-arm64-v8a-release.apk** — 推荐：大多数现代 Android 设备"
-              echo "- **app-armeabi-v7a-release.apk** — 较旧的 32 位设备"
-              echo "- **app-x86_64-release.apk** — Android 模拟器"
+              echo "- **app-arm64-v8a-release.apk** — 推荐：大多数现代 Android 设备（arm64）"
               echo ""
               cat /tmp/section.md
               echo ""
@@ -371,9 +367,7 @@ jobs:
           prerelease: false
           append_body: false  # 默认行为：用组装好的正文替换 release 描述
           files: |
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            build/app/outputs/flutter-apk/app-x86_64-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
