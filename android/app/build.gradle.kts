@@ -1,5 +1,7 @@
 import java.util.Properties
 import java.io.FileInputStream
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 plugins {
     id("com.android.application")
@@ -46,14 +48,15 @@ val resolvedApplicationId: String =
 val resolvedVersionCode: Int =
     (findProperty("buildVersionCode") as String?)?.toIntOrNull()
         ?: providers.environmentVariable("BUILD_VERSION_CODE").orNull?.toIntOrNull()
-        ?: java.time.LocalDateTime.now()
-            .format(java.time.format.DateTimeFormatter.ofPattern("yyMMddHHmm"))
+        ?: LocalDateTime.now()
+            .format(DateTimeFormatter.ofPattern("yyMMddHHmm"))
             .toLong().minus(2_000_000_000L).toInt()
 
-val resolvedVersionName: String =
+// versionName 覆盖值（为空时在 defaultConfig 里回退 flutter.versionName —
+// flutter 扩展在 android 块内取值最稳，不在顶层作用域引用）
+val overrideVersionName: String? =
     (findProperty("buildVersionName") as String?)
         ?: providers.environmentVariable("BUILD_VERSION_NAME").orNull
-        ?: flutter.versionName
 
 android {
     namespace = "cn.kuwo.kwmusiccar"
@@ -70,7 +73,7 @@ android {
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = resolvedVersionCode
-        versionName = resolvedVersionName
+        versionName = overrideVersionName ?: flutter.versionName
         // USB 独占输出 C++ 驱动：只编译与 jniLibs 相同的 4 个 ABI
         externalNativeBuild {
             cmake {
