@@ -3081,6 +3081,11 @@ class KugouApiClient {
       'list_create_userid': userid,
       'list_create_listid': listid,
     };
+    // 显式传 userid：服务端仅靠 cookie 取 userid 时部分场景会落 0 → 20010/404
+    final currentUid = _userid;
+    if (currentUid != null && currentUid.isNotEmpty && currentUid != '0') {
+      params['userid'] = currentUid;
+    }
     // 收藏歌单时需要传入 list_create_gid
     if (globalCollectionId != null && globalCollectionId.isNotEmpty) {
       params['list_create_gid'] = globalCollectionId;
@@ -3109,19 +3114,27 @@ class KugouApiClient {
     String listid, {
     int type = 1,
   }) async {
-    return await _get(
-      KugouEndpoints.playlistDel,
-      queryParameters: {'listid': listid, 'type': type},
-    );
+    final params = <String, dynamic>{'listid': listid, 'type': type};
+    // 显式传 userid：服务端仅靠 cookie 取 userid 时部分场景会落 0 → 20010/404
+    final uid = _userid;
+    if (uid != null && uid.isNotEmpty && uid != '0') {
+      params['userid'] = uid;
+    }
+    return await _get(KugouEndpoints.playlistDel, queryParameters: params);
   }
 
   Future<Map<String, dynamic>?> addPlaylistTracks(
     String listid,
     String data,
   ) async {
+    final params = <String, dynamic>{'listid': listid, 'data': data};
+    final uid = _userid;
+    if (uid != null && uid.isNotEmpty && uid != '0') {
+      params['userid'] = uid;
+    }
     return await _get(
       KugouEndpoints.playlistTracksAdd,
-      queryParameters: {'listid': listid, 'data': data},
+      queryParameters: params,
     );
   }
 
@@ -3129,9 +3142,14 @@ class KugouApiClient {
     String listid,
     String fileids,
   ) async {
+    final params = <String, dynamic>{'listid': listid, 'fileids': fileids};
+    final uid = _userid;
+    if (uid != null && uid.isNotEmpty && uid != '0') {
+      params['userid'] = uid;
+    }
     return await _get(
       KugouEndpoints.playlistTracksDel,
-      queryParameters: {'listid': listid, 'fileids': fileids},
+      queryParameters: params,
     );
   }
 

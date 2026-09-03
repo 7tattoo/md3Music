@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// USB 独占输出服务：封装原生 MethodChannel "com.md3music.md3music/usb_audio"。
+/// USB 独占输出服务：封装原生 MethodChannel "cn.kuwo.kwmusiccar/usb_audio"。
 ///
 /// 提供：
 /// - 开关：enableExclusive / disableExclusive（原生负责授权、开设备、xHCI 时序）
@@ -20,7 +20,7 @@ class UsbAudioService {
   static final UsbAudioService instance = UsbAudioService._();
 
   static const MethodChannel _channel =
-      MethodChannel('com.md3music.md3music/usb_audio');
+      MethodChannel('cn.kuwo.kwmusiccar/usb_audio');
 
   static const String _tag = 'UsbAudioService';
   static const String _keyAutoDisableForMv = 'usb_auto_disable_for_mv';

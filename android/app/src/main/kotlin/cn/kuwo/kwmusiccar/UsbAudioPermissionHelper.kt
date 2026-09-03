@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.content.Context
 import android.content.Intent

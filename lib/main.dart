@@ -153,6 +153,10 @@ Future<void> _restoreLyricPushPref() async {
     final btLyricEnabled = await settings.getBluetoothLyricEnabled();
     await DesktopLyricService.instance.setBluetoothLyricEnabled(btLyricEnabled);
 
+    // 车载歌词（独立开关）：用于 vivo 车载投屏等设备读取 MediaSession 歌词字段
+    final carLyricEnabled = await settings.getCarLyricEnabled();
+    await DesktopLyricService.instance.setCarLyricEnabled(carLyricEnabled);
+
     // 锁屏歌词（独立开关）：开启后歌词服务定时器运行以推送整首歌词
     // （样式全部跟随 AM 歌词偏好，与播放页 Zen 沉浸模式一致）
     final lockScreenLyricEnabled = await settings.getLockScreenLyricEnabled();

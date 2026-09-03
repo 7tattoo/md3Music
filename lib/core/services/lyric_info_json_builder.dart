@@ -314,8 +314,8 @@ Map<String, dynamic> buildLyricInfoJson({
       if (rawLyric.isNotEmpty) 'rawLyric': rawLyric,
       if (transLrc.isNotEmpty) 'translationLyric': transLrc,
       'noLyric': false,
-      'provider': 'com.md3music.md3music',
-      'source': 'com.md3music.md3music-v5',
+      'provider': 'cn.kuwo.kwmusiccar',
+      'source': 'cn.kuwo.kwmusiccar-v5',
       if (album != null && album.isNotEmpty) 'album': album,
       if (trackKey != null && trackKey.isNotEmpty) 'trackKey': trackKey,
       if (sessionGeneration != null && sessionGeneration > 0)

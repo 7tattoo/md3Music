@@ -63,6 +63,7 @@ import androidx.media3.session.MediaLibraryService.LibraryParams;
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession;
 import androidx.media3.session.legacy.LegacyParcelableUtil;
 import androidx.media3.session.legacy.MediaControllerCompat;
+import androidx.media3.session.legacy.MediaMetadataCompat;
 import androidx.media3.session.legacy.MediaSessionCompat;
 import androidx.media3.session.legacy.MediaSessionManager.RemoteUserInfo;
 import com.google.common.base.Objects;
@@ -1200,6 +1201,59 @@ public class MediaSession {
 
   /* package */ final MediaSessionCompat getSessionCompat() {
     return impl.getSessionCompat();
+  }
+
+  // ==== MD3Music fork（车载歌词）：legacy MediaMetadataCompat 读写桥 ====
+  // 车机（vivo uCar 等）实际连接的是 Media3 内部创建的 legacy MediaSessionCompat，
+  // 读取的是它的 MediaMetadataCompat。AudioPlayer 在别的包里、拿不到 package-private
+  // 的 getSessionCompat()，因此在此暴露两个公开方法。
+  //
+  // 封面保留铁律：写入前必须用 getLegacyMetadata() 取当前值，
+  // 以 new MediaMetadataCompat.Builder(current) 为基底，否则歌词高频刷新会冲掉封面。
+  @Nullable private MediaMetadataCompat lastLegacyMetadata;
+
+  /// 写 legacy 会话元数据（车载歌词字段）；同时记录快照供 getLegacyMetadata 兜底。
+  @UnstableApi
+  public final void setLegacyMetadata(MediaMetadataCompat metadata) {
+    if (metadata == null) return;
+    try {
+      lastLegacyMetadata = metadata;
+      impl.getSessionCompat().setMetadata(metadata);
+    } catch (Exception e) {
+      android.util.Log.w("MediaSession", "setLegacyMetadata failed: " + e);
+    }
+  }
+
+  /// 读 legacy 会话当前元数据：优先 controller 的实时值，失败时回退本地快照。
+  @UnstableApi
+  @Nullable
+  public final MediaMetadataCompat getLegacyMetadata() {
+    try {
+      MediaControllerCompat controller = impl.getSessionCompat().getController();
+      if (controller != null) {
+        MediaMetadataCompat m = controller.getMetadata();
+        if (m != null) return m;
+      }
+    } catch (Exception e) {
+      android.util.Log.w("MediaSession", "getLegacyMetadata failed: " + e);
+    }
+    return lastLegacyMetadata;
+  }
+
+  /// 写 legacy/media3 会话 extras（车机 NOTICE_CAR / LYRIC 通道）。
+  @UnstableApi
+  public final void setCarSessionExtras(Bundle extras) {
+    if (extras == null) return;
+    try {
+      setSessionExtras(extras);
+    } catch (Exception e) {
+      android.util.Log.w("MediaSession", "setCarSessionExtras failed: " + e);
+    }
+    try {
+      impl.getSessionCompat().setExtras(extras);
+    } catch (Exception e) {
+      android.util.Log.w("MediaSession", "setCarSessionExtras legacy failed: " + e);
+    }
   }
 
   /**

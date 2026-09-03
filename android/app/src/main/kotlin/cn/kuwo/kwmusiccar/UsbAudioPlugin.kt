@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -18,7 +18,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * USB 独占输出插件：MethodChannel "com.md3music.md3music/usb_audio"。
+ * USB 独占输出插件：MethodChannel "cn.kuwo.kwmusiccar/usb_audio"。
  *
  * 编排层职责：
  * - listDevices / getStatus / getFormatInfo / isEnabled：查询
@@ -33,7 +33,7 @@ class UsbAudioPlugin(private val context: Context) {
 
     companion object {
         private const val TAG = "UsbAudioPlugin"
-        private const val CHANNEL_NAME = "com.md3music.md3music/usb_audio"
+        private const val CHANNEL_NAME = "cn.kuwo.kwmusiccar/usb_audio"
         private const val ACTION_USB_PERMISSION_SUFFIX = ".USB_AUDIO_PERMISSION"
         /** 默认采样率/声道（尚未捕获到播放格式时创建流的兜底）。 */
         private const val DEFAULT_SAMPLE_RATE = 44100

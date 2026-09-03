@@ -440,6 +440,12 @@ import org.checkerframework.checker.initialization.qual.Initialized;
 
   @Override
   public void onSkipToNext() {
+    // MD3Music fork（车载方向盘切歌）：车机/方向盘经 legacy MediaSessionCompat 到达这里，
+    // 不走 MediaSession.Callback.onPlayerCommandRequest。若不拦截，ExoPlayer 默认 seek
+    // 会与 App 自维护队列脱节。优先转发 App 的下一首逻辑。
+    if (com.ryanheise.just_audio.AudioPlayer.dispatchCustomNext()) {
+      return;
+    }
     if (sessionImpl.getPlayerWrapper().isCommandAvailable(COMMAND_SEEK_TO_NEXT)) {
       dispatchSessionTaskWithPlayerCommand(
           COMMAND_SEEK_TO_NEXT,
@@ -457,6 +463,10 @@ import org.checkerframework.checker.initialization.qual.Initialized;
 
   @Override
   public void onSkipToPrevious() {
+    // MD3Music fork（车载方向盘切歌）：同 onSkipToNext，优先转发 App 的上一首逻辑。
+    if (com.ryanheise.just_audio.AudioPlayer.dispatchCustomPrevious()) {
+      return;
+    }
     if (sessionImpl.getPlayerWrapper().isCommandAvailable(COMMAND_SEEK_TO_PREVIOUS)) {
       dispatchSessionTaskWithPlayerCommand(
           COMMAND_SEEK_TO_PREVIOUS,

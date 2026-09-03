@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.content.Context
 import android.util.Log
@@ -10,14 +10,14 @@ import io.flutter.plugin.common.MethodChannel
  * 通过 JNI 启动/停止 127.0.0.1 上随机端口的 HTTP 服务器（取代旧的
  * libnode.so + server_bundle.js 方案），并把实际端口回传给 Dart。
  *
- * 注意：JNI 符号名含包名（Java_com_md3music_md3music_KugouApiService_*），
+ * 注意：JNI 符号名含包名（Java_cn_kuwo_kwmusiccar_KugouApiService_*），
  * 如果 .so 是旧包名编译的，JNI 会找不到符号。此时 MethodChannel 返回错误，
  * Dart 端会走 dart:ffi 兜底路径（纯 C 函数 start_server 等不含包名）。
  */
 class KugouApiService(private val context: Context, flutterEngine: FlutterEngine) {
     companion object {
         private const val TAG = "KugouApiService"
-        private const val CHANNEL = "com.md3music.md3music/kugou_api"
+        private const val CHANNEL = "cn.kuwo.kwmusiccar/kugou_api"
 
         // 延迟加载 + 捕获异常，避免 JNI 符号不匹配时类加载直接崩溃
         private var libLoaded = false

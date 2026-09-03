@@ -43,6 +43,7 @@ const List<({String label, String category, String aliases})>
   (label: '解锁桌面歌词', category: '歌词', aliases: '桌面歌词 桌面'),
   (label: '蓝牙歌词', category: '歌词', aliases: '蓝牙'),
   (label: '压缩封面图', category: '歌词', aliases: '蓝牙 封面 压缩'),
+  (label: '车载歌词', category: '歌词', aliases: '车载'),
   (label: '锁屏歌词（实验性）', category: '歌词', aliases: '锁屏'),
   (label: '网络音质', category: '播放', aliases: '音质 清晰度 wifi 移动'),
   (label: '自动领取VIP', category: '播放', aliases: 'vip 会员 自动领取'),

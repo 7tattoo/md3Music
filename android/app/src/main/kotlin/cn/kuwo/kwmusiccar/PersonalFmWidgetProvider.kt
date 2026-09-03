@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -38,11 +38,11 @@ class PersonalFmWidgetProvider : AppWidgetProvider() {
 
     companion object {
         // 快照更新广播（Flutter → MainActivity → 本方法发出）
-        const val ACTION_FM_UPDATE_WIDGET = "com.md3music.md3music.ACTION_FM_UPDATE_WIDGET"
+        const val ACTION_FM_UPDATE_WIDGET = "cn.kuwo.kwmusiccar.ACTION_FM_UPDATE_WIDGET"
         // 封面就绪后的内部重绘（无 extras，禁止覆盖缓存快照）
-        const val ACTION_FM_COVER_READY = "com.md3music.md3music.ACTION_FM_COVER_READY"
+        const val ACTION_FM_COVER_READY = "cn.kuwo.kwmusiccar.ACTION_FM_COVER_READY"
         // 登录引导卡点击（拉起 app 进登录页）
-        const val ACTION_FM_OPEN_LOGIN = "com.md3music.md3music.ACTION_FM_WIDGET_OPEN_LOGIN"
+        const val ACTION_FM_OPEN_LOGIN = "cn.kuwo.kwmusiccar.ACTION_FM_WIDGET_OPEN_LOGIN"
         // 播放类动作常量定义在 AudioPlaybackService（PendingIntent 直接引用），
         // 保证 Provider 与 Service 两端字符串一致。
 

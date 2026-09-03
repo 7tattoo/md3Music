@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 class MediaNotificationService {
   static const MethodChannel _channel = MethodChannel(
-    'com.md3music.md3music/floating_lyric',
+    'cn.kuwo.kwmusiccar/floating_lyric',
   );
 
   static void Function()? onPrevious;
@@ -216,6 +216,25 @@ class MediaNotificationService {
   static Future<void> setBluetoothLyricEnabled(bool enabled) async {
     try {
       await _channel.invokeMethod('setBluetoothLyricEnabled', {
+        'enabled': enabled,
+      });
+    } catch (_) {}
+  }
+
+  // 车载歌词：推送当前行和整首歌词到 MediaSession extras
+  // 用于 vivo 车载投屏等场景
+  static Future<void> updateCarLyric(String? line, String? whole) async {
+    try {
+      await _channel.invokeMethod('updateCarLyric', {
+        'line': line ?? '',
+        'whole': whole ?? '',
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> setCarLyricEnabled(bool enabled) async {
+    try {
+      await _channel.invokeMethod('setCarLyricEnabled', {
         'enabled': enabled,
       });
     } catch (_) {}

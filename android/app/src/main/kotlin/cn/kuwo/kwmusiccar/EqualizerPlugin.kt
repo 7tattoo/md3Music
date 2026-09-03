@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.media.audiofx.Equalizer
 import android.os.Handler
@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 均衡器插件：通过 MethodChannel "com.md3music.md3music/equalizer" 暴露 Android 原生 Equalizer。
+ * 均衡器插件：通过 MethodChannel "cn.kuwo.kwmusiccar/equalizer" 暴露 Android 原生 Equalizer。
  *
  * 使用 android.media.audiofx.Equalizer，绑定到 just_audio 的 audio session ID。
  * 频段数和频率由设备硬件决定（通常 5 段：60Hz / 230Hz / 910Hz / 3600Hz / 14000Hz）。
@@ -30,7 +30,7 @@ class EqualizerPlugin {
 
     companion object {
         private const val TAG = "EqualizerPlugin"
-        private const val CHANNEL_NAME = "com.md3music.md3music/equalizer"
+        private const val CHANNEL_NAME = "cn.kuwo.kwmusiccar/equalizer"
         private const val INIT_TIMEOUT_MS = 4000L
     }
 

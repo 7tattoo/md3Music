@@ -120,6 +120,8 @@ class _SettingsPageState extends State<SettingsPage>
   bool _bluetoothLyricEnabled = false;
   // 蓝牙歌词封面压缩开关：默认关闭（不压缩，保持原始封面质量）
   bool _bluetoothLyricCompressArt = false;
+  // 车载歌词开关：用于 vivo 车载投屏等设备
+  bool _carLyricEnabled = false;
   // 锁屏歌词开关：锁屏时全屏显示滚动歌词（覆盖在系统锁屏上方），默认关闭
   // 样式（字号/行距/字重/字体等）全部跟随 AM 歌词偏好，与播放页 Zen 模式一致
   bool _lockScreenLyricEnabled = false;
@@ -314,6 +316,8 @@ class _SettingsPageState extends State<SettingsPage>
     // 读取蓝牙歌词封面压缩开关
     final bluetoothLyricCompressArt = await _settingsRepository
         .getBluetoothLyricCompressArt();
+    // 读取车载歌词开关
+    final carLyricEnabled = await _settingsRepository.getCarLyricEnabled();
     // 读取锁屏歌词开关
     final lockScreenLyricEnabled = await _settingsRepository
         .getLockScreenLyricEnabled();
@@ -371,6 +375,7 @@ class _SettingsPageState extends State<SettingsPage>
       _glowThresholdFactor = LyricPreferences.instance.glowThresholdFactor;
       _bluetoothLyricEnabled = bluetoothLyricEnabled;
       _bluetoothLyricCompressArt = bluetoothLyricCompressArt;
+      _carLyricEnabled = carLyricEnabled;
       _lockScreenLyricEnabled = lockScreenLyricEnabled;
       _pauseFadeEnabled = pauseFadeEnabled;
       _crossfadeEnabled = crossfadeEnabled;
@@ -872,7 +877,22 @@ class _SettingsPageState extends State<SettingsPage>
             await _settingsRepository.setBluetoothLyricCompressArt(value);
           },
         ),
-        // ④ 锁屏歌词：主开关（字号/行距/字重/字体等样式全部跟随 AM 歌词偏好，
+        // ④ 车载歌词：用于 vivo 车载投屏等设备
+        _buildGroupLabel('车载歌词', colorScheme),
+        // search: 车载
+        SwitchListTile(
+          title: const Text('车载歌词'),
+          subtitle: const Text('推送歌词到 MediaSession extras，用于 vivo 车载投屏等设备显示滚动歌词'),
+          value: _carLyricEnabled,
+          onChanged: (value) async {
+            HapticFeedback.lightImpact();
+            setState(() => _carLyricEnabled = value);
+            await _settingsRepository.setCarLyricEnabled(value);
+            // 同步到歌词服务
+            DesktopLyricService.instance.setCarLyricEnabled(value);
+          },
+        ),
+        // ⑤ 锁屏歌词：主开关（字号/行距/字重/字体等样式全部跟随 AM 歌词偏好，
         // 与播放页 Zen 沉浸模式一致，在播放页歌词设置中调整）
         _buildGroupLabel('锁屏歌词', colorScheme),
         // search: 锁屏
@@ -2670,7 +2690,7 @@ class _SettingsPageState extends State<SettingsPage>
   /// 并把本地 Rust API 服务器当前端口传过去（原生页据此直连取数）。
   // ignore: unused_element
   Future<void> _openMiuixDiscover() async {
-    const channel = MethodChannel('com.md3music.md3music/miuix_discover');
+    const channel = MethodChannel('cn.kuwo.kwmusiccar/miuix_discover');
     try {
       await channel.invokeMethod('open', {'port': KugouApiServer.currentPort});
     } catch (e) {

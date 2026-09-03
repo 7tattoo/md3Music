@@ -380,6 +380,19 @@ class SettingsRepository {
     await prefs.setBool(_keyBluetoothLyricEnabled, v);
   }
 
+  // 车载歌词：推送歌词到 MediaSession extras，用于 vivo 车载投屏等场景
+  static const String _keyCarLyricEnabled = 'settings_car_lyric_enabled';
+
+  Future<bool> getCarLyricEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyCarLyricEnabled) ?? false;
+  }
+
+  Future<void> setCarLyricEnabled(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyCarLyricEnabled, v);
+  }
+
   // 蓝牙歌词封面压缩开关：默认 false（不压缩，保持原始 512px 封面质量）。
   // 开启后原生端 refreshMetadata 使用 256px 缩略图，降低 Binder 负载与 SystemUI 解码压力。
   static const String _keyBluetoothLyricCompressArt = 'settings_bluetooth_lyric_compress_art';

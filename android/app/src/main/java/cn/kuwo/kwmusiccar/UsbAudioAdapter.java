@@ -1,4 +1,4 @@
-package com.md3music.md3music;
+package cn.kuwo.kwmusiccar;
 
 import com.ryanheise.just_audio.UsbAudioSink;
 

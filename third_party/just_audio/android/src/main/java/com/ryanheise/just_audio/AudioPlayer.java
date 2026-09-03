@@ -1054,6 +1054,11 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                     cmdBuilder.add(CMD_TOGGLE_FAVORITE);
                     cmdBuilder.add(CMD_TOGGLE_TRANSLATION);
                     builder.setAvailableSessionCommands(cmdBuilder.build());
+                    // 注：4 个 seek 命令（SEEK_TO_PREVIOUS/NEXT[_MEDIA_ITEM]）已在
+                    // fork 的 ExoPlayerImpl.permanentAvailableCommands 常驻声明，
+                    // 且 DEFAULT_PLAYER_COMMANDS 为全量命令集，此处无需再显式追加，
+                    // 车机即可看到「支持切歌」。实际切歌由 onPlayerCommandRequest
+                    // 与 MediaSessionLegacyStub.onSkipTo* 拦截后转发 App 队列逻辑。
                     return builder.build();
                 }
                 // MD3Music fork（阶段6·修复媒体卡片上一首/下一首）：
@@ -1265,6 +1270,18 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         }
     }
 
+    /// 更新车载歌词到 MediaItem extras 和 session extras（vivo 车载投屏协议）
+    /// 三路写入：1) MediaItem.extras 2) legacy MediaMetadataCompat 3) setSessionExtras
+    public static void updateActiveSessionCarLyric(
+            String line, String whole, String title, String artist) {
+        AudioPlayer p = sActivePlayer;
+        if (p != null) {
+            p.applyCarLyric(line, whole, title, artist);
+        } else {
+            Log.w("AudioFocusFork", "updateActiveSessionCarLyric: no active AudioPlayer");
+        }
+    }
+
     /// 仅更新媒体3会话稳定标题/艺术家（不重压缩封面）。
     public static void updateActiveSessionTitleArtist(
             String expectedMediaId, long generation, String title, String artist) {
@@ -1448,6 +1465,36 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         sCustomActionListener = listener;
     }
 
+    /// MD3Music fork（车载方向盘切歌）：legacy MediaSessionCompat 回调（车机/方向盘走
+    /// MediaSessionLegacyStub.onSkipToNext/onSkipToPrevious，不经 onPlayerCommandRequest）
+    /// 优先转发到 App 自有队列逻辑。返回 true 表示已消费，调用方不再走 ExoPlayer 默认 seek
+    /// （默认 seek 会与 App 队列脱节：上一首变成从头重播当前曲）。
+    public static boolean dispatchCustomNext() {
+        final CustomActionListener listener = sCustomActionListener;
+        if (listener == null) return false;
+        try {
+            Log.i("AudioFocusFork", "dispatchCustomNext (legacy stub) -> App next");
+            listener.onNext();
+            return true;
+        } catch (Exception e) {
+            Log.w("AudioFocusFork", "dispatchCustomNext failed: " + e);
+            return false;
+        }
+    }
+
+    public static boolean dispatchCustomPrevious() {
+        final CustomActionListener listener = sCustomActionListener;
+        if (listener == null) return false;
+        try {
+            Log.i("AudioFocusFork", "dispatchCustomPrevious (legacy stub) -> App previous");
+            listener.onPrevious();
+            return true;
+        } catch (Exception e) {
+            Log.w("AudioFocusFork", "dispatchCustomPrevious failed: " + e);
+            return false;
+        }
+    }
+
     /// 由 App 在元数据/开关变化时推送媒体3通知栏的自定义按钮（图标按开/关态切换）。
     /// 阶段6：下一首已改回原生按钮，这里只保留桌面歌词/收藏两个自定义按钮。
     /// hasTranslation=true 时在自定义布局首位插入 ColorOS 翻译切换按钮（仅 Bridge
@@ -1542,6 +1589,111 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                     expectedMediaId, generation, title, artist, lyricInfo));
         } catch (Exception e) {
             Log.w("AudioFocusFork", "applySessionTitleArtistAndLyricInfo dispatch failed: " + e);
+        }
+    }
+
+    /// 推送车载歌词到 MediaItem.extras（三路写入，供 vivo 车载投屏读取）
+    private void applyCarLyric(final String line, final String whole, final String title, final String artist) {
+        try {
+            final androidx.media3.common.Player p = player;
+            if (p == null) return;
+            Handler handler = new Handler(p.getApplicationLooper());
+            handler.post(() -> doApplyCarLyric(line, whole, title, artist));
+        } catch (Exception e) {
+            Log.w("AudioFocusFork", "applyCarLyric dispatch failed: " + e);
+        }
+    }
+
+    /// 在 player 线程执行车载歌词写入（三路写入同帧）
+    /// 1) MediaItem.extras 裸大写键（LYRICS_LINE/WHOLE/STATUS）
+    /// 2) MediaItem.extras 带前缀键（ucar.media.metadata.LYRICS_LINE/WHOLE/STATUS + UCAR_TITLE/ARTIST）
+    /// 3) Legacy MediaMetadataCompat 顶级字段（车机 launcher 优先读这里）
+    /// 4) MediaSession.setSessionExtras（NOTICE_CAR 等车机识别标志）
+    /// 无歌词时整首写空串（车机 LrcUtils 直接显示，绝不写 "-1"）
+    private void doApplyCarLyric(String line, String whole, String title, String artist) {
+        try {
+            MediaItem cur = player.getCurrentMediaItem();
+            if (cur == null) return;
+            int index = player.getCurrentMediaItemIndex();
+            
+            // 构建车载歌词 extras（三路写入）
+            android.os.Bundle extras = new android.os.Bundle();
+            
+            // 1) 裸大写键（车机精确按字面量取值）
+            extras.putString("LYRICS_LINE", line != null ? line : "");
+            extras.putString("LYRICS_WHOLE", whole != null ? whole : "");
+            extras.putString("LYRICS_STATUS", (whole != null && !whole.isEmpty()) ? "0" : "1");
+            
+            // 2) 带前缀键（双写兼容）
+            extras.putString("ucar.media.metadata.LYRICS_LINE", line != null ? line : "");
+            extras.putString("ucar.media.metadata.LYRICS_WHOLE", whole != null ? whole : "");
+            extras.putString("ucar.media.metadata.LYRICS_STATUS", (whole != null && !whole.isEmpty()) ? "0" : "1");
+            extras.putString("ucar.media.metadata.UCAR_TITLE", title != null ? title : "");
+            extras.putString("ucar.media.metadata.UCAR_ARTIST", artist != null ? artist : "");
+            
+            // 合并到现有 extras（如果有 lyricInfo 等）
+            android.os.Bundle currentExtras = cur.mediaMetadata.extras;
+            android.os.Bundle newExtras = currentExtras != null ? new android.os.Bundle(currentExtras) : new android.os.Bundle();
+            newExtras.putAll(extras);
+            
+            MediaMetadata.Builder mb = cur.mediaMetadata.buildUpon();
+            mb.setExtras(newExtras);
+            
+            MediaItem updated = cur.buildUpon().setMediaMetadata(mb.build()).build();
+            player.replaceMediaItem(index, updated);
+            
+            // 3) Legacy MediaMetadataCompat（车机 launcher 优先读这里）
+            // 封面保留铁律：以 getLegacyMetadata() 当前值为基底 new Builder(current)，
+            // 否则 250ms 级歌词刷新会把封面/专辑字段冲掉。
+            if (mediaSession != null) {
+                try {
+                    androidx.media3.session.legacy.MediaMetadataCompat current =
+                            mediaSession.getLegacyMetadata();
+                    androidx.media3.session.legacy.MediaMetadataCompat.Builder legacyBuilder =
+                            current != null
+                                    ? new androidx.media3.session.legacy.MediaMetadataCompat.Builder(current)
+                                    : new androidx.media3.session.legacy.MediaMetadataCompat.Builder();
+
+                    // 裸大写键 + 带前缀键双写
+                    legacyBuilder.putString("LYRICS_LINE", line != null ? line : "");
+                    legacyBuilder.putString("LYRICS_WHOLE", whole != null ? whole : "");
+                    legacyBuilder.putString("LYRICS_STATUS",
+                            (whole != null && !whole.isEmpty()) ? "0" : "1");
+                    legacyBuilder.putString("ucar.media.metadata.LYRICS_LINE", line != null ? line : "");
+                    legacyBuilder.putString("ucar.media.metadata.LYRICS_WHOLE", whole != null ? whole : "");
+                    legacyBuilder.putString("ucar.media.metadata.LYRICS_STATUS",
+                            (whole != null && !whole.isEmpty()) ? "0" : "1");
+                    legacyBuilder.putString("ucar.media.metadata.UCAR_TITLE", title != null ? title : "");
+                    legacyBuilder.putString("ucar.media.metadata.UCAR_ARTIST", artist != null ? artist : "");
+
+                    mediaSession.setLegacyMetadata(legacyBuilder.build());
+                } catch (Exception e) {
+                    Log.w("AudioFocusFork", "doApplyCarLyric legacy metadata failed: " + e);
+                }
+            }
+
+            // 4) session extras（车机识别标志）
+            // NOTICE_CAR 永远 true：车机据此判定「正在播放」，即使当前无歌词。
+            if (mediaSession != null) {
+                try {
+                    android.os.Bundle sessionExtras = new android.os.Bundle();
+                    sessionExtras.putString("LYRIC", line != null ? line : "");
+                    sessionExtras.putBoolean("LYRIC_IS_ALLOWED", true);
+                    sessionExtras.putBoolean("NOTICE_CAR", true);
+                    // 带前缀版双写（部分车机读 music.media.extras.*）
+                    sessionExtras.putString("music.media.extras.LYRIC", line != null ? line : "");
+                    sessionExtras.putBoolean("music.media.extras.LYRIC_IS_ALLOWED", true);
+                    sessionExtras.putBoolean("music.media.extras.NOTICE_CAR", true);
+                    mediaSession.setCarSessionExtras(sessionExtras);
+                } catch (Exception e) {
+                    Log.w("AudioFocusFork", "doApplyCarLyric session extras failed: " + e);
+                }
+            }
+            
+            Log.d("AudioFocusFork", "doApplyCarLyric OK lineLen=" + (line != null ? line.length() : 0) 
+                    + " wholeLen=" + (whole != null ? whole.length() : 0));
+        } catch (Exception e) {
+            Log.w("AudioFocusFork", "doApplyCarLyric failed: " + e);
         }
     }
 

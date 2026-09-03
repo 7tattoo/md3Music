@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -21,21 +21,21 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import com.md3music.md3music.AudioPlaybackService
-import com.md3music.md3music.FloatingLyricService
+import cn.kuwo.kwmusiccar.AudioPlaybackService
+import cn.kuwo.kwmusiccar.FloatingLyricService
 import java.io.File
 
 class MainActivity : FlutterActivity() {
-    private val FLOATING_CHANNEL = "com.md3music.md3music/floating_lyric"
-    private val FOLDER_PICKER_CHANNEL = "com.md3music.md3music/folder_picker"
-    private val FONT_PICKER_CHANNEL = "com.md3music.md3music/font_picker"
-    private val BACKGROUND_PICKER_CHANNEL = "com.md3music.md3music/background_picker"
-    private val MEDIA_STORE_CHANNEL = "com.md3music.md3music/media_store"
-    private val HOME_WIDGET_CHANNEL = "com.md3music.md3music/home_widget"
-    private val RECOGNITION_CHANNEL = "com.md3music.md3music/floating_recognition"
-    private val PIP_CHANNEL = "com.md3music.md3music/pip"
-    private val MIUIX_DISCOVER_CHANNEL = "com.md3music.md3music/miuix_discover"
-    private val TASK_CHANNEL = "com.md3music.md3music/task"
+    private val FLOATING_CHANNEL = "cn.kuwo.kwmusiccar/floating_lyric"
+    private val FOLDER_PICKER_CHANNEL = "cn.kuwo.kwmusiccar/folder_picker"
+    private val FONT_PICKER_CHANNEL = "cn.kuwo.kwmusiccar/font_picker"
+    private val BACKGROUND_PICKER_CHANNEL = "cn.kuwo.kwmusiccar/background_picker"
+    private val MEDIA_STORE_CHANNEL = "cn.kuwo.kwmusiccar/media_store"
+    private val HOME_WIDGET_CHANNEL = "cn.kuwo.kwmusiccar/home_widget"
+    private val RECOGNITION_CHANNEL = "cn.kuwo.kwmusiccar/floating_recognition"
+    private val PIP_CHANNEL = "cn.kuwo.kwmusiccar/pip"
+    private val MIUIX_DISCOVER_CHANNEL = "cn.kuwo.kwmusiccar/miuix_discover"
+    private val TASK_CHANNEL = "cn.kuwo.kwmusiccar/task"
     private var pendingDesktopLyricAction: String? = null
     private var folderPickerResult: MethodChannel.Result? = null
     private var fontPickerResult: MethodChannel.Result? = null
@@ -444,6 +444,34 @@ class MainActivity : FlutterActivity() {
                     startService(intent)
                     result.success(true)
                 }
+                // 车载歌词（vivo 车载投屏）：当前行 + 整首 LRC 写入 MediaSession 车载字段
+                "updateCarLyric" -> {
+                    val intent = Intent(this, AudioPlaybackService::class.java).apply {
+                        action = AudioPlaybackService.ACTION_UPDATE_CAR_LYRIC
+                        putExtra(
+                            AudioPlaybackService.EXTRA_CAR_LYRIC_LINE,
+                            call.argument<String>("line") ?: ""
+                        )
+                        putExtra(
+                            AudioPlaybackService.EXTRA_CAR_LYRIC_WHOLE,
+                            call.argument<String>("whole") ?: ""
+                        )
+                    }
+                    startService(intent)
+                    result.success(true)
+                }
+                // 车载歌词：开关切换
+                "setCarLyricEnabled" -> {
+                    val intent = Intent(this, AudioPlaybackService::class.java).apply {
+                        action = AudioPlaybackService.ACTION_SET_CAR_LYRIC_ENABLED
+                        putExtra(
+                            AudioPlaybackService.EXTRA_CAR_LYRIC_ENABLED,
+                            call.argument<Boolean>("enabled") ?: false
+                        )
+                    }
+                    startService(intent)
+                    result.success(true)
+                }
                 // LyricInfo 歌词转发：写入 MediaSession 元数据 extras.lyricInfo
                 // （空字符串表示移除，切歌/功能关闭时使用）
                 "updateLyricInfo" -> {
@@ -797,7 +825,7 @@ class MainActivity : FlutterActivity() {
         // 注册屏幕常亮 MethodChannel：Dart 端 WakelockService 调用，开关 FLAG_KEEP_SCREEN_ON
         val wakelockChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "com.md3music.md3music/wakelock"
+            "cn.kuwo.kwmusiccar/wakelock"
         )
         wakelockChannel.setMethodCallHandler { call, result ->
             when (call.method) {

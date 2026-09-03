@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -81,13 +81,13 @@ class FloatingLyricService : Service() {
         // 进程前台，AudioPlaybackService 据此让位（不再显示保活空通知 1002）。
         @Volatile
         var isRunning = false
-        const val ACTION_UPDATE_LYRIC = "com.md3music.md3music.UPDATE_LYRIC"
-        const val ACTION_UPDATE_TITLE = "com.md3music.md3music.UPDATE_TITLE"
-        const val ACTION_UPDATE_PROGRESS = "com.md3music.md3music.UPDATE_PROGRESS"
-        const val ACTION_SET_CONFIG = "com.md3music.md3music.SET_CONFIG"
-        const val ACTION_SET_PLAYING = "com.md3music.md3music.SET_PLAYING"
-        const val ACTION_STOP = "com.md3music.md3music.STOP_LYRIC"
-        const val ACTION_TOGGLE_LOCK = "com.md3music.md3music.TOGGLE_LOCK"
+        const val ACTION_UPDATE_LYRIC = "cn.kuwo.kwmusiccar.UPDATE_LYRIC"
+        const val ACTION_UPDATE_TITLE = "cn.kuwo.kwmusiccar.UPDATE_TITLE"
+        const val ACTION_UPDATE_PROGRESS = "cn.kuwo.kwmusiccar.UPDATE_PROGRESS"
+        const val ACTION_SET_CONFIG = "cn.kuwo.kwmusiccar.SET_CONFIG"
+        const val ACTION_SET_PLAYING = "cn.kuwo.kwmusiccar.SET_PLAYING"
+        const val ACTION_STOP = "cn.kuwo.kwmusiccar.STOP_LYRIC"
+        const val ACTION_TOGGLE_LOCK = "cn.kuwo.kwmusiccar.TOGGLE_LOCK"
         const val EXTRA_LYRIC = "lyric"
         const val EXTRA_NEXT_LYRIC = "nextLyric"
         // 当前行已唱字数（KRC 逐字）。-1 表示无逐字（LRC/纯文本），原生侧整行渐变色
@@ -669,7 +669,7 @@ class FloatingLyricService : Service() {
         if (engine != null) {
             io.flutter.plugin.common.MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/floating_lyric"
+                "cn.kuwo.kwmusiccar/floating_lyric"
             ).invokeMethod("desktopLyricAction", action)
         } else {
             MainActivity.sendDesktopLyricAction(action)
@@ -690,7 +690,7 @@ class FloatingLyricService : Service() {
         if (engine != null) {
             io.flutter.plugin.common.MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/floating_lyric"
+                "cn.kuwo.kwmusiccar/floating_lyric"
             ).invokeMethod("desktopLyricConfigChanged", args)
         }
     }

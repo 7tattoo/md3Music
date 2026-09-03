@@ -64,7 +64,7 @@ class VolumeNormalizationService {
     try {
       // 走播放 isolate 已确认可达的 floating_lyric 通道（封面预取即用该通道），
       // 避免 headless/UI 双引擎下自定义通道注册不到播放 isolate 的问题。
-      const channel = MethodChannel('com.md3music.md3music/floating_lyric');
+      const channel = MethodChannel('cn.kuwo.kwmusiccar/floating_lyric');
       await channel.invokeMethod('setGainDb', {'gainDb': gainDb});
     } catch (e) {
       // ignore: avoid_print

@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -59,16 +59,19 @@ class AudioPlaybackService : Service() {
         const val KEEPALIVE_CHANNEL_ID = "md3music_keepalive"
         const val NOTIFICATION_ID = 1002
         // 阶段8：桌面歌词关闭后通知保活服务立即恢复前台（让位结束）
-        const val ACTION_REFRESH_FOREGROUND = "com.md3music.md3music.REFRESH_FOREGROUND"
-        const val ACTION_PREV = "com.md3music.md3music.ACTION_PREV"
-        const val ACTION_PLAY_PAUSE = "com.md3music.md3music.ACTION_PLAY_PAUSE"
-        const val ACTION_NEXT = "com.md3music.md3music.ACTION_NEXT"
-        const val ACTION_STOP = "com.md3music.md3music.ACTION_STOP"
-        const val ACTION_TOGGLE_DESKTOP_LYRIC = "com.md3music.md3music.ACTION_TOGGLE_DESKTOP_LYRIC"
-        const val ACTION_TOGGLE_FAVORITE = "com.md3music.md3music.ACTION_TOGGLE_FAVORITE"
+        const val ACTION_REFRESH_FOREGROUND = "cn.kuwo.kwmusiccar.REFRESH_FOREGROUND"
+        const val ACTION_PREV = "cn.kuwo.kwmusiccar.ACTION_PREV"
+        const val ACTION_PLAY_PAUSE = "cn.kuwo.kwmusiccar.ACTION_PLAY_PAUSE"
+        const val ACTION_NEXT = "cn.kuwo.kwmusiccar.ACTION_NEXT"
+        const val ACTION_STOP = "cn.kuwo.kwmusiccar.ACTION_STOP"
+        const val ACTION_TOGGLE_DESKTOP_LYRIC = "cn.kuwo.kwmusiccar.ACTION_TOGGLE_DESKTOP_LYRIC"
+        const val ACTION_TOGGLE_FAVORITE = "cn.kuwo.kwmusiccar.ACTION_TOGGLE_FAVORITE"
         // 蓝牙歌词兼容通道；不得再改写 SystemUI 共用 MediaSession 的 TITLE/ARTIST。
-        const val ACTION_UPDATE_BT_LYRIC = "com.md3music.md3music.ACTION_UPDATE_BT_LYRIC"
-        const val ACTION_SET_BT_LYRIC_ENABLED = "com.md3music.md3music.ACTION_SET_BT_LYRIC_ENABLED"
+        const val ACTION_UPDATE_BT_LYRIC = "cn.kuwo.kwmusiccar.ACTION_UPDATE_BT_LYRIC"
+        const val ACTION_SET_BT_LYRIC_ENABLED = "cn.kuwo.kwmusiccar.ACTION_SET_BT_LYRIC_ENABLED"
+        // 车载歌词通道：推送歌词到 MediaSession extras，用于 vivo 车载投屏
+        const val ACTION_UPDATE_CAR_LYRIC = "cn.kuwo.kwmusiccar.ACTION_UPDATE_CAR_LYRIC"
+        const val ACTION_SET_CAR_LYRIC_ENABLED = "cn.kuwo.kwmusiccar.ACTION_SET_CAR_LYRIC_ENABLED"
         const val EXTRA_TITLE = "title"
         const val EXTRA_MEDIA_ID = "mediaId"
         const val EXTRA_ARTIST = "artist"
@@ -81,26 +84,30 @@ class AudioPlaybackService : Service() {
         const val EXTRA_IS_FAVORITED = "isFavorited"
         const val EXTRA_BT_LYRIC_TEXT = "btLyricText"
         const val EXTRA_BT_LYRIC_ENABLED = "btLyricEnabled"
+        // 车载歌词参数
+        const val EXTRA_CAR_LYRIC_LINE = "carLyricLine"
+        const val EXTRA_CAR_LYRIC_WHOLE = "carLyricWhole"
+        const val EXTRA_CAR_LYRIC_ENABLED = "carLyricEnabled"
         // LyricInfo 歌词转发：通过 MediaSession 元数据 extras.lyricInfo 发布整首歌词
-        const val ACTION_UPDATE_LYRIC_INFO = "com.md3music.md3music.ACTION_UPDATE_LYRIC_INFO"
+        const val ACTION_UPDATE_LYRIC_INFO = "cn.kuwo.kwmusiccar.ACTION_UPDATE_LYRIC_INFO"
         const val EXTRA_LYRIC_INFO = "lyricInfo"
         const val EXTRA_HAS_LYRIC_TRANSLATION = "hasLyricTranslation"
         const val EXTRA_LYRIC_SESSION_GENERATION = "lyricSessionGeneration"
         // 桌面小组件按钮动作（由 MusicWidgetProvider 转发）
-        const val ACTION_WIDGET_PLAY_PAUSE = "com.md3music.md3music.ACTION_WIDGET_PLAY_PAUSE"
-        const val ACTION_WIDGET_NEXT = "com.md3music.md3music.ACTION_WIDGET_NEXT"
+        const val ACTION_WIDGET_PLAY_PAUSE = "cn.kuwo.kwmusiccar.ACTION_WIDGET_PLAY_PAUSE"
+        const val ACTION_WIDGET_NEXT = "cn.kuwo.kwmusiccar.ACTION_WIDGET_NEXT"
         // 私人FM桌面小组件按钮动作（由 PersonalFmWidgetProvider 转发）
-        const val ACTION_WIDGET_FM_PLAY_PAUSE = "com.md3music.md3music.ACTION_FM_WIDGET_PLAY_PAUSE"
-        const val ACTION_WIDGET_FM_TOGGLE_FAVORITE = "com.md3music.md3music.ACTION_FM_WIDGET_TOGGLE_FAVORITE"
-        const val ACTION_WIDGET_FM_SELECT_STATION = "com.md3music.md3music.ACTION_FM_WIDGET_SELECT_STATION"
-        const val ACTION_WIDGET_FM_OPEN_TRACK = "com.md3music.md3music.ACTION_FM_WIDGET_OPEN_TRACK"
+        const val ACTION_WIDGET_FM_PLAY_PAUSE = "cn.kuwo.kwmusiccar.ACTION_FM_WIDGET_PLAY_PAUSE"
+        const val ACTION_WIDGET_FM_TOGGLE_FAVORITE = "cn.kuwo.kwmusiccar.ACTION_FM_WIDGET_TOGGLE_FAVORITE"
+        const val ACTION_WIDGET_FM_SELECT_STATION = "cn.kuwo.kwmusiccar.ACTION_FM_WIDGET_SELECT_STATION"
+        const val ACTION_WIDGET_FM_OPEN_TRACK = "cn.kuwo.kwmusiccar.ACTION_FM_WIDGET_OPEN_TRACK"
         // 小部件封面点击：拉起 app 并打开播放器页
-        const val ACTION_WIDGET_FM_OPEN_PLAYER = "com.md3music.md3music.ACTION_FM_WIDGET_OPEN_PLAYER"
+        const val ACTION_WIDGET_FM_OPEN_PLAYER = "cn.kuwo.kwmusiccar.ACTION_FM_WIDGET_OPEN_PLAYER"
         // FM 小部件动作参数（档位下标 / 歌曲 hash）
         const val EXTRA_FM_ACTION_STATION_INDEX = "action_station_index"
         const val EXTRA_FM_ACTION_TRACK_HASH = "action_track_hash"
         // 线控耳机媒体键（由 MediaButtonReceiver 转发，唤醒播放）
-        const val ACTION_MEDIA_BUTTON = "com.md3music.md3music.ACTION_MEDIA_BUTTON"
+        const val ACTION_MEDIA_BUTTON = "cn.kuwo.kwmusiccar.ACTION_MEDIA_BUTTON"
         const val EXTRA_MEDIA_COMMAND = "mediaCommand"
 
         private const val TAG = "AudioPlaybackService"
@@ -515,7 +522,7 @@ class AudioPlaybackService : Service() {
         fun registerLyriconChannel(engine: FlutterEngine) {
             val channel = MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/lyricon"
+                "cn.kuwo.kwmusiccar/lyricon"
             )
             setLyriconChannel(channel)
             channel.setMethodCallHandler { call, result ->
@@ -659,7 +666,7 @@ class AudioPlaybackService : Service() {
         fun registerSuperLyricChannel(engine: FlutterEngine) {
             val channel = MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/super_lyric"
+                "cn.kuwo.kwmusiccar/super_lyric"
             )
             channel.setMethodCallHandler { call, result ->
                 if (call.method != "sendLyric") {
@@ -722,6 +729,12 @@ class AudioPlaybackService : Service() {
     // 蓝牙歌词兼容状态。保留通道与设置，但共享 MediaSession 始终使用真实歌曲身份。
     private var bluetoothLyricEnabled = false
     private var currentBtLyricText = ""
+    // 车载歌词状态：推送到 MediaSession extras，供 vivo 车载投屏读取
+    private var carLyricEnabled = false
+    @Volatile
+    private var currentCarLyricLine = ""
+    @Volatile
+    private var currentCarLyricWhole = ""
     @Volatile
     private var originalMediaId = ""
     private var originalTitle = ""
@@ -900,6 +913,9 @@ class AudioPlaybackService : Service() {
         try {
             val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             bluetoothLyricEnabled = prefs.getBoolean("flutter.settings_bluetooth_lyric_enabled", false)
+            // 车载歌词开关：headless 唤醒场景 Dart 侧尚未下发开关，需在此恢复，
+            // 否则 pushCarLyric 因 carLyricEnabled=false 静默跳过。
+            carLyricEnabled = prefs.getBoolean("flutter.settings_car_lyric_enabled", false)
         } catch (_: Exception) {}
     }
 
@@ -980,6 +996,22 @@ class AudioPlaybackService : Service() {
             ACTION_SET_BT_LYRIC_ENABLED -> {
                 bluetoothLyricEnabled = intent?.getBooleanExtra(EXTRA_BT_LYRIC_ENABLED, false) ?: false
                 refreshMetadata()
+                return START_STICKY
+            }
+            ACTION_UPDATE_CAR_LYRIC -> {
+                currentCarLyricLine = intent?.getStringExtra(EXTRA_CAR_LYRIC_LINE) ?: ""
+                currentCarLyricWhole = intent?.getStringExtra(EXTRA_CAR_LYRIC_WHOLE) ?: ""
+                pushCarLyric()
+                return START_STICKY
+            }
+            ACTION_SET_CAR_LYRIC_ENABLED -> {
+                carLyricEnabled = intent?.getBooleanExtra(EXTRA_CAR_LYRIC_ENABLED, false) ?: false
+                if (carLyricEnabled) {
+                    pushCarLyric()
+                } else {
+                    // Clear car lyric from session
+                    clearCarLyric()
+                }
                 return START_STICKY
             }
             ACTION_UPDATE_LYRIC_INFO -> {
@@ -1078,6 +1110,33 @@ class AudioPlaybackService : Service() {
         refreshMetadata()
     }
 
+    /// 推送车载歌词到 Media3 会话（三路写入：MediaItem.extras + legacy MediaMetadataCompat + setSessionExtras）
+    /// 用于 vivo 车载投屏等场景，车机读取这些字段显示滚动歌词
+    private fun pushCarLyric() {
+        if (!carLyricEnabled) return
+        val mediaId = originalMediaId
+        val title = originalTitle
+        val artist = originalArtist
+        if (mediaId.isEmpty()) return
+        
+        AudioPlayer.updateActiveSessionCarLyric(
+            currentCarLyricLine,
+            currentCarLyricWhole,
+            title,
+            artist
+        )
+        Log.d(TAG, "pushCarLyric: lineLen=${currentCarLyricLine.length} wholeLen=${currentCarLyricWhole.length}")
+    }
+
+    /// 清空车载歌词（关闭开关时调用）
+    private fun clearCarLyric() {
+        currentCarLyricLine = ""
+        currentCarLyricWhole = ""
+        // 推送空歌词到 Media3 会话
+        AudioPlayer.updateActiveSessionCarLyric("", "", originalTitle, originalArtist)
+        Log.d(TAG, "clearCarLyric")
+    }
+
     /** MediaSession / 广播接收器的既有入口：只有 action、无参数。 */
     private fun handleAction(action: String) {
         handleAction(Intent().apply { this.action = action })
@@ -1109,7 +1168,7 @@ class AudioPlaybackService : Service() {
                     intent.getStringExtra(EXTRA_FM_ACTION_TRACK_HASH)
                 else -> null
             }
-            MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
+            MethodChannel(engine.dartExecutor.binaryMessenger, "cn.kuwo.kwmusiccar/floating_lyric")
                 .invokeMethod(method, args)
         } else {
             sendFlutterCommand(action)
@@ -1125,7 +1184,7 @@ class AudioPlaybackService : Service() {
             ACTION_TOGGLE_FAVORITE -> "toggleFavorite"
             else -> return
         }
-        val intent = Intent("com.md3music.md3music.FLUTTER_COMMAND").apply {
+        val intent = Intent("cn.kuwo.kwmusiccar.FLUTTER_COMMAND").apply {
             putExtra("method", method)
         }
         sendBroadcast(intent)
@@ -1386,7 +1445,7 @@ class AudioPlaybackService : Service() {
             try {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
-                    "com.md3music.md3music/floating_lyric"
+                    "cn.kuwo.kwmusiccar/floating_lyric"
                 ).invokeMethod(method, null, object : MethodChannel.Result {
                     override fun success(result: Any?) {
                         dispatched[0] = true
@@ -1427,7 +1486,7 @@ class AudioPlaybackService : Service() {
         try {
             MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/floating_lyric"
+                "cn.kuwo.kwmusiccar/floating_lyric"
             ).setMethodCallHandler { call, result ->
                 when (call.method) {
                     "playerReady" -> {
@@ -1482,6 +1541,21 @@ class AudioPlaybackService : Service() {
                         refreshMetadata()
                         result.success(true)
                     }
+                    "updateCarLyric" -> {
+                        currentCarLyricLine = call.argument<String>("line") ?: ""
+                        currentCarLyricWhole = call.argument<String>("whole") ?: ""
+                        pushCarLyric()
+                        result.success(true)
+                    }
+                    "setCarLyricEnabled" -> {
+                        carLyricEnabled = call.argument<Boolean>("enabled") ?: false
+                        if (carLyricEnabled) {
+                            pushCarLyric()
+                        } else {
+                            clearCarLyric()
+                        }
+                        result.success(true)
+                    }
                     // 锁屏歌词：开关 / 数据推送（正常启动走 MainActivity，headless 在此兜底）
                     "showLockScreenLyric" -> {
                         result.success(true)
@@ -1524,7 +1598,7 @@ class AudioPlaybackService : Service() {
         try {
             MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/volume_normalization"
+                "cn.kuwo.kwmusiccar/volume_normalization"
             ).setMethodCallHandler { call, result ->
                 when (call.method) {
                     "setGainDb" -> {
@@ -2108,6 +2182,9 @@ class AudioPlaybackService : Service() {
             lastIsFavorited,
             hasTranslationForCurrentTrack()
         )
+        // 车载歌词：切歌后 replaceMediaItem 会重置 extras，需在此重写车载字段
+        // （UCAR_TITLE/ARTIST 也随新歌更新）
+        pushCarLyric()
     }
 
     private fun lyricInfoForCurrentTrack(): String {

@@ -16,13 +16,13 @@ class LyricoLaunchResult {
 /// 把本地音频文件经 FileProvider 授权交给 Lyrico（EDIT_TAG intent）编辑元数据/歌词。
 ///
 /// 原生端实现见 MainActivity.kt 的 `handleLaunchLyricoEdit`，channel 名为
-/// "com.md3music.md3music/external_editor"。
+/// "cn.kuwo.kwmusiccar/external_editor"。
 ///
 /// 调用方应在本地歌曲（[Song.localPath] 非空）的更多菜单点击后调用：
 /// 未安装/启动失败返回对应结果，由调用方 Toast 提示，不抛异常。
 class LyricoEditor {
   static const MethodChannel _channel = MethodChannel(
-    'com.md3music.md3music/external_editor',
+    'cn.kuwo.kwmusiccar/external_editor',
   );
 
   /// 将 [filePath] 指向的本地音频文件交给 Lyrico 编辑。

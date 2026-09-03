@@ -47,6 +47,12 @@ class DesktopLyricService {
   bool _enabled = false;
   bool get enabled => _enabled;
 
+  // 车载歌词开关：独立于悬浮窗/蓝牙歌词。开启时推送车载歌词到原生端。
+  bool _carLyricEnabled = false;
+  bool get carLyricEnabled => _carLyricEnabled;
+  String? _lastCarLyricLine;
+  String? _lastCarLyricWhole;
+
   // 蓝牙歌词开关：独立于悬浮窗。ColorOS SystemUI 与 AVRCP 共用 MediaSession，
   // 4.0 接入后原生端必须保持稳定 title/artist，因此不再用该通道改写会话身份。
   bool _bluetoothLyricEnabled = false;
@@ -316,6 +322,34 @@ class DesktopLyricService {
     }
   }
 
+  /// 车载歌词开关：独立于悬浮窗/蓝牙歌词。开启后定时器运行以获取当前歌词行，
+  /// 并推送整首歌词和当前行到原生端，供 vivo 车载投屏等设备读取。
+  Future<void> setCarLyricEnabled(bool enabled) async {
+    if (_carLyricEnabled == enabled) return;
+    _carLyricEnabled = enabled;
+    _bindProvidersFromContext();
+    _updateTicker();
+    // 同步开关到原生端（原生按此决定是否写 MediaSession 车载字段）
+    try {
+      await MediaNotificationService.setCarLyricEnabled(enabled);
+    } catch (_) {}
+    if (enabled) {
+      // 启用时重置切歌检测状态，让下个 tick 重新拉取歌词并推送。
+      _currentSongId = null;
+      _lines = const [];
+      _currentLineIndex = -1;
+      _awaitingLyric = false;
+      _lastCarLyricLine = null;
+      _lastCarLyricWhole = null;
+    } else {
+      // 关闭时清空车载歌词
+      _lastCarLyricLine = null;
+      _lastCarLyricWhole = null;
+      await MediaNotificationService.updateCarLyric('', '');
+    }
+    _notify();
+  }
+
   /// LyricInfo 歌词转发开关：独立于悬浮窗/蓝牙歌词。开启后定时器运行以获取
   /// 当前歌词并构造 JSON 推送（写入 MediaSession extras）；关闭时移除 lyricInfo。
   Future<void> setLyricInfoEnabled(bool enabled) async {
@@ -529,9 +563,10 @@ class DesktopLyricService {
     }
   }
 
-  /// 定时器是否需要运行：悬浮窗、蓝牙歌词、LyricInfo、SuperLyric 或锁屏歌词任一开启即需运行
+  /// 定时器是否需要运行：悬浮窗、车载歌词、蓝牙歌词、LyricInfo、SuperLyric 或锁屏歌词任一开启即需运行
   bool _shouldTick() =>
       _enabled ||
+      _carLyricEnabled ||
       _bluetoothLyricEnabled ||
       _lyricInfoEnabled ||
       _superLyricEnabled ||
@@ -606,9 +641,9 @@ class DesktopLyricService {
     } catch (_) {}
   }
 
-  static const _channel = MethodChannel('com.md3music.md3music/floating_lyric');
+  static const _channel = MethodChannel('cn.kuwo.kwmusiccar/floating_lyric');
   static const _superLyricChannel =
-      MethodChannel('com.md3music.md3music/super_lyric');
+      MethodChannel('cn.kuwo.kwmusiccar/super_lyric');
 
   void _syncCurrentFromPlayer() {
     if (_player == null) return;
@@ -673,6 +708,8 @@ class DesktopLyricService {
       _lastLineSwitchAt = null;
       _awaitingLyric = false;
       _lastPushedPosMs = null;
+      _lastCarLyricLine = null;
+      _lastCarLyricWhole = null;
       _pushPlaying(_player!.isPlaying);
       _pushLyric('歌词加载中...', '', -1);
       // SuperLyric：切歌时立即更新 title/artist（清空上一首歌词）
@@ -764,6 +801,7 @@ class DesktopLyricService {
             _lines = LyricParserChain.parse(embedded);
             if (_lines.isEmpty) _pushLyric('暂无歌词', '', -1);
             _markLockLyricLoaded(_lines.isEmpty ? '暂无歌词' : '');
+            _pushCarLyricWhole();
             return;
           }
         }
@@ -799,6 +837,7 @@ class DesktopLyricService {
     if (lyric == null || lyric.displayLyric.isEmpty) {
       _pushLyric('暂无歌词', '', -1);
       _markLockLyricLoaded('暂无歌词');
+      _pushCarLyricWhole();
       return;
     }
     _lines = LyricParserChain.parse(
@@ -808,6 +847,7 @@ class DesktopLyricService {
     );
     if (_lines.isEmpty) _pushLyric('暂无歌词', '', -1);
     _markLockLyricLoaded(_lines.isEmpty ? '暂无歌词' : '');
+    _pushCarLyricWhole();
   }
 
   int? _lastPushedPosMs;
@@ -841,6 +881,61 @@ class DesktopLyricService {
         await MediaNotificationService.updateBluetoothLyric(btText);
       } catch (_) {}
     }
+    
+    // 车载歌词：当前行变化时推送（整首在歌词加载完成时单独推）
+    if (_carLyricEnabled) {
+      final carLine = (current == '歌词加载中...' ||
+              current == '暂无歌词' ||
+              current == '歌词加载失败')
+          ? ''
+          : current;
+      if (carLine != _lastCarLyricLine) {
+        _lastCarLyricLine = carLine;
+        try {
+          await MediaNotificationService.updateCarLyric(
+            carLine,
+            _lastCarLyricWhole ?? '',
+          );
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// 推送整首歌词到车载端（歌词加载完成时调用；无歌词时推空串，绝不写 "-1"）
+  Future<void> _pushCarLyricWhole() async {
+    if (!_carLyricEnabled) return;
+    final whole = _buildCarLyricWhole();
+    if (whole == _lastCarLyricWhole) return;
+    _lastCarLyricWhole = whole;
+    try {
+      await MediaNotificationService.updateCarLyric(
+        _lastCarLyricLine ?? '',
+        whole,
+      );
+    } catch (_) {}
+  }
+
+  /// 构建车载整首歌词（标准 LRC 行级 `[mm:ss.mmm]`）。
+  ///
+  /// 铁律：绝不输出 ELRC 逐字标签 `<mm:ss.mmm>` —— 车机 LrcUtils 会把逐字标签
+  /// 当普通文本原样显示。空文本行跳过。
+  String _buildCarLyricWhole() {
+    if (_lines.isEmpty) return '';
+    final buffer = StringBuffer();
+    for (final line in _lines) {
+      final text = line.text.trim();
+      if (text.isEmpty) continue;
+      final startMs = line.startTime < 0 ? 0 : line.startTime;
+      final minutes = startMs ~/ 60000;
+      final seconds = (startMs % 60000) ~/ 1000;
+      final millis = startMs % 1000;
+      buffer.writeln(
+        '[${minutes.toString().padLeft(2, '0')}'
+        ':${seconds.toString().padLeft(2, '0')}'
+        '.${millis.toString().padLeft(3, '0')}]$text',
+      );
+    }
+    return buffer.toString();
   }
 
   /// 推送当前歌词行到 SuperLyric（基于 Binder 的系统级实时歌词 API）。

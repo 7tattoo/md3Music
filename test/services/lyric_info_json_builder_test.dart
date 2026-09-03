@@ -254,8 +254,8 @@ void main() {
         // 4.0 建议字段
         expect(json['lyricType'], 0);
         expect(json['noLyric'], isFalse);
-        expect(json['provider'], 'com.md3music.md3music');
-        expect(json['source'], 'com.md3music.md3music-v5');
+        expect(json['provider'], 'cn.kuwo.kwmusiccar');
+        expect(json['source'], 'cn.kuwo.kwmusiccar-v5');
         // lyric 只含主行（翻译不再合并进 lyric）
         expect(json['lyric'], '[00:16.440]歌词\n[00:20.000]第二行');
         // rawLyric：逐字行保留增强标签，逐行歌词只写普通 LRC，不伪造逐字扫光。

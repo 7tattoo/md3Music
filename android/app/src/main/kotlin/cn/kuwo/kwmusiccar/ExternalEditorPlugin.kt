@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package cn.kuwo.kwmusiccar
 
 import android.content.Context
 import android.content.Intent
@@ -10,7 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 /**
- * 用 Lyrico 外部编辑本地歌曲插件：通过 MethodChannel "com.md3music.md3music/external_editor"
+ * 用 Lyrico 外部编辑本地歌曲插件：通过 MethodChannel "cn.kuwo.kwmusiccar/external_editor"
  * 暴露 launchLyricoEdit，把本地音频文件经 FileProvider 授权交给 Lyrico（EDIT_TAG intent）
  * 编辑元数据/歌词。
  *
@@ -25,7 +25,7 @@ import java.io.File
 class ExternalEditorPlugin(private val context: Context) {
 
     companion object {
-        private const val CHANNEL_NAME = "com.md3music.md3music/external_editor"
+        private const val CHANNEL_NAME = "cn.kuwo.kwmusiccar/external_editor"
         private const val LYRICO_PACKAGE = "com.lonx.lyrico"
     }
 

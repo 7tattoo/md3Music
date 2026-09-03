@@ -1607,7 +1607,7 @@ class _MainLayoutState extends State<_MainLayout>
   Future<void> _doExit() async {
     if (_isExiting) return;
     try {
-      const MethodChannel('com.md3music.md3music/task')
+      const MethodChannel('cn.kuwo.kwmusiccar/task')
           .invokeMethod('moveToBack');
     } catch (_) {
       SystemNavigator.pop();

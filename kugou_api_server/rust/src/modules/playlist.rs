@@ -60,6 +60,33 @@ fn source_0_or_1(q: &Value) -> i64 {
     }
 }
 
+/// userid 多来源兜底：URL 参数 `userid` → `list_create_userid` → cookie。
+///
+/// 根因：仅靠 cookie 取 userid 时，部分场景（headless 引擎 / cookie 尚未回填 /
+/// 服务端 cookie 透传丢失）会落到 0，酷狗返回 20010（未登录）或 404。
+/// 这里补齐参数与 list_create_userid 两条来源，Dart 侧同时显式传 userid。
+fn resolve_userid(q: &Value) -> i64 {
+    // 1) URL 参数 userid
+    let pv = q_str(q, "userid", "");
+    if let Ok(n) = pv.trim().parse::<i64>() {
+        if n > 0 {
+            return n;
+        }
+    }
+    // 2) list_create_userid（创建歌单场景常携带）
+    let lc = q_str(q, "list_create_userid", "");
+    if let Ok(n) = lc.trim().parse::<i64>() {
+        if n > 0 {
+            return n;
+        }
+    }
+    // 3) cookie
+    param_or_cookie_str(q, "userid", "0")
+        .trim()
+        .parse()
+        .unwrap_or(0)
+}
+
 /// 通用 playlistAES + rsaEncrypt2 加密后的 arraybuffer 请求，解密回 JSON。
 fn aes_roundtrip(
     q: &Value,
@@ -72,10 +99,7 @@ fn aes_roundtrip(
     not_signature: bool,
     headers: &[(&str, &str)],
 ) -> Result<ModuleResponse, ModuleResponse> {
-    let userid = param_or_cookie_str(q, "userid", "0")
-        .trim()
-        .parse()
-        .unwrap_or(0);
+    let userid = resolve_userid(q);
     let token = param_or_cookie_str(q, "token", "");
     let (key, aes_str) = playlist_aes_encrypt(&json_stringify(data_obj));
     let p = rsa_encrypt2(&json_stringify(&json!({ "aes": key, "uid": userid, "token": token })))
@@ -131,10 +155,7 @@ fn aes_roundtrip(
 
 /// playlist_add.js → /playlist/add（收藏歌单）。
 pub fn handle_add(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, ModuleResponse> {
-    let userid = param_or_cookie_str(q, "userid", "0")
-        .trim()
-        .parse()
-        .unwrap_or(0);
+    let userid = resolve_userid(q);
     let token = param_or_cookie_str(q, "token", "");
     let clienttime = now_secs();
     let ptype = q_num(q, "type", 0);
@@ -176,8 +197,11 @@ pub fn handle_add(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, ModuleResponse
     };
 
     forward(
-        q, ctx, "post", "/cloudlist.service/v5/add_list", None,
-        Some(params), Some(Value::Object(dm)), "android", &[], false, false,
+        q, ctx, "post", "/v5/add_list", None,
+        Some(params), Some(Value::Object(dm)), "android",
+        // 网关分发头：URL 不带 /cloudlist.service 前缀（该前缀网关 404），
+        // 靠 x-router 头路由到 cloudlist 服务（与 get_all_list 一致）。
+        &[("x-router", "cloudlist.service.kugou.com")], false, false,
     )
 }
 
@@ -334,10 +358,7 @@ pub fn handle_track_all_new(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, Modu
 
 /// playlist_tracks_add.js → /playlist/tracks/add（对歌单添加歌曲）。
 pub fn handle_tracks_add(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, ModuleResponse> {
-    let userid = param_or_cookie_str(q, "userid", "0")
-        .trim()
-        .parse()
-        .unwrap_or(0);
+    let userid = resolve_userid(q);
     let token = param_or_cookie_str(q, "token", "");
     let clienttime = now_secs();
     let resource: Vec<Value> = q_str(q, "data", "")
@@ -377,17 +398,16 @@ pub fn handle_tracks_add(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, ModuleR
         "token": token,
     });
     forward(
-        q, ctx, "post", "/cloudlist.service/v6/add_song", None,
-        Some(params), Some(Value::Object(dm)), "android", &[], false, false,
+        q, ctx, "post", "/v6/add_song", None,
+        Some(params), Some(Value::Object(dm)), "android",
+        // 缺 x-router 会 502：网关按该头路由到 cloudlist 服务
+        &[("x-router", "cloudlist.service.kugou.com")], false, false,
     )
 }
 
 /// playlist_tracks_del.js → /playlist/tracks/del（对歌单删除歌曲）。
 pub fn handle_tracks_del(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, ModuleResponse> {
-    let userid = param_or_cookie_str(q, "userid", "0")
-        .trim()
-        .parse()
-        .unwrap_or(0);
+    let userid = resolve_userid(q);
     let token = param_or_cookie_str(q, "token", "");
     let clienttime = now_secs();
     let resource: Vec<Value> = q_str(q, "fileids", "")
@@ -418,7 +438,9 @@ pub fn handle_tracks_del(q: &Value, ctx: &Ctx) -> Result<ModuleResponse, ModuleR
         "token": token,
     });
     forward(
-        q, ctx, "post", "/cloudlist.service/v4/delete_songs", None,
-        Some(params), Some(Value::Object(dm)), "android", &[], false, false,
+        q, ctx, "post", "/v4/delete_songs", None,
+        Some(params), Some(Value::Object(dm)), "android",
+        // 缺 x-router 会 502：网关按该头路由到 cloudlist 服务
+        &[("x-router", "cloudlist.service.kugou.com")], false, false,
     )
 }
