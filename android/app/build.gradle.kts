@@ -35,22 +35,27 @@ val resolvedApplicationId: String =
         ?: "cn.kuwo.kwmusiccar"
 
 // ============================================================
-// versionCode 按构建时间生成：(YY-20)MMDDHHmm
+// versionCode 按构建时间生成：YYMMDDHH（8 位，北京时间）
 // ------------------------------------------------------------
-// 例：2026-09-03 17:44 → 609031744（单调递增，便于回溯构建时刻）
+// 例：2026-09-03 17 时 → 26090317（单调递增，便于回溯构建时刻）
+// 8 位最大 99123123，远低于 Int32 上限 2147483647，可用到 2099 年。
 //
-// 注意：versionCode 是 Int32，上限 2147483647。完整的 YYMMDDHHmm
-// （如 2609031744）会溢出，因此去掉世纪位，该编码可用到 2040 年底。
+// 注意：同一小时内重复构建会得到相同 versionCode。需要区分时请手动传
+// -PbuildVersionCode 或用不同小时重打标签。
 //
-// CI 传 -PbuildVersionCode / -PbuildVersionName 统一所有并行 job 的版本号，
+// 另注：**不要用 --split-per-abi 构建**。Flutter Gradle 插件会对分 ABI 产物
+// 追加偏移（arm64-v8a = 2 * 1000 + versionCode），使 26090317 变成 26092317。
+// CI 用 --target-platform android-arm64 单 ABI 构建，versionCode 保持精确。
+//
+// CI 传 BUILD_VERSION_CODE / BUILD_VERSION_NAME 统一所有并行 job 的版本号，
 // 避免各 job 各自取时间导致同一 Release 里版本号不一致。
 // ============================================================
 val resolvedVersionCode: Int =
     (findProperty("buildVersionCode") as String?)?.toIntOrNull()
         ?: providers.environmentVariable("BUILD_VERSION_CODE").orNull?.toIntOrNull()
         ?: LocalDateTime.now()
-            .format(DateTimeFormatter.ofPattern("yyMMddHHmm"))
-            .toLong().minus(2_000_000_000L).toInt()
+            .format(DateTimeFormatter.ofPattern("yyMMddHH"))
+            .toInt()
 
 // versionName 覆盖值（为空时在 defaultConfig 里回退 flutter.versionName —
 // flutter 扩展在 android 块内取值最稳，不在顶层作用域引用）

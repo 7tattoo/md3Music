@@ -50,19 +50,19 @@ jobs:
         id: ver
         run: |
           set -e
-          # versionCode 规则：(YY-20)MMDDHHmm，北京时间。
-          # 完整 YYMMDDHHmm（如 2609031744）会溢出 Int32(2147483647)，故去掉世纪位。
-          # 例：2026-09-03 17:44 CST -> 609031744
-          BJ_NOW="$(TZ=Asia/Shanghai date +%y%m%d%H%M)"
+          # versionCode 规则：YYMMDDHH（8 位，北京时间）
+          # 例：2026-09-03 17 时 -> 26090317
+          # 8 位最大 99123123 < Int32 上限 2147483647，可用到 2099 年。
+          BJ_NOW="$(TZ=Asia/Shanghai date +%y%m%d%H)"
           BJ_HUMAN="$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %Z')"
 
           REF_NAME="${GITHUB_REF_NAME}"
-          if [[ "$REF_NAME" =~ ^release-([0-9]{9,10})$ ]]; then
+          if [[ "$REF_NAME" =~ ^release-([0-9]{8})$ ]]; then
             # 标签里已带 versionCode：以标签为准，保证重跑同一标签版本号不变
             VERSION_CODE="${BASH_REMATCH[1]}"
             TAG_NAME="$REF_NAME"
           else
-            VERSION_CODE="$(python3 -c "print(int('$BJ_NOW') - 2000000000)")"
+            VERSION_CODE="$BJ_NOW"
             TAG_NAME="release-${VERSION_CODE}"
           fi
 
@@ -256,6 +256,11 @@ jobs:
 
       # 注：不用 -P 传参。flutter build apk 对未知 -P 选项的转发行为不稳定，
       # 而环境变量必定能被 Gradle 的 providers.environmentVariable 读到。
+      #
+      # 关键：**不加 --split-per-abi**。该选项会让 Flutter Gradle 插件对产物
+      # 追加 ABI 偏移（arm64-v8a = 2 * 1000 + versionCode），把 26090317
+      # 变成 26092317，与 Release 里声明的版本号不符。
+      # 用 --target-platform android-arm64 出单 ABI 包，versionCode 保持精确。
       - name: Build APK (release, arm64-v8a)
         env:
           APP_ID: ${{ matrix.app_id }}
@@ -263,14 +268,21 @@ jobs:
           BUILD_VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
         run: |
           set -e
-          flutter build apk --release --split-per-abi \
+          flutter build apk --release \
             --target-platform android-arm64 \
             --dart-define=APP_VERSION="$BUILD_VERSION_NAME ($BUILD_VERSION_CODE)"
+          ls -lh build/app/outputs/flutter-apk/
 
       - name: Rename & verify APK
+        env:
+          APP_ID: ${{ matrix.app_id }}
+          VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
+          VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
         run: |
           set -e
-          SRC=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          # 不带 --split-per-abi 时产物名为 app-release.apk
+          SRC=build/app/outputs/flutter-apk/app-release.apk
+          [ -f "$SRC" ] || SRC=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           OUT="md3music-${VERSION_NAME}-${VERSION_CODE}-${APP_ID}-arm64-v8a.apk"
           mkdir -p dist
           cp "$SRC" "dist/$OUT"
@@ -283,8 +295,8 @@ jobs:
             echo "$INFO"
             echo "$INFO" | grep -q "name='${APP_ID}'" || { echo "::error::包名不符，期望 $APP_ID"; exit 1; }
             echo "$INFO" | grep -q "versionCode='${VERSION_CODE}'" || { echo "::error::versionCode 不符，期望 $VERSION_CODE"; exit 1; }
+            echo "包名与 versionCode 校验通过"
           else
-            # aapt2 不可用时退回字符串校验（不阻断构建）
             echo "aapt2 不可用，退回 strings 校验"
             unzip -p "dist/$OUT" AndroidManifest.xml | strings -el | grep -q "$APP_ID" \
               && echo "包名字符串命中 $APP_ID" || echo "::warning::未命中包名字符串（仅提示）"
@@ -294,6 +306,9 @@ jobs:
           unzip -p "dist/$OUT" classes.dex | strings \
             | grep -oE "LYRICS_WHOLE|NOTICE_CAR|dispatchCustomNext|updateActiveSessionCarLyric" \
             | sort -u
+
+          echo "--- ABI 校验（应仅 arm64-v8a）---"
+          unzip -Z1 "dist/$OUT" 'lib/*' | cut -d/ -f2 | sort -u
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -341,8 +356,8 @@ jobs:
             | 提交 | `${{ github.sha }}` |
             | ABI | arm64-v8a |
 
-            > versionCode 规则：`(YY-20)MMDDHHmm`（北京时间）。
-            > 例 `609031744` = 2026-09-03 17:44。后续正式版均以此递增。
+            > versionCode 规则：`YYMMDDHH`（8 位，北京时间）。
+            > 例 `26090317` = 2026-09-03 17 时。后续正式版均以此递增。
 
             ### 功能
             - vivo 车载投屏歌词（设置 → 歌词 → 车载歌词，默认关闭）
