@@ -1,0 +1,371 @@
+name: Release (multi-package)
+
+# 正式版发布：同一份代码打 10 个包名，全部汇总到同一个 Release。
+#
+# 触发方式：
+#   1. 推送 release-* 标签（推荐，标签名内嵌 versionCode）：
+#        git tag -a release-609031744 -m "..." && git push origin release-609031744
+#   2. 手动 workflow_dispatch（versionCode 按触发时刻的北京时间生成）
+#
+# 注意：标签前缀刻意不用 v*，避免与 main.yml（on push tags v*）重复触发。
+
+on:
+  push:
+    tags:
+      - 'release-*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'versionName（留空则取 pubspec 的 5.3.7）'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: release-multi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ============================================================
+  # 1. 统一算版本号 + 只编译一次 Rust 后端
+  #    10 个 job 各自取时间会导致 versionCode 不一致，必须集中生成。
+  # ============================================================
+  prepare:
+    name: Prepare version & Rust lib
+    runs-on: ubuntu-latest
+    outputs:
+      version_code: ${{ steps.ver.outputs.version_code }}
+      version_name: ${{ steps.ver.outputs.version_name }}
+      tag_name: ${{ steps.ver.outputs.tag_name }}
+      build_time: ${{ steps.ver.outputs.build_time }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve versionCode / versionName / tag
+        id: ver
+        run: |
+          set -e
+          # versionCode 规则：(YY-20)MMDDHHmm，北京时间。
+          # 完整 YYMMDDHHmm（如 2609031744）会溢出 Int32(2147483647)，故去掉世纪位。
+          # 例：2026-09-03 17:44 CST -> 609031744
+          BJ_NOW="$(TZ=Asia/Shanghai date +%y%m%d%H%M)"
+          BJ_HUMAN="$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %Z')"
+
+          REF_NAME="${GITHUB_REF_NAME}"
+          if [[ "$REF_NAME" =~ ^release-([0-9]{9,10})$ ]]; then
+            # 标签里已带 versionCode：以标签为准，保证重跑同一标签版本号不变
+            VERSION_CODE="${BASH_REMATCH[1]}"
+            TAG_NAME="$REF_NAME"
+          else
+            VERSION_CODE="$(python3 -c "print(int('$BJ_NOW') - 2000000000)")"
+            TAG_NAME="release-${VERSION_CODE}"
+          fi
+
+          if [ "$VERSION_CODE" -le 0 ] || [ "$VERSION_CODE" -gt 2147483647 ]; then
+            echo "::error::versionCode $VERSION_CODE 越界（Int32 上限 2147483647）"
+            exit 1
+          fi
+
+          VERSION_NAME="${{ inputs.version_name }}"
+          if [ -z "$VERSION_NAME" ]; then
+            VERSION_NAME="$(grep '^version:' pubspec.yaml | sed 's/version: *//' | cut -d'+' -f1)"
+          fi
+
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME"         >> "$GITHUB_OUTPUT"
+          echo "build_time=$BJ_HUMAN"       >> "$GITHUB_OUTPUT"
+
+          echo "versionCode = $VERSION_CODE"
+          echo "versionName = $VERSION_NAME"
+          echo "tag         = $TAG_NAME"
+          echo "buildTime   = $BJ_HUMAN"
+
+      - name: Set up Android SDK & NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: sdkmanager --install "ndk;28.2.13676358"
+
+      - name: Set up Rust (aarch64-linux-android)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            kugou_api_server/rust/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('kugou_api_server/rust/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      # 仓库内 jniLibs/*.so 是 git 跟踪的预编译产物；Rust 侧改动（歌单修复等）
+      # 不重新交叉编译就不会进包。这里编一次给 10 个 build job 复用。
+      - name: Build libkugou_server.so (arm64-v8a)
+        run: |
+          set -e
+          NDK="$ANDROID_HOME/ndk/28.2.13676358"
+          [ -d "$NDK" ] || NDK="$(ls -1d "$ANDROID_HOME"/ndk/* | sort -V | tail -1)"
+          BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "Using NDK: $NDK"
+          cd kugou_api_server/rust
+          env CC_aarch64_linux_android="$BIN/aarch64-linux-android21-clang" \
+              AR_aarch64_linux_android="$BIN/llvm-ar" \
+              CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$BIN/aarch64-linux-android21-clang" \
+              cargo build --release --target aarch64-linux-android
+          ls -lh target/aarch64-linux-android/release/libkugou_server.so
+
+      - name: Upload libkugou_server.so
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-lib-arm64-v8a
+          path: kugou_api_server/rust/target/aarch64-linux-android/release/libkugou_server.so
+          if-no-files-found: error
+          retention-days: 1
+
+  # ============================================================
+  # 2. 10 个包名并行构建
+  #    namespace 保持 cn.kuwo.kwmusiccar 不变（JNI 符号绑定它），
+  #    只覆盖 applicationId。
+  # ============================================================
+  build:
+    name: Build ${{ matrix.app_id }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        app_id:
+          - com.tencent.ibg.joox
+          - com.spotify.music
+          - com.apple.android.music
+          - com.luna.music.car
+          - com.kugou.android.auto
+          - cn.kuwo.kwmusiccar
+          - com.qidian.QDReader
+          - com.tencent.weread
+          - cn.aqzscn.stream_music
+          - com.tencent.wecarflow
+    env:
+      APP_ID: ${{ matrix.app_id }}
+      VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
+      VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK & NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "cmdline-tools;latest" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # 用 prepare 编好的 Rust 库覆盖仓库内预编译产物
+      - name: Download libkugou_server.so
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-lib-arm64-v8a
+          path: /tmp/rustlib
+
+      - name: Overwrite jniLibs with fresh Rust lib
+        run: |
+          set -e
+          cp /tmp/rustlib/libkugou_server.so android/app/src/main/jniLibs/arm64-v8a/libkugou_server.so
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/libkugou_server.so
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # runner 仅 7GB：仓库默认 8G/4G 会 OOM（exit 143）
+      - name: Limit Gradle JVM memory for CI runner
+        run: |
+          set -e
+          sed -i 's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=1G -XX:ReservedCodeCacheSize=512m -XX:+HeapDumpOnOutOfMemoryError|' android/gradle.properties
+          sed -i '/^android.sdk.dir=/d' android/gradle.properties
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      # 签名：keystore release 里的 release.keystore（缺失时回退 debug 签名）
+      - name: Download release keystore
+        id: keystore
+        continue-on-error: true
+        run: |
+          set -e
+          if ! curl -fL --retry 3 -o /tmp/release.keystore \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/keystore/release.keystore"; then
+            echo "keystore release 不存在，使用 debug keystore"
+            echo "keystore_available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cp /tmp/release.keystore android/app/release.keystore
+          rm /tmp/release.keystore
+          echo "keystore_available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Generate keystore.properties (for CI)
+        if: steps.keystore.outputs.keystore_available == 'true'
+        run: |
+          set -e
+          cat > android/keystore.properties <<EOF
+          storePassword=${KEYSTORE_PASSWORD:-android}
+          keyPassword=${KEY_PASSWORD:-android}
+          keyAlias=${KEY_ALIAS:-androiddebugkey}
+          storeFile=release.keystore
+          EOF
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+
+      # 注：不用 -P 传参。flutter build apk 对未知 -P 选项的转发行为不稳定，
+      # 而环境变量必定能被 Gradle 的 providers.environmentVariable 读到。
+      - name: Build APK (release, arm64-v8a)
+        env:
+          APP_ID: ${{ matrix.app_id }}
+          BUILD_VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
+          BUILD_VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
+        run: |
+          set -e
+          flutter build apk --release --split-per-abi \
+            --target-platform android-arm64 \
+            --dart-define=APP_VERSION="$BUILD_VERSION_NAME ($BUILD_VERSION_CODE)"
+
+      - name: Rename & verify APK
+        run: |
+          set -e
+          SRC=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          OUT="md3music-${VERSION_NAME}-${VERSION_CODE}-${APP_ID}-arm64-v8a.apk"
+          mkdir -p dist
+          cp "$SRC" "dist/$OUT"
+          ls -lh "dist/$OUT"
+
+          echo "--- 校验 applicationId / versionCode ---"
+          AAPT2="$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$AAPT2" ] && "$AAPT2" version >/dev/null 2>&1; then
+            INFO="$("$AAPT2" dump badging "dist/$OUT" | head -1)"
+            echo "$INFO"
+            echo "$INFO" | grep -q "name='${APP_ID}'" || { echo "::error::包名不符，期望 $APP_ID"; exit 1; }
+            echo "$INFO" | grep -q "versionCode='${VERSION_CODE}'" || { echo "::error::versionCode 不符，期望 $VERSION_CODE"; exit 1; }
+          else
+            # aapt2 不可用时退回字符串校验（不阻断构建）
+            echo "aapt2 不可用，退回 strings 校验"
+            unzip -p "dist/$OUT" AndroidManifest.xml | strings -el | grep -q "$APP_ID" \
+              && echo "包名字符串命中 $APP_ID" || echo "::warning::未命中包名字符串（仅提示）"
+          fi
+
+          echo "--- 车载 / 方向盘符号抽查 ---"
+          unzip -p "dist/$OUT" classes.dex | strings \
+            | grep -oE "LYRICS_WHOLE|NOTICE_CAR|dispatchCustomNext|updateActiveSessionCarLyric" \
+            | sort -u
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ matrix.app_id }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  # ============================================================
+  # 3. 汇总 10 个 APK 到同一个 Release
+  # ============================================================
+  release:
+    name: Publish Release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all APKs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apk-*
+          merge-multiple: true
+          path: dist
+
+      - name: List artifacts
+        run: |
+          ls -lh dist/
+          echo "APK 数量: $(ls -1 dist/*.apk | wc -l)"
+          echo "--- SHA256 ---"
+          sha256sum dist/*.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag_name }}
+          name: ${{ needs.prepare.outputs.version_name }} (${{ needs.prepare.outputs.version_code }})
+          body: |
+            ## 正式版 · 车载适配
+
+            | 项 | 值 |
+            | --- | --- |
+            | versionName | `${{ needs.prepare.outputs.version_name }}` |
+            | versionCode | `${{ needs.prepare.outputs.version_code }}` |
+            | 构建时间 | ${{ needs.prepare.outputs.build_time }} |
+            | 提交 | `${{ github.sha }}` |
+            | ABI | arm64-v8a |
+
+            > versionCode 规则：`(YY-20)MMDDHHmm`（北京时间）。
+            > 例 `609031744` = 2026-09-03 17:44。后续正式版均以此递增。
+
+            ### 功能
+            - vivo 车载投屏歌词（设置 → 歌词 → 车载歌词，默认关闭）
+            - 方向盘切歌（legacy MediaSession 拦截转发 App 队列）
+            - 歌单创建 / 删除 / 加歌 / 删歌修复
+            - Rust 后端随 CI 重新交叉编译，歌单修复已进包
+
+            ### 10 个包名（可同时安装，数据互相独立）
+            | 包名 | 文件 |
+            | --- | --- |
+            | `com.tencent.ibg.joox` | md3music-…-com.tencent.ibg.joox-arm64-v8a.apk |
+            | `com.spotify.music` | md3music-…-com.spotify.music-arm64-v8a.apk |
+            | `com.apple.android.music` | md3music-…-com.apple.android.music-arm64-v8a.apk |
+            | `com.luna.music.car` | md3music-…-com.luna.music.car-arm64-v8a.apk |
+            | `com.kugou.android.auto` | md3music-…-com.kugou.android.auto-arm64-v8a.apk |
+            | `cn.kuwo.kwmusiccar` | md3music-…-cn.kuwo.kwmusiccar-arm64-v8a.apk |
+            | `com.qidian.QDReader` | md3music-…-com.qidian.QDReader-arm64-v8a.apk |
+            | `com.tencent.weread` | md3music-…-com.tencent.weread-arm64-v8a.apk |
+            | `cn.aqzscn.stream_music` | md3music-…-cn.aqzscn.stream_music-arm64-v8a.apk |
+            | `com.tencent.wecarflow` | md3music-…-com.tencent.wecarflow-arm64-v8a.apk |
+
+            所有包共用同一签名，同名包可直接覆盖升级；不同包名视为不同应用。
+          prerelease: false
+          files: dist/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
