@@ -153,6 +153,10 @@ jobs:
 
       # 构建 Release APK（仅 arm64-v8a：Rust 侧只交叉编译了该 ABI）
       - name: Flutter build APK (release, arm64-v8a)
+        env:
+          # 收紧 ndk/cmake abiFilters：否则 jniLibs 与 cmake 会把 4 个 ABI 全打进包，
+          # 而只有 arm64-v8a 有 libflutter.so/libapp.so → 32 位设备可安装但启动即崩
+          ABI_FILTER: arm64-v8a
         run: |
           flutter build apk --release \
             --target-platform android-arm64 \

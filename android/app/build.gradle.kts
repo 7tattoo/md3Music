@@ -63,6 +63,26 @@ val overrideVersionName: String? =
     (findProperty("buildVersionName") as String?)
         ?: providers.environmentVariable("BUILD_VERSION_NAME").orNull
 
+// ============================================================
+// ABI 过滤
+// ------------------------------------------------------------
+// 不带 --split-per-abi 构建时，Flutter 不再按 ABI 拆分产物，但
+// jniLibs/**（libkugou_server.so 等）与 cmake 产物（libusb_audio_driver.so）
+// 仍会把 4 个 ABI 全部打进包。结果是 APK 里有 armeabi-v7a / x86_64 目录，
+// 却没有对应的 libflutter.so / libapp.so —— 32 位设备判定「可安装」，
+// 启动即因缺少 Flutter 引擎崩溃。
+//
+// 因此单 ABI 发布时必须同时收紧 ndk.abiFilters 与 cmake.abiFilters。
+// ABI_FILTER 为空则保留原有 4 ABI 行为（本地全量构建 / 分 ABI 构建）。
+// ============================================================
+val abiFilterList: List<String> =
+    (providers.environmentVariable("ABI_FILTER").orNull
+        ?: (findProperty("abiFilter") as String?))
+        ?.split(',')
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?: listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+
 android {
     namespace = "cn.kuwo.kwmusiccar"
     compileSdk = 36
@@ -79,10 +99,15 @@ android {
         targetSdk = 35
         versionCode = resolvedVersionCode
         versionName = overrideVersionName ?: flutter.versionName
-        // USB 独占输出 C++ 驱动：只编译与 jniLibs 相同的 4 个 ABI
+        // USB 独占输出 C++ 驱动：ABI 由 abiFilterList 统一控制
+        // （单 ABI 发布时同时收紧 ndk 与 cmake，避免打进没有 Flutter 引擎的多余 ABI）
+        ndk {
+            abiFilters.clear()
+            abiFilters.addAll(abiFilterList)
+        }
         externalNativeBuild {
             cmake {
-                abiFilters("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+                abiFilters(*abiFilterList.toTypedArray())
             }
         }
     }

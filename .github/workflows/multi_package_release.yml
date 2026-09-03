@@ -266,6 +266,9 @@ jobs:
           APP_ID: ${{ matrix.app_id }}
           BUILD_VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
           BUILD_VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
+          # 收紧 ndk/cmake abiFilters：否则 jniLibs 与 cmake 会把 4 个 ABI 全打进包，
+          # 而只有 arm64-v8a 有 libflutter.so/libapp.so → 32 位设备可安装但启动即崩
+          ABI_FILTER: arm64-v8a
         run: |
           set -e
           flutter build apk --release \
@@ -308,7 +311,11 @@ jobs:
             | sort -u
 
           echo "--- ABI 校验（应仅 arm64-v8a）---"
-          unzip -Z1 "dist/$OUT" 'lib/*' | cut -d/ -f2 | sort -u
+          ABIS="$(unzip -Z1 "dist/$OUT" 'lib/*' | cut -d/ -f2 | sort -u)"
+          echo "$ABIS"
+          [ "$ABIS" = "arm64-v8a" ] || { echo "::error::APK 含非 arm64-v8a 的 ABI，缺 Flutter 引擎会导致 32 位设备崩溃"; exit 1; }
+          echo "--- Flutter 引擎存在性 ---"
+          unzip -Z1 "dist/$OUT" 'lib/arm64-v8a/*' | xargs -n1 basename | grep -E "libflutter.so|libapp.so|libkugou_server.so" | sort
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
