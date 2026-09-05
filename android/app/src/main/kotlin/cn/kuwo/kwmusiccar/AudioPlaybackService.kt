@@ -919,7 +919,9 @@ class AudioPlaybackService : Service() {
             bluetoothLyricEnabled = prefs.getBoolean("flutter.settings_bluetooth_lyric_enabled", false)
             // 车载歌词开关：headless 唤醒场景 Dart 侧尚未下发开关，需在此恢复，
             // 否则 pushCarLyric 因 carLyricEnabled=false 静默跳过。
-            carLyricEnabled = prefs.getBoolean("flutter.settings_car_lyric_enabled", false)
+            // 默认 true 与 Dart 侧 SettingsRepository.getCarLyricEnabled 保持一致
+            // （这些包名就是为 vivo 车机场景打的，默认开启）。
+            carLyricEnabled = prefs.getBoolean("flutter.settings_car_lyric_enabled", true)
         } catch (_: Exception) {}
     }
 
@@ -1119,17 +1121,24 @@ class AudioPlaybackService : Service() {
     ///
     /// 只传整段歌词：车机与原子随身听都按 PlaybackState 进度自行滚动，
     /// 推「当前行」会被识别成单行卡片模式（见 VivoCarLyrics 的三条铁律）。
+    ///
+    /// 第 5 个参数是稳定曲目 ID：just_audio 的平台消息不下发 AudioSource 的 tag，
+    /// MediaItem.mediaId 恒为空串，导致 legacy metadata 的 METADATA_KEY_MEDIA_ID
+    /// 也是空的；而原子随身听对空 ID 直接丢弃歌词（歌词区显示「暂无歌词」）。
+    /// 这里把 App 侧的 originalMediaId 传下去补齐。
     private fun pushCarLyric() {
         if (!carLyricEnabled) return
         AudioPlayer.updateActiveSessionCarLyric(
             "",
             carLyricWholeForCurrentTrack(),
             originalTitle,
-            originalArtist
+            originalArtist,
+            originalMediaId
         )
         Log.d(
             TAG,
             "pushCarLyric: wholeLen=${carLyricWholeForCurrentTrack().length} " +
+                "mediaIdLen=${originalMediaId.length} " +
                 "lyricSongIdMatched=${currentCarLyricSongId.isEmpty() ||
                     currentCarLyricSongId == originalMediaId}"
         )
@@ -1149,7 +1158,9 @@ class AudioPlaybackService : Service() {
     private fun clearCarLyric() {
         currentCarLyricWhole = ""
         currentCarLyricSongId = ""
-        AudioPlayer.updateActiveSessionCarLyric("", "", originalTitle, originalArtist)
+        AudioPlayer.updateActiveSessionCarLyric(
+            "", "", originalTitle, originalArtist, originalMediaId
+        )
         Log.d(TAG, "clearCarLyric")
     }
 

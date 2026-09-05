@@ -1285,13 +1285,21 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     /// 参数 line 保留但**不再使用**：车机与原子组件都按 PlaybackState 进度自行滚动，
     /// App 推"当前是第几行"会触发单行卡片模式（见 VivoCarLyrics 的三条铁律）。
     /// MethodChannel 协议不变，避免 Dart 侧改动扩散。
+    ///
+    /// trackId 是 App 侧稳定的业务曲目 ID，用来补齐 METADATA_KEY_MEDIA_ID ——
+    /// just_audio 的平台消息不下发 tag，MediaItem.mediaId 恒为空串，
+    /// 而原子随身听对空 ID 直接丢弃歌词（详见 VivoCarLyrics.sTrackId 注释）。
     public static void updateActiveSessionCarLyric(
-            String line, String whole, String title, String artist) {
+            String line, String whole, String title, String artist, String trackId) {
         AudioPlayer p = sActivePlayer;
         if (p != null) {
-            p.applyCarLyric(whole);
+            p.applyCarLyric(whole, trackId);
         } else {
-            Log.w("AudioFocusFork", "updateActiveSessionCarLyric: no active AudioPlayer");
+            // 播放器还没建好（headless 唤醒 / 冷启动）时先把状态记下来，
+            // 会话建立后的连接补发会用到。
+            VivoCarLyrics.setTrackId(trackId);
+            VivoCarLyrics.setWhole(whole == null ? "" : whole);
+            Log.w("AudioFocusFork", "updateActiveSessionCarLyric: no active AudioPlayer (cached)");
         }
     }
 
@@ -1609,12 +1617,12 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     ///
     /// 派发到 player 的 application looper 执行 —— 媒体3会话的元数据/extras 下发
     /// 必须在会话的 application 线程上做（会话的 handler 就建自这个 looper）。
-    private void applyCarLyric(final String whole) {
+    private void applyCarLyric(final String whole, final String trackId) {
         try {
             final androidx.media3.common.Player p = player;
             if (p == null || mediaSession == null) return;
             Handler handler = new Handler(p.getApplicationLooper());
-            handler.post(() -> doApplyCarLyric(whole, false));
+            handler.post(() -> doApplyCarLyric(whole, trackId, false));
         } catch (Exception e) {
             Log.w("AudioFocusFork", "applyCarLyric dispatch failed: " + e);
         }
@@ -1623,26 +1631,31 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     /// 在会话线程执行两个显示位的下发。
     ///
     /// 1) **车联投屏（ucar）**：只缓存整段 LRC，由 MediaSessionLegacyStub.setMetadata
-    ///    的统一出口装饰进 legacy metadata；歌词内容变化时在此强推一次
+    ///    的统一出口装饰进 legacy metadata；歌词或曲目变化时在此强推一次
     ///    （切歌那次 metadata 必定还没歌词，不补推车机永远看不到 LYRICS_WHOLE）。
     /// 2) **原子随身听（vivomusicmix）**：整段 LRC 走 session extras 的 lrc_change 事件；
     ///    内容变化立即发，内容相同按 25s 节流兜底"车机在播放开始后才连上"。
     ///
     /// 铁律：无歌词时只做"清除"（空 lrc_change + 从 metadata 摘掉 LYRICS_WHOLE），
     /// 绝不写 LYRICS_STATUS=1/2 负状态，也绝不推空 Bundle 的 setExtras。
-    private void doApplyCarLyric(String whole, boolean force) {
+    private void doApplyCarLyric(String whole, String trackId, boolean force) {
         try {
             final MediaSession session = mediaSession;
             if (session == null) return;
 
-            String mediaId = resolveCarMediaId(session);
             String lrc = whole == null ? "" : whole;
-            boolean changed = VivoCarLyrics.setWhole(lrc);
+            boolean idChanged = VivoCarLyrics.setTrackId(trackId);
+            boolean lrcChanged = VivoCarLyrics.setWhole(lrc);
+            boolean changed = idChanged || lrcChanged;
 
-            // 车联投屏：内容变化（或连接补发）时强推一次带整段歌词的 metadata
+            // 车联投屏 + 原子随身听 MEDIA_ID：变化（或连接补发）时强推一次 metadata。
+            // 强推同时把 METADATA_KEY_MEDIA_ID 补上（装饰器负责），这是原子随身听
+            // 认歌词的前提 —— 它在 t4/d0.z1() 与 f5/n.a0() 两处都对空 ID 直接返回。
             if (changed || force) {
                 session.republishLegacyMetadataWithLyrics();
             }
+
+            String mediaId = resolveCarMediaId(session);
 
             // 原子随身听：lrc_change 事件
             long now = System.currentTimeMillis();
@@ -1652,25 +1665,25 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             }
 
             if (changed) {
-                // 切歌瞬间 legacy metadata 的 MEDIA_ID 可能还没跟上（replaceMediaItem
-                // 到 legacy stub 的传播要晚一个消息，封面异步时更晚）。原子随身听要求
-                // 事件里的 meidia_id 等于它当前持有的那个，否则静默丢弃整段歌词 ——
-                // 所以歌词内容变化后补两次重发，让 ID 稳定下来后再发一遍。
-                // shouldSend 内部按「ID 或内容变化」去重，重复调用是幂等的。
+                // 强推的 metadata 要经 Binder 到达原子随身听、再回填它的 f17858g，
+                // 之后 lrc_change 里的 meidia_id 才可能与之相等。首次事件常常早于
+                // 这个回填，所以内容变化后再补发两次（shouldSend 按 ID+内容去重，幂等）。
                 scheduleLrcResend(lrc);
             }
 
             if (changed || force) {
                 Log.d("AudioFocusFork", "doApplyCarLyric wholeLen=" + lrc.length()
-                        + " changed=" + changed + " force=" + force);
+                        + " mediaIdLen=" + mediaId.length()
+                        + " idChanged=" + idChanged + " lrcChanged=" + lrcChanged
+                        + " force=" + force);
             }
         } catch (Exception e) {
             Log.w("AudioFocusFork", "doApplyCarLyric failed: " + e);
         }
     }
 
-    /// 歌词内容变化后的两次补发（700ms / 2500ms）：等 legacy metadata 的 MEDIA_ID
-    /// 追上新曲目，再按当时的权威 ID 重发一次 lrc_change。
+    /// 歌词内容变化后的两次补发（700ms / 2500ms）：等原子随身听把新曲目的
+    /// MEDIA_ID 回填进自己的状态，再按当时的权威 ID 重发一次 lrc_change。
     private void scheduleLrcResend(final String lrc) {
         try {
             final androidx.media3.common.Player p = player;
@@ -1680,7 +1693,7 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                 handler.postDelayed(() -> {
                     // 期间又切了歌 / 歌词已变，则以最新缓存为准，不复活旧歌词
                     if (!lrc.equals(VivoCarLyrics.cachedWhole())) return;
-                    doApplyCarLyric(lrc, false);
+                    doApplyCarLyric(lrc, VivoCarLyrics.trackId(), true);
                 }, delay);
             }
         } catch (Exception e) {
@@ -1688,10 +1701,15 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         }
     }
 
-    /// 原子随身听要求 lrc_change 里的 meidia_id 等于当前曲目的
-    /// android.media.metadata.MEDIA_ID（t4/d0.E0()/z1() 不等即静默丢弃歌词），
-    /// 因此优先取 legacy 会话实时元数据里的 MEDIA_ID，取不到再退回 MediaItem.mediaId。
+    /// 原子随身听要求 lrc_change 里的 meidia_id 等于它记录的当前曲目 MEDIA_ID
+    /// （t4/d0.z1() 与 f5/n.a0() 不等或为空即静默丢弃歌词）。
+    ///
+    /// 取值顺序：App 侧稳定 ID（装饰器写进 metadata 的就是这个）→ legacy 会话实时
+    /// metadata → MediaItem.mediaId。just_audio 的平台消息不下发 tag，所以后两者
+    /// 在未补齐时都是空串，第一项才是可靠来源。
     private String resolveCarMediaId(MediaSession session) {
+        String appId = VivoCarLyrics.trackId();
+        if (!appId.isEmpty()) return appId;
         try {
             androidx.media3.session.legacy.MediaMetadataCompat m = session.getLegacyMetadata();
             if (m != null) {
@@ -1720,7 +1738,7 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             Handler handler = new Handler(p.getApplicationLooper());
             handler.postDelayed(() -> {
                 Log.i("AudioFocusFork", "vivo car resync: " + reason);
-                doApplyCarLyric(VivoCarLyrics.cachedWhole(), true);
+                doApplyCarLyric(VivoCarLyrics.cachedWhole(), VivoCarLyrics.trackId(), true);
             }, VivoCarLyrics.CONNECT_RESYNC_DELAY_MS);
         } catch (Exception e) {
             Log.w("AudioFocusFork", "scheduleVivoCarResync failed: " + e);

@@ -120,8 +120,8 @@ class _SettingsPageState extends State<SettingsPage>
   bool _bluetoothLyricEnabled = false;
   // 蓝牙歌词封面压缩开关：默认关闭（不压缩，保持原始封面质量）
   bool _bluetoothLyricCompressArt = false;
-  // 车载歌词开关：用于 vivo 车载投屏等设备
-  bool _carLyricEnabled = false;
+  // 车载歌词开关：用于 vivo 车载投屏 / 原子随身听，默认开启
+  bool _carLyricEnabled = true;
   // 锁屏歌词开关：锁屏时全屏显示滚动歌词（覆盖在系统锁屏上方），默认关闭
   // 样式（字号/行距/字重/字体等）全部跟随 AM 歌词偏好，与播放页 Zen 模式一致
   bool _lockScreenLyricEnabled = false;
@@ -882,7 +882,7 @@ class _SettingsPageState extends State<SettingsPage>
         // search: 车载
         SwitchListTile(
           title: const Text('车载歌词'),
-          subtitle: const Text('推送歌词到 MediaSession extras，用于 vivo 车载投屏等设备显示滚动歌词'),
+          subtitle: const Text('推送整段歌词到 MediaSession，用于 vivo 车联投屏与原子随身听显示滚动歌词（默认开启）'),
           value: _carLyricEnabled,
           onChanged: (value) async {
             HapticFeedback.lightImpact();

@@ -106,6 +106,24 @@ public final class VivoCarLyrics {
     /** 当前曲目的整段 LRC（空串 = 无歌词 / 已清除）。 */
     private static volatile String sWhole = "";
 
+    /**
+     * App 侧提供的稳定曲目 ID（业务 Song.id），用于补齐 {@code METADATA_KEY_MEDIA_ID}。
+     *
+     * <p><b>为什么必须补</b>：{@code just_audio_platform_interface} 的
+     * {@code ProgressiveAudioSourceMessage.toMap()} 不输出 {@code tag} 字段，
+     * 所以 fork 的 {@code applyPlayerTag} 永远拿不到业务 ID，
+     * {@code MediaItem.mediaId} 一直是 media3 的 {@code DEFAULT_MEDIA_ID}（空串），
+     * {@code LegacyConversions} 又把它无条件写进 {@code METADATA_KEY_MEDIA_ID}。
+     *
+     * <p>而原子随身听两处都在第一行判空丢弃：
+     * <pre>
+     * t4/d0.z1(musicId):  if (TextUtils.isEmpty(str) || !str.equals(this.f17858g)) return;
+     * f5/n.a0(...,musicId): if (TextUtils.isEmpty(str3)) { n0(""); return; }
+     * </pre>
+     * 空 ID 的表现就是"能力位全对、进度条正常、歌词区显示暂无歌词"。
+     */
+    private static volatile String sTrackId = "";
+
     // ---- lrc_change 发送节流状态 ----
     private static volatile String sSentMediaId = "";
     private static volatile String sSentWhole = "";
@@ -138,6 +156,35 @@ public final class VivoCarLyrics {
         return sWhole;
     }
 
+    /**
+     * 记录 App 侧的稳定曲目 ID。
+     *
+     * @return ID 是否变化（变化说明切歌了，需要重推 metadata 与 lrc_change）
+     */
+    public static synchronized boolean setTrackId(String trackId) {
+        String id = trackId == null ? "" : trackId;
+        if (id.equals(sTrackId)) return false;
+        sTrackId = id;
+        return true;
+    }
+
+    /** App 侧稳定曲目 ID（可能为空串）。 */
+    public static String trackId() {
+        return sTrackId;
+    }
+
+    /**
+     * 取应发布给车机/组件的 MEDIA_ID：优先 App 侧稳定 ID，回退 metadata 里已有的值。
+     *
+     * <p>两侧都为空时返回空串 —— 此时原子随身听会丢弃歌词，但这只发生在
+     * App 还没推过任何曲目身份的启动瞬间。
+     */
+    public static String resolveMediaId(String existingId) {
+        String id = sTrackId;
+        if (!id.isEmpty()) return id;
+        return existingId == null ? "" : existingId;
+    }
+
     /** legacy metadata 唯一出口的原始快照（可能为 null）。 */
     public static MediaMetadataCompat rawMetadata() {
         return sRawMetadata;
@@ -155,9 +202,12 @@ public final class VivoCarLyrics {
     }
 
     /**
-     * 纯增量装饰器：补齐原子能力位与 ucar 整段歌词。
+     * 纯增量装饰器：补齐 MEDIA_ID、原子能力位与 ucar 整段歌词。
      *
      * <ul>
+     *   <li>{@code METADATA_KEY_MEDIA_ID} 为空时用 App 侧稳定 ID 补上 ——
+     *       原子随身听两处判空丢弃歌词（见 {@link #resolveMediaId(String)} 注释），
+     *       这是"能力位全对但歌词区显示暂无歌词"的根因；
      *   <li>始终补齐 {@link #KEY_ATOMIC_SUPPORT_EVENT}（与歌词无关，缺 16 位进度条恒 {@code --:--}）；
      *   <li>有整段歌词 → 追加 {@code LYRICS_WHOLE} + {@code LYRICS_STATUS=0}
      *       + {@code UCAR_TITLE/UCAR_ARTIST}；
@@ -171,15 +221,21 @@ public final class VivoCarLyrics {
         try {
             String lrc = sWhole;
             String existing = src.getString(KEY_UCAR_LYRICS_WHOLE);
+            String existingId = src.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID);
+            String mediaId = resolveMediaId(existingId);
 
+            boolean needMediaId = !mediaId.isEmpty() && !mediaId.equals(existingId);
             boolean needSupportEvent =
                     src.getLong(KEY_ATOMIC_SUPPORT_EVENT) != ATOMIC_SUPPORT_EVENT;
             boolean needLyric = !lrc.isEmpty() && !lrc.equals(existing);
             boolean needStrip = lrc.isEmpty() && !TextUtils.isEmpty(existing);
 
-            if (!needSupportEvent && !needLyric && !needStrip) return src;
+            if (!needMediaId && !needSupportEvent && !needLyric && !needStrip) return src;
 
             MediaMetadataCompat.Builder builder = new MediaMetadataCompat.Builder(src);
+            if (needMediaId) {
+                builder.putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, mediaId);
+            }
             if (needSupportEvent) {
                 builder.putLong(KEY_ATOMIC_SUPPORT_EVENT, ATOMIC_SUPPORT_EVENT);
             }

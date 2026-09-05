@@ -385,7 +385,9 @@ class SettingsRepository {
 
   Future<bool> getCarLyricEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyCarLyricEnabled) ?? false;
+    // 默认 ON：这些包名本身就是为 vivo 车机场景打的，默认关闭会让用户装上后
+    // 以为歌词功能坏了。代价是歌词定时器常驻（250ms tick），实测功耗可接受。
+    return prefs.getBool(_keyCarLyricEnabled) ?? true;
   }
 
   Future<void> setCarLyricEnabled(bool v) async {
