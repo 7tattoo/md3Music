@@ -81,13 +81,25 @@
         </receiver>
         <!-- 方案B阶段1：媒体3会话承载服务，渲染系统 now playing 通知。
              不改变 fork 自建会话的关联行为；仅把会话归入本服务以生成通知。
-             exported=false：仅本进程承载通知渲染，不对外暴露绑定（后续阶段再放开）。 -->
+
+             vivo 原子随身听（com.vivo.musicwidgetmix）适配：
+             - 必须 exported=true 并声明 android.media.browse.MediaBrowserService，
+               原子随身听靠 MediaBrowser 绑定本服务取 session token；
+             - 必须追加 com.vivo.musicwidgetmix.support.service：原子随身听用
+               queryIntentServices 收集声明了该 action 的包，只有命中的包才会被分配
+               **合作控制器 c0**（唯一会读 support_event 能力位、会解析 lrc_change 事件
+               的实现）。没有这个 action 就走通用控制器，歌词区不会出现。
+             注意：exported=true 意味着其它应用可以绑定本服务并通过 MediaSession
+             控制播放（与系统媒体控制中心同等权限），这是 vivo 组件读取歌词的前提。 -->
         <service
             android:name=".MD3MusicMediaSessionService"
             android:foregroundServiceType="mediaPlayback"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+                <!-- vivo 原子随身听（音乐小组件）合作控制器识别 -->
+                <action android:name="com.vivo.musicwidgetmix.support.service" />
             </intent-filter>
         </service>
         <service

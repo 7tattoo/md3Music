@@ -957,10 +957,19 @@ import org.checkerframework.checker.initialization.qual.Initialized;
     // no-op
   }
 
+  // MD3Music fork（vivo 车机歌词·要点一）：这里是 legacy MediaMetadataCompat 的
+  // **唯一出口** —— 车机（vivo uCar / 原子随身听）连接的正是 media3 内部创建的
+  // legacy MediaSessionCompat，读的就是这份 metadata。updateMetadataIfChanged 的
+  // 两条路径（封面同步就绪 / 封面异步回调）都汇聚到本方法，因此在此注入即可覆盖
+  // 全部推送路径，不会出现"前台正常、后台刷新把歌词冲掉"。
+  //
+  // VivoCarLyrics.decorateAtFunnel 是纯增量装饰器：无歌词原样返回、零 IO、
+  // 绝不写负状态（详见该类注释的三条铁律）。
   @SuppressWarnings("nullness:argument") // MediaSessionCompat didn't annotate @Nullable.
   private static void setMetadata(
       MediaSessionCompat sessionCompat, @Nullable MediaMetadataCompat metadataCompat) {
-    sessionCompat.setMetadata(metadataCompat);
+    sessionCompat.setMetadata(
+        com.ryanheise.just_audio.VivoCarLyrics.decorateAtFunnel(metadataCompat));
   }
 
   @SuppressWarnings("nullness:argument") // MediaSessionCompat didn't annotate @Nullable.

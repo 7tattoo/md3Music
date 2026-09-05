@@ -221,13 +221,24 @@ class MediaNotificationService {
     } catch (_) {}
   }
 
-  // 车载歌词：推送当前行和整首歌词到 MediaSession extras
-  // 用于 vivo 车载投屏等场景
-  static Future<void> updateCarLyric(String? line, String? whole) async {
+  // 车载歌词：推送整段 LRC 到 MediaSession（vivo 车联投屏 + 原子随身听）。
+  //
+  // [songId] 用于原生侧判定这段歌词属于哪一首：切歌时通知与歌词的到达顺序不固定
+  // （本地内嵌歌词几乎瞬时返回，可能早于新歌的 updateNotification），
+  // 带上 id 原生才能只丢弃真正过期的歌词，而不是把刚到的新歌词误清掉。
+  //
+  // [line] 参数已废弃（保留位以兼容旧协议）：车机与原子随身听都按播放进度自行
+  // 滚动，推「当前行」会被识别成单行卡片模式。
+  static Future<void> updateCarLyric(
+    String? line,
+    String? whole, {
+    String songId = '',
+  }) async {
     try {
       await _channel.invokeMethod('updateCarLyric', {
         'line': line ?? '',
         'whole': whole ?? '',
+        'songId': songId,
       });
     } catch (_) {}
   }

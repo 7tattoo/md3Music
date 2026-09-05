@@ -31,6 +31,34 @@ concurrency:
 
 jobs:
   # ============================================================
+  # 0. 车载歌词纯函数单测
+  #    整段 LRC 的构造是两个显示位的共同数据源，写错（混入 ELRC 逐字标签、
+  #    把翻译当独立行）会直接表现为车机歌词错乱，构建前先挡住。
+  # ============================================================
+  test:
+    name: Car lyric unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Run lyric builder tests
+        run: |
+          flutter test \
+            test/services/car_lyric_builder_test.dart \
+            test/services/lyric_info_json_builder_test.dart
+
+  # ============================================================
   # 1. 统一算版本号 + 只编译一次 Rust 后端
   #    10 个 job 各自取时间会导致 versionCode 不一致，必须集中生成。
   # ============================================================
@@ -139,7 +167,7 @@ jobs:
   # ============================================================
   build:
     name: Build ${{ matrix.app_id }}
-    needs: prepare
+    needs: [test, prepare]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -305,10 +333,85 @@ jobs:
               && echo "包名字符串命中 $APP_ID" || echo "::warning::未命中包名字符串（仅提示）"
           fi
 
-          echo "--- 车载 / 方向盘符号抽查 ---"
-          unzip -p "dist/$OUT" classes.dex | strings \
-            | grep -oE "LYRICS_WHOLE|NOTICE_CAR|dispatchCustomNext|updateActiveSessionCarLyric" \
-            | sort -u
+          echo "--- vivo 车机歌词协议校验（分级口径）---"
+          # 全部 10 个包名：保证车联投屏（ucar）整段 LRC 滚动歌词。
+          # 仅 apple / spotify：额外保证原子随身听（vivomusicmix）滚动歌词。
+          #
+          # ⚠️ 坑：`strings dex | grep -q KEY` 在 `set -e` 下会误判 ——
+          # grep 命中即退出，上游 strings 收到 SIGPIPE 返回 141；只要开了
+          # pipefail 整条管道就判失败，导致所有 require 全部误报缺失。
+          # 必须用 `grep -Fc ... || true` 取计数再比较数值。
+          mkdir -p /tmp/dexcheck
+          unzip -o -q "dist/$OUT" 'classes*.dex' -d /tmp/dexcheck
+          ALLDEX=/tmp/dexcheck/all.strings
+          : > "$ALLDEX"
+          for d in /tmp/dexcheck/classes*.dex; do
+            strings "$d" >> "$ALLDEX"
+          done
+
+          count_key() {
+            hits="$(grep -Fc -- "$1" "$ALLDEX" || true)"
+            [ -n "$hits" ] || hits=0
+            echo "$hits"
+          }
+          require_key() {
+            n="$(count_key "$1")"
+            if [ "$n" -lt 1 ]; then
+              echo "::error::缺少必需字段 $1"
+              exit 1
+            fi
+            printf '  [有] %-52s (%s 次)\n' "$1" "$n"
+          }
+          forbid_key() {
+            n="$(count_key "$1")"
+            if [ "$n" -gt 0 ]; then
+              echo "::error::出现禁止字段 $1（$n 次）—— 单行歌词协议信号，会让车机退回单行卡片"
+              exit 1
+            fi
+            printf '  [无] %-52s\n' "$1"
+          }
+
+          echo "· 车联投屏（全部包名必须）"
+          require_key "ucar.media.metadata.LYRICS_WHOLE"
+          require_key "ucar.media.metadata.LYRICS_STATUS"
+          echo "· 单行协议信号（全部包名必须无）"
+          forbid_key "ucar.media.metadata.LYRICS_LINE"
+          forbid_key "music.media.extras.LYRIC"
+          forbid_key "music.media.extras.LYRIC_IS_ALLOWED"
+          forbid_key "music.media.extras.NOTICE_CAR"
+
+          case "$APP_ID" in
+            com.apple.android.music|com.spotify.music)
+              echo "· 原子随身听（本包名承诺支持，逐项校验）"
+              require_key "vivomusicmix.media.metadata.support_event"
+              require_key "vivomusicmix.meida.extra.key.action"
+              require_key "vivomusicmix.extra.lrc_change"
+              require_key "vivomusicmix.extra.key.meidia_id"
+              require_key "vivomusicmix.extra.key.lyric"
+              require_key "android.media.metadata.MEDIA_ID"
+              if [ -n "$AAPT2" ] && "$AAPT2" version >/dev/null 2>&1; then
+                XT="$("$AAPT2" dump xmltree --file AndroidManifest.xml "dist/$OUT")"
+                if ! printf '%s' "$XT" | grep -Fc "com.vivo.musicwidgetmix.support.service" > /dev/null; then
+                  echo "::error::manifest 缺少 com.vivo.musicwidgetmix.support.service —— 原子随身听不会分配合作控制器"
+                  exit 1
+                fi
+                if ! printf '%s' "$XT" | grep -Fc "android.media.browse.MediaBrowserService" > /dev/null; then
+                  echo "::error::manifest 缺少 android.media.browse.MediaBrowserService"
+                  exit 1
+                fi
+                echo "  [有] manifest: support.service + MediaBrowserService"
+              else
+                echo "::warning::aapt2 不可用，跳过 manifest action 校验"
+              fi
+              ;;
+            *)
+              echo "· 原子随身听：本包名不承诺（skipped），仅保证车联投屏歌词"
+              ;;
+          esac
+
+          echo "--- 方向盘切歌符号抽查 ---"
+          grep -oE "dispatchCustomNext|updateActiveSessionCarLyric" "$ALLDEX" | sort -u
+          rm -rf /tmp/dexcheck
 
           echo "--- ABI 校验（应仅 arm64-v8a）---"
           ABIS="$(unzip -Z1 "dist/$OUT" 'lib/*' | cut -d/ -f2 | sort -u)"

@@ -1203,56 +1203,81 @@ public class MediaSession {
     return impl.getSessionCompat();
   }
 
-  // ==== MD3Music fork（车载歌词）：legacy MediaMetadataCompat 读写桥 ====
-  // 车机（vivo uCar 等）实际连接的是 Media3 内部创建的 legacy MediaSessionCompat，
-  // 读取的是它的 MediaMetadataCompat。AudioPlayer 在别的包里、拿不到 package-private
-  // 的 getSessionCompat()，因此在此暴露两个公开方法。
+  // ==== MD3Music fork（vivo 车机歌词）：legacy 会话读写桥 ====
+  // 车机（vivo 车联投屏 / 原子随身听）实际连接的是 Media3 内部创建的 legacy
+  // MediaSessionCompat，读的是它的 MediaMetadataCompat 与 session extras。
+  // AudioPlayer 在别的包里、拿不到 package-private 的 getSessionCompat()，
+  // 因此在此暴露三个公开方法。
   //
-  // 封面保留铁律：写入前必须用 getLegacyMetadata() 取当前值，
-  // 以 new MediaMetadataCompat.Builder(current) 为基底，否则歌词高频刷新会冲掉封面。
-  @Nullable private MediaMetadataCompat lastLegacyMetadata;
+  // 注入点在 MediaSessionLegacyStub.setMetadata（唯一出口，见该处注释），
+  // 本类这些方法只负责「歌词异步到达后强推一次」与「原子随身听事件下发」。
 
-  /// 写 legacy 会话元数据（车载歌词字段）；同时记录快照供 getLegacyMetadata 兜底。
-  @UnstableApi
-  public final void setLegacyMetadata(MediaMetadataCompat metadata) {
-    if (metadata == null) return;
-    try {
-      lastLegacyMetadata = metadata;
-      impl.getSessionCompat().setMetadata(metadata);
-    } catch (Exception e) {
-      android.util.Log.w("MediaSession", "setLegacyMetadata failed: " + e);
-    }
-  }
-
-  /// 读 legacy 会话当前元数据：优先 controller 的实时值，失败时回退本地快照。
+  /**
+   * 读 legacy 会话当前元数据（controller 实时值）。
+   *
+   * <p>供上层取 {@code METADATA_KEY_MEDIA_ID} 作为原子随身听 {@code meidia_id} 的权威来源
+   * —— 组件在 {@code t4/d0.E0()/z1()} 里要求事件里的 id 等于当前歌曲，否则静默丢弃歌词。
+   */
   @UnstableApi
   @Nullable
   public final MediaMetadataCompat getLegacyMetadata() {
     try {
       MediaControllerCompat controller = impl.getSessionCompat().getController();
       if (controller != null) {
-        MediaMetadataCompat m = controller.getMetadata();
-        if (m != null) return m;
+        return controller.getMetadata();
       }
     } catch (Exception e) {
       android.util.Log.w("MediaSession", "getLegacyMetadata failed: " + e);
     }
-    return lastLegacyMetadata;
+    return null;
   }
 
-  /// 写 legacy/media3 会话 extras（车机 NOTICE_CAR / LYRIC 通道）。
+  /**
+   * 歌词异步到达后强推一次 legacy 元数据（车机歌词适配要点四）。
+   *
+   * <p>切歌时推的那次 metadata 必定还没歌词（歌词是异步加载的），不补推车机永远看不到
+   * {@code LYRICS_WHOLE}。基底优先用 {@code MediaSessionLegacyStub} 记下的<b>原始</b>
+   * 快照（media3 生成的完整版，带封面），拿不到再退回 controller 实时值；不加
+   * 「当前无歌词才推」这类多余条件。
+   *
+   * @return 是否真的推了一次
+   */
+  @UnstableApi
+  public final boolean republishLegacyMetadataWithLyrics() {
+    try {
+      MediaSessionCompat sessionCompat = impl.getSessionCompat();
+      MediaMetadataCompat base = com.ryanheise.just_audio.VivoCarLyrics.rawMetadata();
+      if (base == null) {
+        MediaControllerCompat controller = sessionCompat.getController();
+        base = controller != null ? controller.getMetadata() : null;
+      }
+      if (base == null) return false;
+      MediaMetadataCompat decorated = com.ryanheise.just_audio.VivoCarLyrics.decorate(base);
+      if (decorated == null) return false;
+      sessionCompat.setMetadata(decorated);
+      return true;
+    } catch (Exception e) {
+      android.util.Log.w("MediaSession", "republishLegacyMetadataWithLyrics failed: " + e);
+      return false;
+    }
+  }
+
+  /**
+   * 下发车机 session extras（原子随身听 {@code lrc_change} 事件）。
+   *
+   * <p>{@link #setSessionExtras(Bundle)} 会同时广播给 media3 controller 与
+   * legacy 会话（{@code ControllerLegacyCb.onSessionExtrasChanged} → {@code
+   * sessionCompat.setExtras}），所以只调用一次即可，不需要再直写 sessionCompat。
+   *
+   * <p>调用方必须保证 extras 非空 —— 推空 Bundle 会清掉车机/组件已收到的 extras。
+   */
   @UnstableApi
   public final void setCarSessionExtras(Bundle extras) {
-    if (extras == null) return;
+    if (extras == null || extras.isEmpty()) return;
     try {
       setSessionExtras(extras);
     } catch (Exception e) {
       android.util.Log.w("MediaSession", "setCarSessionExtras failed: " + e);
-    }
-    try {
-      impl.getSessionCompat().setExtras(extras);
-    } catch (Exception e) {
-      android.util.Log.w("MediaSession", "setCarSessionExtras legacy failed: " + e);
     }
   }
 

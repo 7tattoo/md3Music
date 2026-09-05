@@ -18,6 +18,7 @@ import 'package:md3music/widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/apple_lyrics/layout/lyric_preferences.dart';
 import '../../widgets/apple_lyrics/parsers/lyric_parser_chain.dart';
 import 'media_notification_service.dart';
+import 'car_lyric_builder.dart';
 import 'lyric_info_json_builder.dart';
 
 /// 桌面歌词服务：管理开关、解析歌词（KRC/LRC/纯文本）、按播放位置同步到原生悬浮窗。
@@ -47,10 +48,12 @@ class DesktopLyricService {
   bool _enabled = false;
   bool get enabled => _enabled;
 
-  // 车载歌词开关：独立于悬浮窗/蓝牙歌词。开启时推送车载歌词到原生端。
+  // 车载歌词开关：独立于悬浮窗/蓝牙歌词。开启时把整段 LRC 推送到原生端。
+  //
+  // 只推整段歌词，不推「当前行」—— 车机与原子随身听都按 PlaybackState 进度
+  // 自行滚动；推当前行会被识别为单行卡片模式。
   bool _carLyricEnabled = false;
   bool get carLyricEnabled => _carLyricEnabled;
-  String? _lastCarLyricLine;
   String? _lastCarLyricWhole;
 
   // 蓝牙歌词开关：独立于悬浮窗。ColorOS SystemUI 与 AVRCP 共用 MediaSession，
@@ -339,12 +342,12 @@ class DesktopLyricService {
       _lines = const [];
       _currentLineIndex = -1;
       _awaitingLyric = false;
-      _lastCarLyricLine = null;
       _lastCarLyricWhole = null;
+      _lastCarLyricSentAt = null;
     } else {
-      // 关闭时清空车载歌词
-      _lastCarLyricLine = null;
+      // 关闭时清空车载歌词（原生侧据此发一次空 lrc_change 并摘掉 LYRICS_WHOLE）
       _lastCarLyricWhole = null;
+      _lastCarLyricSentAt = null;
       await MediaNotificationService.updateCarLyric('', '');
     }
     _notify();
@@ -708,8 +711,12 @@ class DesktopLyricService {
       _lastLineSwitchAt = null;
       _awaitingLyric = false;
       _lastPushedPosMs = null;
-      _lastCarLyricLine = null;
       _lastCarLyricWhole = null;
+      _lastCarLyricSentAt = null;
+      // 车载歌词：切歌时立即清一次。原生侧据此给原子随身听发
+      // 「新曲 ID + 空 lyric」的 lrc_change，清除组件内存里的上一首歌词，
+      // 同时把 legacy metadata 上的 LYRICS_WHOLE 摘掉，避免歌词串曲。
+      _clearCarLyricForTrackChange(song.id);
       _pushPlaying(_player!.isPlaying);
       _pushLyric('歌词加载中...', '', -1);
       // SuperLyric：切歌时立即更新 title/artist（清空上一首歌词）
@@ -739,6 +746,11 @@ class DesktopLyricService {
 
     // LyricInfo：歌词加载完成后推送一次整首歌词（_lyricInfoPushed 去重）
     _maybePushLyricInfo();
+
+    // 车载歌词心跳：兜底「车机/原子随身听在播放开始之后才连上」。
+    // 30s 一次的低频重发，不是逐行推送。
+    // ignore: discarded_futures
+    _maybeResendCarLyricWhole();
 
     // Sync progress (500ms throttle)
     final pos = _player!.position;
@@ -882,61 +894,68 @@ class DesktopLyricService {
       } catch (_) {}
     }
     
-    // 车载歌词：当前行变化时推送（整首在歌词加载完成时单独推）
-    if (_carLyricEnabled) {
-      final carLine = (current == '歌词加载中...' ||
-              current == '暂无歌词' ||
-              current == '歌词加载失败')
-          ? ''
-          : current;
-      if (carLine != _lastCarLyricLine) {
-        _lastCarLyricLine = carLine;
-        try {
-          await MediaNotificationService.updateCarLyric(
-            carLine,
-            _lastCarLyricWhole ?? '',
-          );
-        } catch (_) {}
-      }
-    }
+    // 车载歌词：当前行变化时不再推送（车机与原子随身听按播放进度自行滚动，
+    // App 推"当前行"会触发单行卡片模式）。整段歌词在歌词加载完成时由
+    // _pushCarLyricWhole 推送，另有 30s 心跳兜底"车机在播放开始后才连上"。
   }
 
-  /// 推送整首歌词到车载端（歌词加载完成时调用；无歌词时推空串，绝不写 "-1"）
+  /// 车载歌词心跳间隔：兜底「车机/原子随身听在播放开始之后才连上」。
+  ///
+  /// 必须大于原生侧 VivoCarLyrics.RESEND_INTERVAL_MS（25s），否则原生节流会把
+  /// 心跳吃掉。绝不能做成 250/500ms 级高频推送 —— 那是单行方案的做法。
+  static const Duration _carLyricHeartbeat = Duration(seconds: 30);
+  DateTime? _lastCarLyricSentAt;
+
+  /// 车载歌词心跳：整段歌词非空时每 30s 重发一次（原生侧幂等）。
+  Future<void> _maybeResendCarLyricWhole() async {
+    if (!_carLyricEnabled) return;
+    final whole = _lastCarLyricWhole;
+    if (whole == null || whole.isEmpty) return;
+    final now = DateTime.now();
+    final last = _lastCarLyricSentAt;
+    if (last != null && now.difference(last) < _carLyricHeartbeat) return;
+    _lastCarLyricSentAt = now;
+    try {
+      await MediaNotificationService.updateCarLyric(
+        '',
+        whole,
+        songId: _currentSongId ?? '',
+      );
+    } catch (_) {}
+  }
+
+  /// 切歌时清空车载歌词（不等新歌歌词加载完成）。
+  ///
+  /// 带上新歌 id：原生侧据此发「新曲 ID + 空 lyric」的 lrc_change，
+  /// 清掉原子随身听内存里上一首的歌词，同时摘掉 legacy metadata 的 LYRICS_WHOLE。
+  void _clearCarLyricForTrackChange(String songId) {
+    if (!_carLyricEnabled) return;
+    // ignore: discarded_futures
+    MediaNotificationService.updateCarLyric('', '', songId: songId);
+  }
+
+  /// 推送整首歌词到车载端（歌词加载完成时调用）。
+  ///
+  /// 无歌词时推空串：原生侧据此发一次空 `lrc_change` 清掉原子随身听里上一首的
+  /// 歌词，并把 `LYRICS_WHOLE` 从 legacy metadata 上摘掉。**绝不写负状态**
+  /// （`LYRICS_STATUS=1/2` 会让车机永久退回单行卡片）。
   Future<void> _pushCarLyricWhole() async {
     if (!_carLyricEnabled) return;
     final whole = _buildCarLyricWhole();
     if (whole == _lastCarLyricWhole) return;
     _lastCarLyricWhole = whole;
+    _lastCarLyricSentAt = DateTime.now();
     try {
       await MediaNotificationService.updateCarLyric(
-        _lastCarLyricLine ?? '',
+        '',
         whole,
+        songId: _currentSongId ?? '',
       );
     } catch (_) {}
   }
 
-  /// 构建车载整首歌词（标准 LRC 行级 `[mm:ss.mmm]`）。
-  ///
-  /// 铁律：绝不输出 ELRC 逐字标签 `<mm:ss.mmm>` —— 车机 LrcUtils 会把逐字标签
-  /// 当普通文本原样显示。空文本行跳过。
-  String _buildCarLyricWhole() {
-    if (_lines.isEmpty) return '';
-    final buffer = StringBuffer();
-    for (final line in _lines) {
-      final text = line.text.trim();
-      if (text.isEmpty) continue;
-      final startMs = line.startTime < 0 ? 0 : line.startTime;
-      final minutes = startMs ~/ 60000;
-      final seconds = (startMs % 60000) ~/ 1000;
-      final millis = startMs % 1000;
-      buffer.writeln(
-        '[${minutes.toString().padLeft(2, '0')}'
-        ':${seconds.toString().padLeft(2, '0')}'
-        '.${millis.toString().padLeft(3, '0')}]$text',
-      );
-    }
-    return buffer.toString();
-  }
+  /// 构建车载整首歌词：委托给纯函数 [buildCarWholeLrc]（单测覆盖）。
+  String _buildCarLyricWhole() => buildCarWholeLrc(_lines);
 
   /// 推送当前歌词行到 SuperLyric（基于 Binder 的系统级实时歌词 API）。
   ///

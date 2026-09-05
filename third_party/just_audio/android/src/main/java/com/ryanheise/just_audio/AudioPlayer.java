@@ -1043,6 +1043,16 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                 @Override
                 public MediaSession.ConnectionResult onConnect(
                         MediaSession session, MediaSession.ControllerInfo controller) {
+                    // MD3Music fork（vivo 车机歌词）：车机组件（车联投屏 / 原子随身听）
+                    // 可能在 App 已经开始播放之后才连上 —— 此时不会再有切歌事件触发歌词下发，
+                    // 首曲会没有歌词。这里识别 vivo 侧包名并延迟补发一次当前状态。
+                    // 断开重连同样走这条路径。
+                    try {
+                        String controllerPkg = controller != null ? controller.getPackageName() : null;
+                        if (VivoCarLyrics.isVivoCarComponent(controllerPkg)) {
+                            scheduleVivoCarResync(controllerPkg);
+                        }
+                    } catch (Throwable ignore) {}
                     // MD3Music fork: 让自定义命令（桌面歌词/收藏）对所有 controller 可用，
                     // 否则内部媒体通知 controller 的 customLayout 会把它们过滤成禁用/移除，
                     // 通知栏自定义按钮无法渲染（阶段4）。
@@ -1270,13 +1280,16 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         }
     }
 
-    /// 更新车载歌词到 MediaItem extras 和 session extras（vivo 车载投屏协议）
-    /// 三路写入：1) MediaItem.extras 2) legacy MediaMetadataCompat 3) setSessionExtras
+    /// 更新车载歌词：整段 LRC 交给 vivo 车联投屏（ucar）与原子随身听（vivomusicmix）。
+    ///
+    /// 参数 line 保留但**不再使用**：车机与原子组件都按 PlaybackState 进度自行滚动，
+    /// App 推"当前是第几行"会触发单行卡片模式（见 VivoCarLyrics 的三条铁律）。
+    /// MethodChannel 协议不变，避免 Dart 侧改动扩散。
     public static void updateActiveSessionCarLyric(
             String line, String whole, String title, String artist) {
         AudioPlayer p = sActivePlayer;
         if (p != null) {
-            p.applyCarLyric(line, whole, title, artist);
+            p.applyCarLyric(whole);
         } else {
             Log.w("AudioFocusFork", "updateActiveSessionCarLyric: no active AudioPlayer");
         }
@@ -1592,108 +1605,125 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         }
     }
 
-    /// 推送车载歌词到 MediaItem.extras（三路写入，供 vivo 车载投屏读取）
-    private void applyCarLyric(final String line, final String whole, final String title, final String artist) {
+    /// 车载歌词入口：把整段 LRC 交给 vivo 车联投屏（ucar）与原子随身听（vivomusicmix）。
+    ///
+    /// 派发到 player 的 application looper 执行 —— 媒体3会话的元数据/extras 下发
+    /// 必须在会话的 application 线程上做（会话的 handler 就建自这个 looper）。
+    private void applyCarLyric(final String whole) {
         try {
             final androidx.media3.common.Player p = player;
-            if (p == null) return;
+            if (p == null || mediaSession == null) return;
             Handler handler = new Handler(p.getApplicationLooper());
-            handler.post(() -> doApplyCarLyric(line, whole, title, artist));
+            handler.post(() -> doApplyCarLyric(whole, false));
         } catch (Exception e) {
             Log.w("AudioFocusFork", "applyCarLyric dispatch failed: " + e);
         }
     }
 
-    /// 在 player 线程执行车载歌词写入（三路写入同帧）
-    /// 1) MediaItem.extras 裸大写键（LYRICS_LINE/WHOLE/STATUS）
-    /// 2) MediaItem.extras 带前缀键（ucar.media.metadata.LYRICS_LINE/WHOLE/STATUS + UCAR_TITLE/ARTIST）
-    /// 3) Legacy MediaMetadataCompat 顶级字段（车机 launcher 优先读这里）
-    /// 4) MediaSession.setSessionExtras（NOTICE_CAR 等车机识别标志）
-    /// 无歌词时整首写空串（车机 LrcUtils 直接显示，绝不写 "-1"）
-    private void doApplyCarLyric(String line, String whole, String title, String artist) {
+    /// 在会话线程执行两个显示位的下发。
+    ///
+    /// 1) **车联投屏（ucar）**：只缓存整段 LRC，由 MediaSessionLegacyStub.setMetadata
+    ///    的统一出口装饰进 legacy metadata；歌词内容变化时在此强推一次
+    ///    （切歌那次 metadata 必定还没歌词，不补推车机永远看不到 LYRICS_WHOLE）。
+    /// 2) **原子随身听（vivomusicmix）**：整段 LRC 走 session extras 的 lrc_change 事件；
+    ///    内容变化立即发，内容相同按 25s 节流兜底"车机在播放开始后才连上"。
+    ///
+    /// 铁律：无歌词时只做"清除"（空 lrc_change + 从 metadata 摘掉 LYRICS_WHOLE），
+    /// 绝不写 LYRICS_STATUS=1/2 负状态，也绝不推空 Bundle 的 setExtras。
+    private void doApplyCarLyric(String whole, boolean force) {
         try {
-            MediaItem cur = player.getCurrentMediaItem();
-            if (cur == null) return;
-            int index = player.getCurrentMediaItemIndex();
-            
-            // 构建车载歌词 extras（三路写入）
-            android.os.Bundle extras = new android.os.Bundle();
-            
-            // 1) 裸大写键（车机精确按字面量取值）
-            extras.putString("LYRICS_LINE", line != null ? line : "");
-            extras.putString("LYRICS_WHOLE", whole != null ? whole : "");
-            extras.putString("LYRICS_STATUS", (whole != null && !whole.isEmpty()) ? "0" : "1");
-            
-            // 2) 带前缀键（双写兼容）
-            extras.putString("ucar.media.metadata.LYRICS_LINE", line != null ? line : "");
-            extras.putString("ucar.media.metadata.LYRICS_WHOLE", whole != null ? whole : "");
-            extras.putString("ucar.media.metadata.LYRICS_STATUS", (whole != null && !whole.isEmpty()) ? "0" : "1");
-            extras.putString("ucar.media.metadata.UCAR_TITLE", title != null ? title : "");
-            extras.putString("ucar.media.metadata.UCAR_ARTIST", artist != null ? artist : "");
-            
-            // 合并到现有 extras（如果有 lyricInfo 等）
-            android.os.Bundle currentExtras = cur.mediaMetadata.extras;
-            android.os.Bundle newExtras = currentExtras != null ? new android.os.Bundle(currentExtras) : new android.os.Bundle();
-            newExtras.putAll(extras);
-            
-            MediaMetadata.Builder mb = cur.mediaMetadata.buildUpon();
-            mb.setExtras(newExtras);
-            
-            MediaItem updated = cur.buildUpon().setMediaMetadata(mb.build()).build();
-            player.replaceMediaItem(index, updated);
-            
-            // 3) Legacy MediaMetadataCompat（车机 launcher 优先读这里）
-            // 封面保留铁律：以 getLegacyMetadata() 当前值为基底 new Builder(current)，
-            // 否则 250ms 级歌词刷新会把封面/专辑字段冲掉。
-            if (mediaSession != null) {
-                try {
-                    androidx.media3.session.legacy.MediaMetadataCompat current =
-                            mediaSession.getLegacyMetadata();
-                    androidx.media3.session.legacy.MediaMetadataCompat.Builder legacyBuilder =
-                            current != null
-                                    ? new androidx.media3.session.legacy.MediaMetadataCompat.Builder(current)
-                                    : new androidx.media3.session.legacy.MediaMetadataCompat.Builder();
+            final MediaSession session = mediaSession;
+            if (session == null) return;
 
-                    // 裸大写键 + 带前缀键双写
-                    legacyBuilder.putString("LYRICS_LINE", line != null ? line : "");
-                    legacyBuilder.putString("LYRICS_WHOLE", whole != null ? whole : "");
-                    legacyBuilder.putString("LYRICS_STATUS",
-                            (whole != null && !whole.isEmpty()) ? "0" : "1");
-                    legacyBuilder.putString("ucar.media.metadata.LYRICS_LINE", line != null ? line : "");
-                    legacyBuilder.putString("ucar.media.metadata.LYRICS_WHOLE", whole != null ? whole : "");
-                    legacyBuilder.putString("ucar.media.metadata.LYRICS_STATUS",
-                            (whole != null && !whole.isEmpty()) ? "0" : "1");
-                    legacyBuilder.putString("ucar.media.metadata.UCAR_TITLE", title != null ? title : "");
-                    legacyBuilder.putString("ucar.media.metadata.UCAR_ARTIST", artist != null ? artist : "");
+            String mediaId = resolveCarMediaId(session);
+            String lrc = whole == null ? "" : whole;
+            boolean changed = VivoCarLyrics.setWhole(lrc);
 
-                    mediaSession.setLegacyMetadata(legacyBuilder.build());
-                } catch (Exception e) {
-                    Log.w("AudioFocusFork", "doApplyCarLyric legacy metadata failed: " + e);
-                }
+            // 车联投屏：内容变化（或连接补发）时强推一次带整段歌词的 metadata
+            if (changed || force) {
+                session.republishLegacyMetadataWithLyrics();
             }
 
-            // 4) session extras（车机识别标志）
-            // NOTICE_CAR 永远 true：车机据此判定「正在播放」，即使当前无歌词。
-            if (mediaSession != null) {
-                try {
-                    android.os.Bundle sessionExtras = new android.os.Bundle();
-                    sessionExtras.putString("LYRIC", line != null ? line : "");
-                    sessionExtras.putBoolean("LYRIC_IS_ALLOWED", true);
-                    sessionExtras.putBoolean("NOTICE_CAR", true);
-                    // 带前缀版双写（部分车机读 music.media.extras.*）
-                    sessionExtras.putString("music.media.extras.LYRIC", line != null ? line : "");
-                    sessionExtras.putBoolean("music.media.extras.LYRIC_IS_ALLOWED", true);
-                    sessionExtras.putBoolean("music.media.extras.NOTICE_CAR", true);
-                    mediaSession.setCarSessionExtras(sessionExtras);
-                } catch (Exception e) {
-                    Log.w("AudioFocusFork", "doApplyCarLyric session extras failed: " + e);
-                }
+            // 原子随身听：lrc_change 事件
+            long now = System.currentTimeMillis();
+            if (force || VivoCarLyrics.shouldSend(now, mediaId, lrc)) {
+                session.setCarSessionExtras(VivoCarLyrics.buildLrcChangeExtras(mediaId, lrc));
+                VivoCarLyrics.markSent(now, mediaId, lrc);
             }
-            
-            Log.d("AudioFocusFork", "doApplyCarLyric OK lineLen=" + (line != null ? line.length() : 0) 
-                    + " wholeLen=" + (whole != null ? whole.length() : 0));
+
+            if (changed) {
+                // 切歌瞬间 legacy metadata 的 MEDIA_ID 可能还没跟上（replaceMediaItem
+                // 到 legacy stub 的传播要晚一个消息，封面异步时更晚）。原子随身听要求
+                // 事件里的 meidia_id 等于它当前持有的那个，否则静默丢弃整段歌词 ——
+                // 所以歌词内容变化后补两次重发，让 ID 稳定下来后再发一遍。
+                // shouldSend 内部按「ID 或内容变化」去重，重复调用是幂等的。
+                scheduleLrcResend(lrc);
+            }
+
+            if (changed || force) {
+                Log.d("AudioFocusFork", "doApplyCarLyric wholeLen=" + lrc.length()
+                        + " changed=" + changed + " force=" + force);
+            }
         } catch (Exception e) {
             Log.w("AudioFocusFork", "doApplyCarLyric failed: " + e);
+        }
+    }
+
+    /// 歌词内容变化后的两次补发（700ms / 2500ms）：等 legacy metadata 的 MEDIA_ID
+    /// 追上新曲目，再按当时的权威 ID 重发一次 lrc_change。
+    private void scheduleLrcResend(final String lrc) {
+        try {
+            final androidx.media3.common.Player p = player;
+            if (p == null) return;
+            Handler handler = new Handler(p.getApplicationLooper());
+            for (long delay : VivoCarLyrics.RESEND_BACKOFF_MS) {
+                handler.postDelayed(() -> {
+                    // 期间又切了歌 / 歌词已变，则以最新缓存为准，不复活旧歌词
+                    if (!lrc.equals(VivoCarLyrics.cachedWhole())) return;
+                    doApplyCarLyric(lrc, false);
+                }, delay);
+            }
+        } catch (Exception e) {
+            Log.w("AudioFocusFork", "scheduleLrcResend failed: " + e);
+        }
+    }
+
+    /// 原子随身听要求 lrc_change 里的 meidia_id 等于当前曲目的
+    /// android.media.metadata.MEDIA_ID（t4/d0.E0()/z1() 不等即静默丢弃歌词），
+    /// 因此优先取 legacy 会话实时元数据里的 MEDIA_ID，取不到再退回 MediaItem.mediaId。
+    private String resolveCarMediaId(MediaSession session) {
+        try {
+            androidx.media3.session.legacy.MediaMetadataCompat m = session.getLegacyMetadata();
+            if (m != null) {
+                String id = m.getString(
+                        androidx.media3.session.legacy.MediaMetadataCompat.METADATA_KEY_MEDIA_ID);
+                if (id != null && !id.isEmpty()) return id;
+            }
+        } catch (Exception ignore) {}
+        try {
+            final androidx.media3.common.Player p = player;
+            MediaItem cur = p != null ? p.getCurrentMediaItem() : null;
+            if (cur != null && cur.mediaId != null) return cur.mediaId;
+        } catch (Exception ignore) {}
+        return "";
+    }
+
+    /// vivo 车机组件（车联投屏 / 原子随身听）连接后补发一次当前状态。
+    ///
+    /// 场景：App 已经在播、车机之后才连上 —— 此时不会再有切歌事件触发下发，
+    /// 首曲会没有歌词。延迟一小段时间等对端把 controller 建完再推。
+    /// 该路径也覆盖"断开重连"。
+    void scheduleVivoCarResync(String reason) {
+        try {
+            final androidx.media3.common.Player p = player;
+            if (p == null || mediaSession == null) return;
+            Handler handler = new Handler(p.getApplicationLooper());
+            handler.postDelayed(() -> {
+                Log.i("AudioFocusFork", "vivo car resync: " + reason);
+                doApplyCarLyric(VivoCarLyrics.cachedWhole(), true);
+            }, VivoCarLyrics.CONNECT_RESYNC_DELAY_MS);
+        } catch (Exception e) {
+            Log.w("AudioFocusFork", "scheduleVivoCarResync failed: " + e);
         }
     }
 

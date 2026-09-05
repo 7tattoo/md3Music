@@ -729,12 +729,16 @@ class AudioPlaybackService : Service() {
     // 蓝牙歌词兼容状态。保留通道与设置，但共享 MediaSession 始终使用真实歌曲身份。
     private var bluetoothLyricEnabled = false
     private var currentBtLyricText = ""
-    // 车载歌词状态：推送到 MediaSession extras，供 vivo 车载投屏读取
+    // 车载歌词状态：整段 LRC 推送到 vivo 车联投屏（ucar metadata）与
+    // 原子随身听（vivomusicmix lrc_change 事件）。
+    // 不保存「当前行」—— 两个显示位都按播放进度自行滚动，推当前行会切单行模式。
     private var carLyricEnabled = false
     @Volatile
-    private var currentCarLyricLine = ""
-    @Volatile
     private var currentCarLyricWhole = ""
+    // 这段歌词属于哪一首。切歌时通知与歌词的到达顺序不固定（本地内嵌歌词几乎瞬时
+    // 返回，可能早于新歌的 updateNotification），据此只丢弃真正过期的歌词。
+    @Volatile
+    private var currentCarLyricSongId = ""
     @Volatile
     private var originalMediaId = ""
     private var originalTitle = ""
@@ -999,8 +1003,9 @@ class AudioPlaybackService : Service() {
                 return START_STICKY
             }
             ACTION_UPDATE_CAR_LYRIC -> {
-                currentCarLyricLine = intent?.getStringExtra(EXTRA_CAR_LYRIC_LINE) ?: ""
+                // EXTRA_CAR_LYRIC_LINE 保留在协议里但不再消费（见 pushCarLyric 注释）
                 currentCarLyricWhole = intent?.getStringExtra(EXTRA_CAR_LYRIC_WHOLE) ?: ""
+                currentCarLyricSongId = intent?.getStringExtra(EXTRA_MEDIA_ID) ?: ""
                 pushCarLyric()
                 return START_STICKY
             }
@@ -1110,29 +1115,40 @@ class AudioPlaybackService : Service() {
         refreshMetadata()
     }
 
-    /// 推送车载歌词到 Media3 会话（三路写入：MediaItem.extras + legacy MediaMetadataCompat + setSessionExtras）
-    /// 用于 vivo 车载投屏等场景，车机读取这些字段显示滚动歌词
+    /// 推送车载歌词到 Media3 会话（整段 LRC → vivo 车联投屏 + 原子随身听）。
+    ///
+    /// 只传整段歌词：车机与原子随身听都按 PlaybackState 进度自行滚动，
+    /// 推「当前行」会被识别成单行卡片模式（见 VivoCarLyrics 的三条铁律）。
     private fun pushCarLyric() {
         if (!carLyricEnabled) return
-        val mediaId = originalMediaId
-        val title = originalTitle
-        val artist = originalArtist
-        if (mediaId.isEmpty()) return
-        
         AudioPlayer.updateActiveSessionCarLyric(
-            currentCarLyricLine,
-            currentCarLyricWhole,
-            title,
-            artist
+            "",
+            carLyricWholeForCurrentTrack(),
+            originalTitle,
+            originalArtist
         )
-        Log.d(TAG, "pushCarLyric: lineLen=${currentCarLyricLine.length} wholeLen=${currentCarLyricWhole.length}")
+        Log.d(
+            TAG,
+            "pushCarLyric: wholeLen=${carLyricWholeForCurrentTrack().length} " +
+                "lyricSongIdMatched=${currentCarLyricSongId.isEmpty() ||
+                    currentCarLyricSongId == originalMediaId}"
+        )
     }
 
-    /// 清空车载歌词（关闭开关时调用）
+    /// 只在歌词与当前曲目匹配时才返回整段 LRC，否则返回空串（触发清除路径）。
+    /// 与 lyricInfoForCurrentTrack 同构：id 为空时不阻断（首播身份尚未建立）。
+    private fun carLyricWholeForCurrentTrack(): String {
+        if (currentCarLyricWhole.isEmpty()) return ""
+        return if (currentCarLyricSongId.isEmpty() ||
+            currentCarLyricSongId == originalMediaId
+        ) currentCarLyricWhole else ""
+    }
+
+    /// 清空车载歌词（关闭开关时调用）。
+    /// 原生桥据此发一次空 lrc_change 清掉原子随身听里的残留，并摘掉 LYRICS_WHOLE。
     private fun clearCarLyric() {
-        currentCarLyricLine = ""
         currentCarLyricWhole = ""
-        // 推送空歌词到 Media3 会话
+        currentCarLyricSongId = ""
         AudioPlayer.updateActiveSessionCarLyric("", "", originalTitle, originalArtist)
         Log.d(TAG, "clearCarLyric")
     }
@@ -1542,8 +1558,9 @@ class AudioPlaybackService : Service() {
                         result.success(true)
                     }
                     "updateCarLyric" -> {
-                        currentCarLyricLine = call.argument<String>("line") ?: ""
+                        // "line" 参数保留在 MethodChannel 协议里但不再消费
                         currentCarLyricWhole = call.argument<String>("whole") ?: ""
+                        currentCarLyricSongId = call.argument<String>("songId") ?: ""
                         pushCarLyric()
                         result.success(true)
                     }
@@ -1942,6 +1959,15 @@ class AudioPlaybackService : Service() {
                 currentLyricInfo = ""
                 hasLyricTranslation = false
                 lastShownLyricInfo = ""
+            }
+            // 车载歌词：切歌立即丢弃上一首的整段 LRC。
+            // performMetadataRefresh 会在新歌 metadata 上重推车载字段，若不清空，
+            // 上一首的歌词会短暂绑到新歌 mediaId 上（车机/原子随身听显示错歌词）。
+            // 注：若新歌歌词已经先到（本地内嵌歌词可能早于本次通知），
+            // currentCarLyricSongId 会等于新 mediaId，此时不能清。
+            if (currentCarLyricSongId != mediaId) {
+                currentCarLyricWhole = ""
+                currentCarLyricSongId = ""
             }
         }
         val requestMediaId = mediaId.ifEmpty { originalMediaId }
