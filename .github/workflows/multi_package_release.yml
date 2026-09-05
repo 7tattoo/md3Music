@@ -469,25 +469,64 @@ jobs:
             > versionCode 规则：`YYMMDDHH`（8 位，北京时间）。
             > 例 `26090317` = 2026-09-03 17 时。后续正式版均以此递增。
 
-            ### 功能
-            - vivo 车载投屏歌词（设置 → 歌词 → 车载歌词，默认关闭）
-            - 方向盘切歌（legacy MediaSession 拦截转发 App 队列）
-            - 歌单创建 / 删除 / 加歌 / 删歌修复
-            - Rust 后端随 CI 重新交叉编译，歌单修复已进包
+            ### 功能分级（本版重点）
+
+            | 功能 | 保证范围 |
+            | --- | --- |
+            | vivo 车联投屏歌词（整段 LRC 滚动） | **全部 10 个包名**，已实机验证 |
+            | vivo 原子随身听歌词（滚动 + 进度条） | **仅 `com.apple.android.music` / `com.spotify.music`**，已实机验证 |
+            | 方向盘切歌（legacy MediaSession 拦截转发 App 队列） | 全部包名 |
+            | 歌单创建 / 删除 / 加歌 / 删歌修复 | 全部包名 |
+
+            > 车载歌词开关在 **设置 → 歌词 → 车载歌词**，默认关闭，需手动开启。
+            > Rust 后端随 CI 重新交叉编译，歌单修复已进包。
+
+            #### 为什么原子随身听只承诺两个包名
+
+            原子随身听除了要求 App 声明 `com.vivo.musicwidgetmix.support.service`
+            （本版全部包名都声明了），内部还有一份**内置支持应用列表**
+            （`t4/m0.java` 的三个 list）。未列入的包名即使协议字段全对，
+            组件也不把它当可用音乐源，歌词区不会出现。`com.apple.android.music`
+            与 `com.spotify.music` 在三个 list 里都在，所以只有这两个能用。
+            这层限制在 App 侧无法绕过。
+
+            ### 本版改动
+
+            **车联投屏（ucar）**
+            - 只写 `ucar.media.metadata.LYRICS_WHOLE` + `LYRICS_STATUS=0`，
+              车机按播放进度自行滚动；不再推"当前是第几行"。
+            - 移除 `ucar.media.metadata.LYRICS_LINE` 与
+              `music.media.extras.{LYRIC,LYRIC_IS_ALLOWED,NOTICE_CAR}` ——
+              这两套是**单行卡片协议信号**，收到即忽略整段歌词
+              （旧版表现为"切歌瞬间多行、十几秒后变回单行"）。
+            - 无歌词时不再写 `LYRICS_STATUS=1` 负状态（语义是"本曲确认无歌词"，
+              车机据此永久退回单行）。
+            - 注入点移到 legacy metadata 的唯一出口，后台通知刷新不会再把歌词冲掉；
+              歌词异步到达后强推一次，切歌首曲不再丢歌词。
+
+            **原子随身听（vivomusicmix）**
+            - 会话服务追加 `android.media.browse.MediaBrowserService` 与
+              `com.vivo.musicwidgetmix.support.service`，并把 vivo 私有 action
+              归一化后交给 media3，组件才能取到 session token。
+            - 能力位 `support_event = 7|8|16 = 31`：缺 8 无歌词区，
+              缺 16 进度条恒 `--:--`。
+            - 整段歌词走 `lrc_change` 事件，`meidia_id` 取会话实时 `MEDIA_ID`
+              （组件要求相等，否则静默丢弃歌词）；切歌先发空歌词清残留。
+            - 车机/组件在播放开始后才连上时，连接后自动补发一次当前歌词。
 
             ### 10 个包名（可同时安装，数据互相独立）
-            | 包名 | 文件 |
-            | --- | --- |
-            | `com.tencent.ibg.joox` | md3music-…-com.tencent.ibg.joox-arm64-v8a.apk |
-            | `com.spotify.music` | md3music-…-com.spotify.music-arm64-v8a.apk |
-            | `com.apple.android.music` | md3music-…-com.apple.android.music-arm64-v8a.apk |
-            | `com.luna.music.car` | md3music-…-com.luna.music.car-arm64-v8a.apk |
-            | `com.kugou.android.auto` | md3music-…-com.kugou.android.auto-arm64-v8a.apk |
-            | `cn.kuwo.kwmusiccar` | md3music-…-cn.kuwo.kwmusiccar-arm64-v8a.apk |
-            | `com.qidian.QDReader` | md3music-…-com.qidian.QDReader-arm64-v8a.apk |
-            | `com.tencent.weread` | md3music-…-com.tencent.weread-arm64-v8a.apk |
-            | `cn.aqzscn.stream_music` | md3music-…-cn.aqzscn.stream_music-arm64-v8a.apk |
-            | `com.tencent.wecarflow` | md3music-…-com.tencent.wecarflow-arm64-v8a.apk |
+            | 包名 | 车联歌词 | 原子随身听 | 文件 |
+            | --- | --- | --- | --- |
+            | `com.apple.android.music` | ✅ | ✅ | md3music-…-com.apple.android.music-arm64-v8a.apk |
+            | `com.spotify.music` | ✅ | ✅ | md3music-…-com.spotify.music-arm64-v8a.apk |
+            | `com.tencent.ibg.joox` | ✅ | — | md3music-…-com.tencent.ibg.joox-arm64-v8a.apk |
+            | `com.luna.music.car` | ✅ | — | md3music-…-com.luna.music.car-arm64-v8a.apk |
+            | `com.kugou.android.auto` | ✅ | — | md3music-…-com.kugou.android.auto-arm64-v8a.apk |
+            | `cn.kuwo.kwmusiccar` | ✅ | — | md3music-…-cn.kuwo.kwmusiccar-arm64-v8a.apk |
+            | `com.qidian.QDReader` | ✅ | — | md3music-…-com.qidian.QDReader-arm64-v8a.apk |
+            | `com.tencent.weread` | ✅ | — | md3music-…-com.tencent.weread-arm64-v8a.apk |
+            | `cn.aqzscn.stream_music` | ✅ | — | md3music-…-cn.aqzscn.stream_music-arm64-v8a.apk |
+            | `com.tencent.wecarflow` | ✅ | — | md3music-…-com.tencent.wecarflow-arm64-v8a.apk |
 
             所有包共用同一签名，同名包可直接覆盖升级；不同包名视为不同应用。
           prerelease: false
