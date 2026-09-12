@@ -1411,7 +1411,7 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
      * 取 "lyric" 字段，并把 ELRC 词级时间标签 {@code <mm:ss.xxx>} 过滤成纯行级 LRC
      * （车机 LRC 解析器会把词级标签当文本渲染）。无歌词返回 null。
      */
-    static String extractCarLyricsFromLyricInfo(String lyricInfo) {
+    public static String extractCarLyricsFromLyricInfo(String lyricInfo) {
         if (lyricInfo == null || lyricInfo.isEmpty()) return null;
         try {
             org.json.JSONObject json = new org.json.JSONObject(lyricInfo);
