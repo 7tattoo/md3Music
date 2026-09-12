@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.apple.android.music
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -59,16 +59,16 @@ class AudioPlaybackService : Service() {
         const val KEEPALIVE_CHANNEL_ID = "md3music_keepalive"
         const val NOTIFICATION_ID = 1002
         // 阶段8：桌面歌词关闭后通知保活服务立即恢复前台（让位结束）
-        const val ACTION_REFRESH_FOREGROUND = "com.md3music.md3music.REFRESH_FOREGROUND"
-        const val ACTION_PREV = "com.md3music.md3music.ACTION_PREV"
-        const val ACTION_PLAY_PAUSE = "com.md3music.md3music.ACTION_PLAY_PAUSE"
-        const val ACTION_NEXT = "com.md3music.md3music.ACTION_NEXT"
-        const val ACTION_STOP = "com.md3music.md3music.ACTION_STOP"
-        const val ACTION_TOGGLE_DESKTOP_LYRIC = "com.md3music.md3music.ACTION_TOGGLE_DESKTOP_LYRIC"
-        const val ACTION_TOGGLE_FAVORITE = "com.md3music.md3music.ACTION_TOGGLE_FAVORITE"
+        const val ACTION_REFRESH_FOREGROUND = "com.apple.android.music.REFRESH_FOREGROUND"
+        const val ACTION_PREV = "com.apple.android.music.ACTION_PREV"
+        const val ACTION_PLAY_PAUSE = "com.apple.android.music.ACTION_PLAY_PAUSE"
+        const val ACTION_NEXT = "com.apple.android.music.ACTION_NEXT"
+        const val ACTION_STOP = "com.apple.android.music.ACTION_STOP"
+        const val ACTION_TOGGLE_DESKTOP_LYRIC = "com.apple.android.music.ACTION_TOGGLE_DESKTOP_LYRIC"
+        const val ACTION_TOGGLE_FAVORITE = "com.apple.android.music.ACTION_TOGGLE_FAVORITE"
         // 蓝牙歌词兼容通道；不得再改写 SystemUI 共用 MediaSession 的 TITLE/ARTIST。
-        const val ACTION_UPDATE_BT_LYRIC = "com.md3music.md3music.ACTION_UPDATE_BT_LYRIC"
-        const val ACTION_SET_BT_LYRIC_ENABLED = "com.md3music.md3music.ACTION_SET_BT_LYRIC_ENABLED"
+        const val ACTION_UPDATE_BT_LYRIC = "com.apple.android.music.ACTION_UPDATE_BT_LYRIC"
+        const val ACTION_SET_BT_LYRIC_ENABLED = "com.apple.android.music.ACTION_SET_BT_LYRIC_ENABLED"
         const val EXTRA_TITLE = "title"
         const val EXTRA_MEDIA_ID = "mediaId"
         const val EXTRA_ARTIST = "artist"
@@ -82,25 +82,25 @@ class AudioPlaybackService : Service() {
         const val EXTRA_BT_LYRIC_TEXT = "btLyricText"
         const val EXTRA_BT_LYRIC_ENABLED = "btLyricEnabled"
         // LyricInfo 歌词转发：通过 MediaSession 元数据 extras.lyricInfo 发布整首歌词
-        const val ACTION_UPDATE_LYRIC_INFO = "com.md3music.md3music.ACTION_UPDATE_LYRIC_INFO"
+        const val ACTION_UPDATE_LYRIC_INFO = "com.apple.android.music.ACTION_UPDATE_LYRIC_INFO"
         const val EXTRA_LYRIC_INFO = "lyricInfo"
         const val EXTRA_HAS_LYRIC_TRANSLATION = "hasLyricTranslation"
         const val EXTRA_LYRIC_SESSION_GENERATION = "lyricSessionGeneration"
         // 桌面小组件按钮动作（由 MusicWidgetProvider 转发）
-        const val ACTION_WIDGET_PLAY_PAUSE = "com.md3music.md3music.ACTION_WIDGET_PLAY_PAUSE"
-        const val ACTION_WIDGET_NEXT = "com.md3music.md3music.ACTION_WIDGET_NEXT"
+        const val ACTION_WIDGET_PLAY_PAUSE = "com.apple.android.music.ACTION_WIDGET_PLAY_PAUSE"
+        const val ACTION_WIDGET_NEXT = "com.apple.android.music.ACTION_WIDGET_NEXT"
         // 私人FM桌面小组件按钮动作（由 PersonalFmWidgetProvider 转发）
-        const val ACTION_WIDGET_FM_PLAY_PAUSE = "com.md3music.md3music.ACTION_FM_WIDGET_PLAY_PAUSE"
-        const val ACTION_WIDGET_FM_TOGGLE_FAVORITE = "com.md3music.md3music.ACTION_FM_WIDGET_TOGGLE_FAVORITE"
-        const val ACTION_WIDGET_FM_SELECT_STATION = "com.md3music.md3music.ACTION_FM_WIDGET_SELECT_STATION"
-        const val ACTION_WIDGET_FM_OPEN_TRACK = "com.md3music.md3music.ACTION_FM_WIDGET_OPEN_TRACK"
+        const val ACTION_WIDGET_FM_PLAY_PAUSE = "com.apple.android.music.ACTION_FM_WIDGET_PLAY_PAUSE"
+        const val ACTION_WIDGET_FM_TOGGLE_FAVORITE = "com.apple.android.music.ACTION_FM_WIDGET_TOGGLE_FAVORITE"
+        const val ACTION_WIDGET_FM_SELECT_STATION = "com.apple.android.music.ACTION_FM_WIDGET_SELECT_STATION"
+        const val ACTION_WIDGET_FM_OPEN_TRACK = "com.apple.android.music.ACTION_FM_WIDGET_OPEN_TRACK"
         // 小部件封面点击：拉起 app 并打开播放器页
-        const val ACTION_WIDGET_FM_OPEN_PLAYER = "com.md3music.md3music.ACTION_FM_WIDGET_OPEN_PLAYER"
+        const val ACTION_WIDGET_FM_OPEN_PLAYER = "com.apple.android.music.ACTION_FM_WIDGET_OPEN_PLAYER"
         // FM 小部件动作参数（档位下标 / 歌曲 hash）
         const val EXTRA_FM_ACTION_STATION_INDEX = "action_station_index"
         const val EXTRA_FM_ACTION_TRACK_HASH = "action_track_hash"
         // 线控耳机媒体键（由 MediaButtonReceiver 转发，唤醒播放）
-        const val ACTION_MEDIA_BUTTON = "com.md3music.md3music.ACTION_MEDIA_BUTTON"
+        const val ACTION_MEDIA_BUTTON = "com.apple.android.music.ACTION_MEDIA_BUTTON"
         const val EXTRA_MEDIA_COMMAND = "mediaCommand"
 
         private const val TAG = "AudioPlaybackService"
@@ -515,7 +515,7 @@ class AudioPlaybackService : Service() {
         fun registerLyriconChannel(engine: FlutterEngine) {
             val channel = MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/lyricon"
+                "com.apple.android.music/lyricon"
             )
             setLyriconChannel(channel)
             channel.setMethodCallHandler { call, result ->
@@ -659,7 +659,7 @@ class AudioPlaybackService : Service() {
         fun registerSuperLyricChannel(engine: FlutterEngine) {
             val channel = MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/super_lyric"
+                "com.apple.android.music/super_lyric"
             )
             channel.setMethodCallHandler { call, result ->
                 if (call.method != "sendLyric") {
@@ -1109,7 +1109,7 @@ class AudioPlaybackService : Service() {
                     intent.getStringExtra(EXTRA_FM_ACTION_TRACK_HASH)
                 else -> null
             }
-            MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
+            MethodChannel(engine.dartExecutor.binaryMessenger, "com.apple.android.music/floating_lyric")
                 .invokeMethod(method, args)
         } else {
             sendFlutterCommand(action)
@@ -1125,7 +1125,7 @@ class AudioPlaybackService : Service() {
             ACTION_TOGGLE_FAVORITE -> "toggleFavorite"
             else -> return
         }
-        val intent = Intent("com.md3music.md3music.FLUTTER_COMMAND").apply {
+        val intent = Intent("com.apple.android.music.FLUTTER_COMMAND").apply {
             putExtra("method", method)
         }
         sendBroadcast(intent)
@@ -1392,7 +1392,7 @@ class AudioPlaybackService : Service() {
             try {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
-                    "com.md3music.md3music/floating_lyric"
+                    "com.apple.android.music/floating_lyric"
                 ).invokeMethod(method, null, object : MethodChannel.Result {
                     override fun success(result: Any?) {
                         dispatched[0] = true
@@ -1433,7 +1433,7 @@ class AudioPlaybackService : Service() {
         try {
             MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/floating_lyric"
+                "com.apple.android.music/floating_lyric"
             ).setMethodCallHandler { call, result ->
                 when (call.method) {
                     "playerReady" -> {
@@ -1530,7 +1530,7 @@ class AudioPlaybackService : Service() {
         try {
             MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/volume_normalization"
+                "com.apple.android.music/volume_normalization"
             ).setMethodCallHandler { call, result ->
                 when (call.method) {
                     "setGainDb" -> {
@@ -2114,7 +2114,54 @@ class AudioPlaybackService : Service() {
             lastIsFavorited,
             hasTranslationForCurrentTrack()
         )
+        // MD3Music fork: Vivo 原子随身听（vivomusicmix）歌词推送（歌词就绪后发一次，
+        // 定时器 25s 重发兜底）。
+        pushVivoAtomicExtras()
     }
+
+    // ==== MD3Music fork: Vivo 原子随身听（vivomusicmix）歌词推送 ====
+    // 协议字段照抄 vivo 官方拼写错误（meida / meidia），写成正确拼写反而收不到。
+    private val vivoAtomicHandler = Handler(Looper.getMainLooper())
+    private var lastVivoLrcSentAt = 0L
+    private var lastVivoLrcMediaId = ""
+
+    private fun startVivoAtomicTimer() {
+        vivoAtomicHandler.removeCallbacksAndMessages(null)
+        vivoAtomicHandler.postDelayed(object : Runnable {
+            override fun run() {
+                pushVivoAtomicExtras()
+                vivoAtomicHandler.postDelayed(this, 25_000L)
+            }
+        }, 25_000L)
+    }
+
+    /// 原子随身听歌词：通过媒体3会话 setSessionExtras 发送 lrc_change 事件。
+    /// 无整段歌词时不调 setExtras（空 Bundle 会清空已收到的 extras）。
+    private fun pushVivoAtomicExtras() {
+        try {
+            val session = AudioPlayer.getActiveMediaSession() ?: return
+            val mediaId = originalMediaId
+            if (mediaId.isEmpty()) return
+            val lrc = AudioPlayer.extractCarLyricsFromLyricInfo(lyricInfoForCurrentTrack())
+                ?: return
+            if (lrc == lastVivoLrcSentLrc && mediaId == lastVivoLrcMediaId &&
+                System.currentTimeMillis() - lastVivoLrcSentAt < 25_000L
+            ) return
+            val extras = android.os.Bundle()
+            extras.putString("vivomusicmix.meida.extra.key.action", "vivomusicmix.extra.lrc_change")
+            extras.putString("vivomusicmix.extra.key.meidia_id", mediaId)
+            extras.putString("vivomusicmix.extra.key.lyric", lrc)
+            session.setSessionExtras(extras)
+            lastVivoLrcSentAt = System.currentTimeMillis()
+            lastVivoLrcMediaId = mediaId
+            lastVivoLrcSentLrc = lrc
+        } catch (e: Throwable) {
+            Log.w(TAG, "pushVivoAtomicExtras failed: ${e.message}", e)
+        }
+    }
+
+    @Volatile
+    private var lastVivoLrcSentLrc = ""
 
     private fun lyricInfoForCurrentTrack(): String {
         if (currentLyricInfo.isEmpty()) return ""
@@ -2154,6 +2201,8 @@ class AudioPlaybackService : Service() {
         setLyriconEnabledState(false)
         // P0: 取消排期中的 setMetadata 合并刷新，防止服务销毁后仍回调
         metadataRefreshHandler.removeCallbacksAndMessages(null)
+        // MD3Music fork: 取消原子随身听 25s 重发定时器
+        vivoAtomicHandler.removeCallbacksAndMessages(null)
         releaseWakeLock()
         // 释放缓存的封面 bitmap
         lastArtBitmap?.let { if (!it.isRecycled) it.recycle() }

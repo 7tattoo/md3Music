@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.apple.android.music
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -101,13 +101,13 @@ class FloatingLyricService : Service() {
         // 运行中的服务实例（同进程直达调用用；onCreate 置位、onDestroy 清空）
         @Volatile
         var instance: FloatingLyricService? = null
-        const val ACTION_UPDATE_LYRIC = "com.md3music.md3music.UPDATE_LYRIC"
-        const val ACTION_UPDATE_TITLE = "com.md3music.md3music.UPDATE_TITLE"
-        const val ACTION_UPDATE_PROGRESS = "com.md3music.md3music.UPDATE_PROGRESS"
-        const val ACTION_SET_CONFIG = "com.md3music.md3music.SET_CONFIG"
-        const val ACTION_SET_PLAYING = "com.md3music.md3music.SET_PLAYING"
-        const val ACTION_STOP = "com.md3music.md3music.STOP_LYRIC"
-        const val ACTION_TOGGLE_LOCK = "com.md3music.md3music.TOGGLE_LOCK"
+        const val ACTION_UPDATE_LYRIC = "com.apple.android.music.UPDATE_LYRIC"
+        const val ACTION_UPDATE_TITLE = "com.apple.android.music.UPDATE_TITLE"
+        const val ACTION_UPDATE_PROGRESS = "com.apple.android.music.UPDATE_PROGRESS"
+        const val ACTION_SET_CONFIG = "com.apple.android.music.SET_CONFIG"
+        const val ACTION_SET_PLAYING = "com.apple.android.music.SET_PLAYING"
+        const val ACTION_STOP = "com.apple.android.music.STOP_LYRIC"
+        const val ACTION_TOGGLE_LOCK = "com.apple.android.music.TOGGLE_LOCK"
         const val EXTRA_LYRIC = "lyric"
         const val EXTRA_NEXT_LYRIC = "nextLyric"
         const val EXTRA_TITLE = "title"
@@ -162,7 +162,7 @@ class FloatingLyricService : Service() {
                         .get("md3music_engine") ?: return
                     io.flutter.plugin.common.MethodChannel(
                         engine.dartExecutor.binaryMessenger,
-                        "com.md3music.md3music/floating_lyric"
+                        "com.apple.android.music/floating_lyric"
                     ).invokeMethod("screenStateChanged", mapOf("on" to screenOn))
                 }
             }
@@ -804,7 +804,7 @@ class FloatingLyricService : Service() {
         if (engine != null) {
             io.flutter.plugin.common.MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/floating_lyric"
+                "com.apple.android.music/floating_lyric"
             ).invokeMethod("desktopLyricAction", action)
         } else {
             MainActivity.sendDesktopLyricAction(action)
@@ -825,7 +825,7 @@ class FloatingLyricService : Service() {
         if (engine != null) {
             io.flutter.plugin.common.MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.md3music.md3music/floating_lyric"
+                "com.apple.android.music/floating_lyric"
             ).invokeMethod("desktopLyricConfigChanged", args)
         }
     }

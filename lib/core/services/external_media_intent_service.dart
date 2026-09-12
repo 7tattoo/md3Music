@@ -35,7 +35,7 @@ class ExternalMediaIntentService {
   static final ExternalMediaIntentService instance =
       ExternalMediaIntentService._();
 
-  static const _channel = MethodChannel('com.md3music.md3music/external_media');
+  static const _channel = MethodChannel('com.apple.android.music/external_media');
 
   /// push/pull 重复送达去重窗口：窗口内相同 uri+path 视为同一次调用。
   static const _dedupeWindowMs = 5000;

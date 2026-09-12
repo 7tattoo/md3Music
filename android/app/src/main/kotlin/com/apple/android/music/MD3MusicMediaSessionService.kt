@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.apple.android.music
 
 import android.annotation.SuppressLint
 import androidx.annotation.OptIn

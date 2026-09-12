@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.apple.android.music
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -21,21 +21,21 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import com.md3music.md3music.AudioPlaybackService
-import com.md3music.md3music.FloatingLyricService
+import com.apple.android.music.AudioPlaybackService
+import com.apple.android.music.FloatingLyricService
 import java.io.File
 
 class MainActivity : FlutterActivity() {
-    private val FLOATING_CHANNEL = "com.md3music.md3music/floating_lyric"
-    private val FOLDER_PICKER_CHANNEL = "com.md3music.md3music/folder_picker"
-    private val FONT_PICKER_CHANNEL = "com.md3music.md3music/font_picker"
-    private val BACKGROUND_PICKER_CHANNEL = "com.md3music.md3music/background_picker"
-    private val MEDIA_STORE_CHANNEL = "com.md3music.md3music/media_store"
-    private val HOME_WIDGET_CHANNEL = "com.md3music.md3music/home_widget"
-    private val RECOGNITION_CHANNEL = "com.md3music.md3music/floating_recognition"
-    private val PIP_CHANNEL = "com.md3music.md3music/pip"
-    private val MIUIX_DISCOVER_CHANNEL = "com.md3music.md3music/miuix_discover"
-    private val TASK_CHANNEL = "com.md3music.md3music/task"
+    private val FLOATING_CHANNEL = "com.apple.android.music/floating_lyric"
+    private val FOLDER_PICKER_CHANNEL = "com.apple.android.music/folder_picker"
+    private val FONT_PICKER_CHANNEL = "com.apple.android.music/font_picker"
+    private val BACKGROUND_PICKER_CHANNEL = "com.apple.android.music/background_picker"
+    private val MEDIA_STORE_CHANNEL = "com.apple.android.music/media_store"
+    private val HOME_WIDGET_CHANNEL = "com.apple.android.music/home_widget"
+    private val RECOGNITION_CHANNEL = "com.apple.android.music/floating_recognition"
+    private val PIP_CHANNEL = "com.apple.android.music/pip"
+    private val MIUIX_DISCOVER_CHANNEL = "com.apple.android.music/miuix_discover"
+    private val TASK_CHANNEL = "com.apple.android.music/task"
     private var pendingDesktopLyricAction: String? = null
     private var folderPickerResult: MethodChannel.Result? = null
     private var fontPickerResult: MethodChannel.Result? = null
@@ -233,7 +233,7 @@ class MainActivity : FlutterActivity() {
         }
 
         // 渲染引擎通道：设置页展示当前构建引擎（构建期 flavor 决定，运行时不可切换）
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.md3music.md3music/render_engine")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.apple.android.music/render_engine")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "getCurrent" -> result.success(
@@ -856,7 +856,7 @@ class MainActivity : FlutterActivity() {
         // 注册屏幕常亮 MethodChannel：Dart 端 WakelockService 调用，开关 FLAG_KEEP_SCREEN_ON
         val wakelockChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "com.md3music.md3music/wakelock"
+            "com.apple.android.music/wakelock"
         )
         wakelockChannel.setMethodCallHandler { call, result ->
             when (call.method) {

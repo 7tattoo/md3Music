@@ -171,7 +171,7 @@ class DiagnosticExporter {
       // 关键上下文；复用设置页「当前渲染引擎」同款通道（MainActivity 注册）。
       try {
         const channel =
-            MethodChannel('com.md3music.md3music/render_engine');
+            MethodChannel('com.apple.android.music/render_engine');
         final v = await channel.invokeMethod<String>('getCurrent');
         renderEngine = v == 'impeller' ? 'impeller' : 'skia';
       } catch (_) {}

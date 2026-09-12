@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.apple.android.music
 
 import android.app.Activity
 import android.content.Intent
@@ -25,7 +25,7 @@ import io.flutter.plugin.common.MethodChannel
  */
 object ExternalMediaBridge {
     private const val TAG = "ExternalMediaBridge"
-    const val CHANNEL_NAME = "com.md3music.md3music/external_media"
+    const val CHANNEL_NAME = "com.apple.android.music/external_media"
 
     // 部分文件管理器对 ogg/opus 使用非 audio/* 的 MIME
     private val EXTRA_AUDIO_MIMES = setOf(

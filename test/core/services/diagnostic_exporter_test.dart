@@ -20,7 +20,7 @@ void main() {
   test('buildInfoText 只输出白名单字段', () {
     final text = DiagnosticExporter.buildInfoText(
       appVersion: '5.3.7+39',
-      packageName: 'com.md3music.md3music',
+      packageName: 'com.apple.android.music',
       platform: 'android',
       osVersion: 'Android 15 (API 35)',
       deviceModel: 'Xiaomi 14',
@@ -30,7 +30,7 @@ void main() {
       exportTime: DateTime(2026, 8, 31, 10, 0, 0),
     );
     expect(text, contains('5.3.7+39'));
-    expect(text, contains('com.md3music.md3music'));
+    expect(text, contains('com.apple.android.music'));
     expect(text, contains('Xiaomi 14'));
     expect(text, contains('Android 15 (API 35)'));
     expect(text, contains('impeller'));

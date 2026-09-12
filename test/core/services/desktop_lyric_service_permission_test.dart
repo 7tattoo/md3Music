@@ -9,7 +9,7 @@ void main() {
     var startCalled = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('com.md3music.md3music/floating_lyric'),
+      const MethodChannel('com.apple.android.music/floating_lyric'),
       (call) async {
         if (call.method == 'startFloatingLyric') {
           startCalled++;

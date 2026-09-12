@@ -102,6 +102,10 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
+            <!-- MD3Music fork: 原子随身听（vivomusicmix）识别声明 -->
+            <intent-filter>
+                <action android:name="com.vivo.musicwidgetmix.support.service" />
+            </intent-filter>
         </service>
         <service
             android:name=".FloatingLyricService"
@@ -147,9 +151,9 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.md3music.md3music.ACTION_UPDATE_WIDGET" />
-                <action android:name="com.md3music.md3music.ACTION_WIDGET_PLAY_PAUSE" />
-                <action android:name="com.md3music.md3music.ACTION_WIDGET_NEXT" />
+                <action android:name="com.apple.android.music.ACTION_UPDATE_WIDGET" />
+                <action android:name="com.apple.android.music.ACTION_WIDGET_PLAY_PAUSE" />
+                <action android:name="com.apple.android.music.ACTION_WIDGET_NEXT" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -161,14 +165,14 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.md3music.md3music.ACTION_FM_UPDATE_WIDGET" />
-                <action android:name="com.md3music.md3music.ACTION_FM_COVER_READY" />
-                <action android:name="com.md3music.md3music.ACTION_FM_WIDGET_OPEN_LOGIN" />
-                <action android:name="com.md3music.md3music.ACTION_FM_WIDGET_PLAY_PAUSE" />
-                <action android:name="com.md3music.md3music.ACTION_FM_WIDGET_TOGGLE_FAVORITE" />
-                <action android:name="com.md3music.md3music.ACTION_FM_WIDGET_SELECT_STATION" />
-                <action android:name="com.md3music.md3music.ACTION_FM_WIDGET_OPEN_TRACK" />
-                <action android:name="com.md3music.md3music.ACTION_FM_WIDGET_OPEN_PLAYER" />
+                <action android:name="com.apple.android.music.ACTION_FM_UPDATE_WIDGET" />
+                <action android:name="com.apple.android.music.ACTION_FM_COVER_READY" />
+                <action android:name="com.apple.android.music.ACTION_FM_WIDGET_OPEN_LOGIN" />
+                <action android:name="com.apple.android.music.ACTION_FM_WIDGET_PLAY_PAUSE" />
+                <action android:name="com.apple.android.music.ACTION_FM_WIDGET_TOGGLE_FAVORITE" />
+                <action android:name="com.apple.android.music.ACTION_FM_WIDGET_SELECT_STATION" />
+                <action android:name="com.apple.android.music.ACTION_FM_WIDGET_OPEN_TRACK" />
+                <action android:name="com.apple.android.music.ACTION_FM_WIDGET_OPEN_PLAYER" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

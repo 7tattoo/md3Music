@@ -1995,7 +1995,7 @@ class _SettingsPageState extends State<SettingsPage>
   /// 从原生侧读取当前构建实际生效的渲染引擎（'skia' | 'impeller'）。
   Future<String> _readCurrentRenderEngine() async {
     try {
-      const channel = MethodChannel('com.md3music.md3music/render_engine');
+      const channel = MethodChannel('com.apple.android.music/render_engine');
       final v = await channel.invokeMethod<String>('getCurrent');
       return v == 'impeller' ? 'impeller' : 'skia';
     } catch (_) {
@@ -2728,7 +2728,7 @@ class _SettingsPageState extends State<SettingsPage>
   /// 并把本地 Rust API 服务器当前端口传过去（原生页据此直连取数）。
   // ignore: unused_element
   Future<void> _openMiuixDiscover() async {
-    const channel = MethodChannel('com.md3music.md3music/miuix_discover');
+    const channel = MethodChannel('com.apple.android.music/miuix_discover');
     try {
       await channel.invokeMethod('open', {'port': KugouApiServer.currentPort});
     } catch (e) {

@@ -1,4 +1,4 @@
-package com.md3music.md3music
+package com.apple.android.music
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver

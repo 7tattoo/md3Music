@@ -19,7 +19,7 @@ void main() {
   group('externalSongId', () {
     test('同一文件路径生成稳定一致的 id', () {
       const p =
-          '/data/user/0/com.md3music.md3music/files/local_music_cache/123.mp3';
+          '/data/user/0/com.apple.android.music/files/local_music_cache/123.mp3';
       expect(externalSongId(p), externalSongId(p));
       expect(externalSongId(p), startsWith('external_'));
     });

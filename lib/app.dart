@@ -1667,7 +1667,7 @@ class _MainLayoutState extends State<_MainLayout>
   Future<void> _doExit() async {
     if (_isExiting) return;
     try {
-      const MethodChannel('com.md3music.md3music/task')
+      const MethodChannel('com.apple.android.music/task')
           .invokeMethod('moveToBack');
     } catch (_) {
       SystemNavigator.pop();
