@@ -4129,6 +4129,20 @@ public class MediaSessionCompat {
       // 匹配失败 → 封面回退纯色。放 hook 最前，任何更新都带稳定身份。
       if (fwkMetadata != null) {
         String mediaIdProbe = fwkMetadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID);
+        // MD3Music fork: 诊断 framework 层 Bitmap 是否存活（compat → parcel → hook 链路）
+        try {
+          android.graphics.Bitmap artProbe =
+              fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+          android.util.Log.i("MD3CarLyrics", "fwk bitmap check: albumArt="
+              + (artProbe == null || artProbe.isRecycled()
+                  ? "null" : artProbe.getWidth() + "x" + artProbe.getHeight())
+              + " artUri=" + fwkMetadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
+              + " art=" + (fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) != null)
+              + " displayIcon=" + (fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) != null));
+        } catch (Throwable t) {
+          android.util.Log.i("MD3CarLyrics", "fwk bitmap check failed: " + t);
+        }
+        if (mediaIdProbe == null || mediaIdProbe.isEmpty()) {
         if (mediaIdProbe == null || mediaIdProbe.isEmpty()) {
           String titleFwk = fwkMetadata.getString(MediaMetadata.METADATA_KEY_TITLE);
           if (titleFwk != null && !titleFwk.isEmpty()) {
