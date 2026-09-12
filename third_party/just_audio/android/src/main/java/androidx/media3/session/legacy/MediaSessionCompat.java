@@ -360,28 +360,30 @@ public class MediaSessionCompat {
       new java.util.ArrayList<>();
 
   /// 由宿主 App 定时调用：向所有活跃 session 重发 lrc_change extras。
-  /// lrc/mediaId 为空时安全跳过，不推空 Bundle（避免清空原子已收到的 extras）。
+  /// lrc 为空时安全跳过，不推空 Bundle（避免清空原子已收到的 extras）。
+  /// 注意：不更新 shouldSendVivoLrcChange 的节流状态——那是 hook 即时发送的节流，
+  /// 定时器若更新它，会把 hook 里带正确身份的有效发送节流掉（实测导致原子收不到）。
   public static void resendVivoLrcChange(String wholeLrc, String mediaId) {
     if (wholeLrc == null || wholeLrc.isEmpty()) return;
+    java.util.ArrayList<MediaSessionImplApi21> live;
     synchronized (sVivoLrcLock) {
-      java.util.ArrayList<MediaSessionImplApi21> live;
       live = new java.util.ArrayList<>(sLiveApi21Impls);
-      for (MediaSessionImplApi21 impl : live) {
-        try {
-          Bundle atomicExtras = new Bundle();
-          atomicExtras.putString(VMM_ACTION_KEY, "vivomusicmix.extra.lrc_change");
-          if (mediaId != null && !mediaId.isEmpty()) {
-            atomicExtras.putString(VMM_MEDIA_ID_KEY, mediaId);
-          }
-          atomicExtras.putString(VMM_LYRIC_KEY, wholeLrc);
-          impl.setExtras(atomicExtras);
-        } catch (Throwable t) {
-          // 单个 session 失败不影响其他
-        }
-      }
-      sVivoLrcLastLyric = wholeLrc;
-      sVivoLrcLastSentAt = SystemClock.elapsedRealtime();
     }
+    for (MediaSessionImplApi21 impl : live) {
+      try {
+        Bundle atomicExtras = new Bundle();
+        atomicExtras.putString(VMM_ACTION_KEY, "vivomusicmix.extra.lrc_change");
+        if (mediaId != null && !mediaId.isEmpty()) {
+          atomicExtras.putString(VMM_MEDIA_ID_KEY, mediaId);
+        }
+        atomicExtras.putString(VMM_LYRIC_KEY, wholeLrc);
+        impl.setExtras(atomicExtras);
+      } catch (Throwable t) {
+        // 单个 session 失败不影响其他
+      }
+    }
+    android.util.Log.i("MD3CarLyrics", "lrc_change resend: mediaId=" + mediaId
+        + " lrcLen=" + wholeLrc.length() + " sessions=" + live.size());
   }
 
   /// 原子随身听 lrc_change 是否需要发送：歌词变化立即发，相同歌词 25s 节流兜底

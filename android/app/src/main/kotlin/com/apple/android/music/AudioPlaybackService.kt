@@ -2137,17 +2137,22 @@ class AudioPlaybackService : Service() {
 
     /// 原子随身听歌词：通过 legacy MediaSessionCompat 静态通道向活跃 session 重发
     /// lrc_change extras（framework extras，25s 定时兜底：覆盖"原子在首次发送后才连上"）。
+    /// meidia_id 必须与 hook 补进 metadata 的身份完全一致（title|artist），
+    /// 否则原子 E0()/z1() 匹配失败 → 封面纯色、歌词不显示（实测 songId 数字 ID 不匹配）。
     /// 无整段歌词时安全跳过，不推空 Bundle。
     private fun pushVivoAtomicExtras() {
         try {
-            val mediaId = originalMediaId
-            if (mediaId.isEmpty()) return
+            val mediaId = if (originalMediaId.isNotEmpty()) originalMediaId
+                else "$originalTitle|$originalArtist"
+            // 与 hook 补的 MEDIA_ID 保持一致：统一用 title|artist 身份
+            val atomicMediaId = "$originalTitle|$originalArtist"
+            if (originalTitle.isEmpty()) return
             val lrc = AudioPlayer.extractCarLyricsFromLyricInfo(lyricInfoForCurrentTrack())
                 ?: return
             androidx.media3.session.legacy.MediaSessionCompat
-                .resendVivoLrcChange(lrc, mediaId)
+                .resendVivoLrcChange(lrc, atomicMediaId)
             lastVivoLrcSentAt = System.currentTimeMillis()
-            lastVivoLrcMediaId = mediaId
+            lastVivoLrcMediaId = atomicMediaId
             lastVivoLrcSentLrc = lrc
         } catch (e: Throwable) {
             Log.w(TAG, "pushVivoAtomicExtras failed: ${e.message}", e)
