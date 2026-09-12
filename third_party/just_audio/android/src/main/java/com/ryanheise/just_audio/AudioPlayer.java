@@ -1662,7 +1662,12 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             if (artist != null && !artist.isEmpty()) mb.setArtist(artist);
             // MD3Music fork：注入 artworkUri（Lyricon autoSync / 外部读取封面用），
             // 通知栏封面仍用 artworkData（bitmap，稳定，避免 artUri 异步加载闪烁）。
+            // http:// 强制替换为 https://：原子随身听（targetSdk 34，无 cleartext 配置）
+            // 默认禁明文流量，http URI 下载封面失败 → 原子/车联纯色封面（实测）。
             if (artUri != null && !artUri.isEmpty()) {
+                if (artUri.startsWith("http://")) {
+                    artUri = "https://" + artUri.substring(7);
+                }
                 mb.setArtworkUri(android.net.Uri.parse(artUri));
             }
             if (art != null) {
