@@ -4102,6 +4102,19 @@ public class MediaSessionCompat {
               + " bundleKeys=" + extrasBundle.keySet().size());
           if (wholeLrc != null && !wholeLrc.isEmpty()) {
             MediaMetadata.Builder fwkBuilder = new MediaMetadata.Builder(fwkMetadata);
+            // MD3Music fork: md3Music 的 media3 item mediaId 为空（实测 lrc_change mediaId=）。
+            // 原子随身听 onExtrasChanged 要求 meidia_id 非空才处理 lrc_change，且 E0()/z1()
+            // 用 mediaId 匹配当前歌曲（封面/歌词显示都依赖）。mediaId 为空时用 title|artist
+            // 补一个稳定身份，同时写入 metadata 与 extras，保证两侧一致匹配。
+            String mediaIdFwk = fwkMetadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID);
+            if (mediaIdFwk == null || mediaIdFwk.isEmpty()) {
+              String titleFwk = fwkMetadata.getString(MediaMetadata.METADATA_KEY_TITLE);
+              String artistFwk = fwkMetadata.getString(MediaMetadata.METADATA_KEY_ARTIST);
+              if (titleFwk != null && !titleFwk.isEmpty()) {
+                mediaIdFwk = titleFwk + "|" + (artistFwk == null ? "" : artistFwk);
+                fwkBuilder.putString(MediaMetadata.METADATA_KEY_MEDIA_ID, mediaIdFwk);
+              }
+            }
             fwkBuilder.putString(UCAR_LYRICS_WHOLE, wholeLrc);
             fwkBuilder.putLong(UCAR_LYRICS_STATUS, 0L);
             fwkBuilder.putLong(VMM_SUPPORT_EVENT, VMM_SUPPORT_EVENT_VALUE);
@@ -4112,9 +4125,7 @@ public class MediaSessionCompat {
               Bundle atomicExtras = new Bundle();
               atomicExtras.putString(
                   VMM_ACTION_KEY, "vivomusicmix.extra.lrc_change");
-              String mediaIdFwk =
-                  fwkMetadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID);
-              if (mediaIdFwk != null) {
+              if (mediaIdFwk != null && !mediaIdFwk.isEmpty()) {
                 atomicExtras.putString(VMM_MEDIA_ID_KEY, mediaIdFwk);
               }
               atomicExtras.putString(VMM_LYRIC_KEY, wholeLrc);
