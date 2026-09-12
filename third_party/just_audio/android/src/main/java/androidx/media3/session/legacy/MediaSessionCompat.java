@@ -4095,8 +4095,9 @@ public class MediaSessionCompat {
         try {
           Bundle extrasBundle = metadata.getBundle();
           String wholeLrc = extrasBundle.getString(UCAR_LYRICS_WHOLE);
-          // MD3Music fork: 诊断日志（抓 logcat 过滤 MD3CarLyrics 验证注入链路）
-          android.util.Log.d("MD3CarLyrics", "setMetadata hook: lrc="
+          // MD3Music fork: 诊断日志（抓 logcat 过滤 MD3CarLyrics 验证注入链路；
+          // Log.i：vivo 等设备默认屏蔽 D 级日志，看不到不代表没触发）
+          android.util.Log.i("MD3CarLyrics", "setMetadata hook: lrc="
               + (wholeLrc == null ? "null" : wholeLrc.length() + "chars")
               + " bundleKeys=" + extrasBundle.keySet().size());
           if (wholeLrc != null && !wholeLrc.isEmpty()) {
