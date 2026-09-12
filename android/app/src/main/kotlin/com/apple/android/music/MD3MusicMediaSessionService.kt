@@ -2,6 +2,7 @@ package com.apple.android.music
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.os.IBinder
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
@@ -38,7 +39,7 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         // 路径（返回 legacy browser binder，原子经 MediaControllerCompat 读取）。
         if (intent?.action == "com.vivo.musicwidgetmix.support.service") {
             return super.onBind(
-                Intent(android.media.browse.MediaBrowserService.SERVICE_INTERFACE)
+                Intent("android.media.browse.MediaBrowserService")
             )
         }
         return super.onBind(intent)
