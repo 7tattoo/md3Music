@@ -4091,9 +4091,9 @@ public class MediaSessionCompat {
       // media3 的 MediaMetadata.extras 在 compat.getMediaMetadata() 转换时不会展开为
       // framework 顶层键，而 ucar 车机读的是顶层键（酷我做法）。无歌词时不写任何字段
       // （负状态 = 车机永久退回单行），绝不写 LYRICS_LINE。
-      if (metadata != null && metadata.getExtras() != null) {
+      if (metadata != null && metadata.getBundle() != null) {
         try {
-          Bundle extrasBundle = metadata.getExtras();
+          Bundle extrasBundle = metadata.getBundle();
           String wholeLrc = extrasBundle.getString(UCAR_LYRICS_WHOLE);
           if (wholeLrc != null && !wholeLrc.isEmpty()) {
             MediaMetadata.Builder fwkBuilder = new MediaMetadata.Builder(fwkMetadata);
