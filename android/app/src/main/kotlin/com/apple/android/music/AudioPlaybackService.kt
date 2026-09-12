@@ -2135,23 +2135,17 @@ class AudioPlaybackService : Service() {
         }, 25_000L)
     }
 
-    /// 原子随身听歌词：通过媒体3会话 setSessionExtras 发送 lrc_change 事件。
-    /// 无整段歌词时不调 setExtras（空 Bundle 会清空已收到的 extras）。
+    /// 原子随身听歌词：通过 legacy MediaSessionCompat 静态通道向活跃 session 重发
+    /// lrc_change extras（framework extras，25s 定时兜底：覆盖"原子在首次发送后才连上"）。
+    /// 无整段歌词时安全跳过，不推空 Bundle。
     private fun pushVivoAtomicExtras() {
         try {
-            val session = AudioPlayer.getActiveMediaSession() ?: return
             val mediaId = originalMediaId
             if (mediaId.isEmpty()) return
             val lrc = AudioPlayer.extractCarLyricsFromLyricInfo(lyricInfoForCurrentTrack())
                 ?: return
-            if (lrc == lastVivoLrcSentLrc && mediaId == lastVivoLrcMediaId &&
-                System.currentTimeMillis() - lastVivoLrcSentAt < 25_000L
-            ) return
-            val extras = android.os.Bundle()
-            extras.putString("vivomusicmix.meida.extra.key.action", "vivomusicmix.extra.lrc_change")
-            extras.putString("vivomusicmix.extra.key.meidia_id", mediaId)
-            extras.putString("vivomusicmix.extra.key.lyric", lrc)
-            session.setSessionExtras(extras)
+            androidx.media3.session.legacy.MediaSessionCompat
+                .resendVivoLrcChange(lrc, mediaId)
             lastVivoLrcSentAt = System.currentTimeMillis()
             lastVivoLrcMediaId = mediaId
             lastVivoLrcSentLrc = lrc
