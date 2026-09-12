@@ -361,7 +361,6 @@ public class MediaSessionCompat {
   // MD3Music fork: 最后一次封面缓存——切歌后的过渡更新无 Bitmap（artData=false），
   // 原子收到后清空封面（"正确封面闪一下然后变纯色"实测）。从缓存补图保证任何
   // 更新都带封面；新歌封面到达后覆盖（短暂显示旧封面优于纯色）。
-  private static android.graphics.Bitmap sLastAlbumArt;
 
   /// 由宿主 App 定时调用：向所有活跃 session 重发 lrc_change extras。
   /// lrc 为空时安全跳过，不推空 Bundle（避免清空原子已收到的 extras）。
@@ -4156,30 +4155,46 @@ public class MediaSessionCompat {
                 .build();
           }
         }
-        // MD3Music fork: 补 METADATA_KEY_ART 位图（实测日志 art=false displayIcon=true）。
-        // convertToMediaMetadataCompat 只写 ALBUM_ART/DISPLAY_ICON，原子随身听/车联投屏
-        // 读 METADATA_KEY_ART 位图 → 永远 null → 纯色封面（软件通知读 ALBUM_ART 所以正常）。
+        // MD3Music fork（封面 1x1 纯色根因修复）：剥掉发给 framework 的 metadata 中全部
+        // bitmap 键，只保留 artUri。实测证据（2026-09-13）：
+        // 1) 我们推 bitmap(400x400)+artUri → 原子端 covers/ 缓存把封面存成 1x1 像素 PNG
+        //    （97 字节，像素=各歌封面主色调）→ 控件显示 1x1 放大 = 纯色封面；
+        // 2) kgka（同样走酷狗 CDN，metadata 只发 artUri 无 bitmap）→ 封面正常，且原子端
+        //    播放期间不写任何 covers/ 文件（原子直接从 URI 加载显示）。
+        // 结论：vivo 跨进程链路对 metadata bitmap 的处理会把封面降为 1x1 平均色，
+        // artUri-only 让原子走自己的 Glide 下载完全绕开。我们自己的通知封面不受影响
+        // （media3 通知在本进程内用 artworkData 构建，不经此 hook）。
         try {
-          android.graphics.Bitmap albumBmp =
-              fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
-          if (albumBmp != null && !albumBmp.isRecycled()) {
-            sLastAlbumArt = albumBmp;
-            if (fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) == null) {
-              fwkMetadata = new MediaMetadata.Builder(fwkMetadata)
-                  .putBitmap(MediaMetadata.METADATA_KEY_ART, albumBmp)
-                  .build();
+          boolean hadBmp =
+              fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) != null
+                  || fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) != null
+                  || fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) != null;
+          if (hadBmp) {
+            MediaMetadata.Builder stripped = new MediaMetadata.Builder();
+            for (String k : fwkMetadata.keySet()) {
+              if (MediaMetadata.METADATA_KEY_ALBUM_ART.equals(k)
+                  || MediaMetadata.METADATA_KEY_ART.equals(k)
+                  || MediaMetadata.METADATA_KEY_DISPLAY_ICON.equals(k)) {
+                continue; // 剥掉 bitmap，防原子端降为 1x1 平均色（纯色封面）
+              }
+              String s = fwkMetadata.getString(k);
+              if (s != null) {
+                stripped.putString(k, s);
+                continue;
+              }
+              android.media.Rating r = fwkMetadata.getRating(k);
+              if (r != null) {
+                stripped.putRating(k, r);
+                continue;
+              }
+              stripped.putLong(k, fwkMetadata.getLong(k));
             }
-          } else if (sLastAlbumArt != null && !sLastAlbumArt.isRecycled()) {
-            // 过渡更新无 Bitmap（切歌后 artData=false）：从缓存补 ALBUM_ART/ART，
-            // 避免原子收到无封面 metadata 后清空封面（短暂显示旧封面优于纯色）。
-            fwkMetadata = new MediaMetadata.Builder(fwkMetadata)
-                .putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, sLastAlbumArt)
-                .putBitmap(MediaMetadata.METADATA_KEY_ART, sLastAlbumArt)
-                .build();
-            android.util.Log.i("MD3CarLyrics", "albumArt filled from cache (transition update)");
+            fwkMetadata = stripped.build();
+            android.util.Log.i("MD3CarLyrics", "artwork bitmap stripped, uri kept="
+                + fwkMetadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI));
           }
         } catch (Throwable t) {
-          // 补 ART 失败不影响原 metadata 下发
+          android.util.Log.i("MD3CarLyrics", "artwork strip failed: " + t);
         }
       }
       // MD3Music fork: 把 extras 里的 Vivo 车载歌词键提升到 framework MediaMetadata 顶层。
