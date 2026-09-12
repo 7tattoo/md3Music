@@ -4143,7 +4143,6 @@ public class MediaSessionCompat {
           android.util.Log.i("MD3CarLyrics", "fwk bitmap check failed: " + t);
         }
         if (mediaIdProbe == null || mediaIdProbe.isEmpty()) {
-        if (mediaIdProbe == null || mediaIdProbe.isEmpty()) {
           String titleFwk = fwkMetadata.getString(MediaMetadata.METADATA_KEY_TITLE);
           if (titleFwk != null && !titleFwk.isEmpty()) {
             String artistFwk = fwkMetadata.getString(MediaMetadata.METADATA_KEY_ARTIST);
