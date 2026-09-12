@@ -4119,6 +4119,10 @@ public class MediaSessionCompat {
               }
               atomicExtras.putString(VMM_LYRIC_KEY, wholeLrc);
               setExtras(atomicExtras);
+              // MD3Music fork: 诊断 lrc_change 发送内容（meidia_id 匹配是原子显示歌词的关键）
+              android.util.Log.i("MD3CarLyrics", "lrc_change sent: mediaId=" + mediaIdFwk
+                  + " lrcLen=" + wholeLrc.length()
+                  + " head=" + wholeLrc.substring(0, Math.min(40, wholeLrc.length())).replace('\n', '|'));
             }
           }
         } catch (Throwable t) {
