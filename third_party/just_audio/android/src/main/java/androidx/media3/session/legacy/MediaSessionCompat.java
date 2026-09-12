@@ -4152,6 +4152,22 @@ public class MediaSessionCompat {
                 .build();
           }
         }
+        // MD3Music fork: 补 METADATA_KEY_ART 位图（实测日志 art=false displayIcon=true）。
+        // convertToMediaMetadataCompat 只写 ALBUM_ART/DISPLAY_ICON，原子随身听/车联投屏
+        // 读 METADATA_KEY_ART 位图 → 永远 null → 纯色封面（软件通知读 ALBUM_ART 所以正常）。
+        try {
+          android.graphics.Bitmap albumBmp =
+              fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+          if (albumBmp != null && !albumBmp.isRecycled()
+              && fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) == null) {
+            fwkMetadata = new MediaMetadata.Builder(fwkMetadata)
+                .putBitmap(MediaMetadata.METADATA_KEY_ART, albumBmp)
+                .build();
+            android.util.Log.i("MD3CarLyrics", "ART bitmap filled from ALBUM_ART");
+          }
+        } catch (Throwable t) {
+          // 补 ART 失败不影响原 metadata 下发
+        }
       }
       // MD3Music fork: 把 extras 里的 Vivo 车载歌词键提升到 framework MediaMetadata 顶层。
       // media3 的 MediaMetadata.extras 在 compat.getMediaMetadata() 转换时不会展开为
