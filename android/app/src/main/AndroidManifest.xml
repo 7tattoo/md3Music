@@ -40,6 +40,11 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:networkSecurityConfig="@xml/network_security_config">
+        <!-- MD3Music fork: 原子随身听（vivomusicmix）合作应用认证 meta-data（照抄酷我 12.0.8.0）。
+             原子可能据此识别合作控制器（c0 路径）。token 为酷我的，若与包名绑定则无效。 -->
+        <meta-data android:name="support_vivo_musicwidgetmix_value" android:value="1001" />
+        <meta-data android:name="support_vivo_musicwidgetmix_token" android:value="81ed19dacbe2c11fa52a129e3815037c62abc5aee1d5a39f9240c35a09e07eb2" />
+        <meta-data android:name="support_vivo_musicwidgetmix_logo_color" android:value="\#00FFFF\#FFFFFF" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

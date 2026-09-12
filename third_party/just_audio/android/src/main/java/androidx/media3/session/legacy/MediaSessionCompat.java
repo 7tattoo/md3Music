@@ -358,6 +358,10 @@ public class MediaSessionCompat {
   // （覆盖"原子随身听在 lrc_change 发送之后才连上"的情况——首曲无歌词的根因）。
   private static final java.util.ArrayList<MediaSessionImplApi21> sLiveApi21Impls =
       new java.util.ArrayList<>();
+  // MD3Music fork: 最后一次封面缓存——切歌后的过渡更新无 Bitmap（artData=false），
+  // 原子收到后清空封面（"正确封面闪一下然后变纯色"实测）。从缓存补图保证任何
+  // 更新都带封面；新歌封面到达后覆盖（短暂显示旧封面优于纯色）。
+  private static android.graphics.Bitmap sLastAlbumArt;
 
   /// 由宿主 App 定时调用：向所有活跃 session 重发 lrc_change extras。
   /// lrc 为空时安全跳过，不推空 Bundle（避免清空原子已收到的 extras）。
@@ -4158,12 +4162,21 @@ public class MediaSessionCompat {
         try {
           android.graphics.Bitmap albumBmp =
               fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
-          if (albumBmp != null && !albumBmp.isRecycled()
-              && fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) == null) {
+          if (albumBmp != null && !albumBmp.isRecycled()) {
+            sLastAlbumArt = albumBmp;
+            if (fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) == null) {
+              fwkMetadata = new MediaMetadata.Builder(fwkMetadata)
+                  .putBitmap(MediaMetadata.METADATA_KEY_ART, albumBmp)
+                  .build();
+            }
+          } else if (sLastAlbumArt != null && !sLastAlbumArt.isRecycled()) {
+            // 过渡更新无 Bitmap（切歌后 artData=false）：从缓存补 ALBUM_ART/ART，
+            // 避免原子收到无封面 metadata 后清空封面（短暂显示旧封面优于纯色）。
             fwkMetadata = new MediaMetadata.Builder(fwkMetadata)
-                .putBitmap(MediaMetadata.METADATA_KEY_ART, albumBmp)
+                .putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, sLastAlbumArt)
+                .putBitmap(MediaMetadata.METADATA_KEY_ART, sLastAlbumArt)
                 .build();
-            android.util.Log.i("MD3CarLyrics", "ART bitmap filled from ALBUM_ART");
+            android.util.Log.i("MD3CarLyrics", "albumArt filled from cache (transition update)");
           }
         } catch (Throwable t) {
           // 补 ART 失败不影响原 metadata 下发
