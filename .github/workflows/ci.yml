@@ -94,7 +94,7 @@ jobs:
           cat > android/keystore.properties <<EOF
           storePassword=${KEYSTORE_PASSWORD:-android}
           keyPassword=${KEY_PASSWORD:-android}
-          keyAlias=${KEY_ALIAS:-androiddebugkey}
+          keyAlias=7tattoo
           storeFile=release.keystore
           EOF
         env:
