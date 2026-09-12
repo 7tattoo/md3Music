@@ -339,6 +339,37 @@ public class MediaSessionCompat {
   // Maximum size of the bitmap in px. It shouldn't be changed.
   static int sMaxBitmapSize;
 
+  // ==== MD3Music fork: Vivo 车载歌词注入常量（ucar 车联投屏 + vivomusicmix 原子随身听） ====
+  // ucar 协议：LYRICS_WHOLE（整段 LRC）+ LYRICS_STATUS=0（有歌词）。车机按 PlaybackState
+  // 进度自行滚动整段 LRC，不需要推送"当前第几行"。
+  static final String UCAR_LYRICS_WHOLE = "ucar.media.metadata.LYRICS_WHOLE";
+  static final String UCAR_LYRICS_STATUS = "ucar.media.metadata.LYRICS_STATUS";
+  // vivomusicmix 原子随身听能力位（7|8|16：播控+歌词+进度）。字段名照抄 vivo 拼写。
+  static final String VMM_SUPPORT_EVENT = "vivomusicmix.media.metadata.support_event";
+  static final long VMM_SUPPORT_EVENT_VALUE = 31L;
+  static final String VMM_ACTION_KEY = "vivomusicmix.meida.extra.key.action";
+  static final String VMM_MEDIA_ID_KEY = "vivomusicmix.extra.key.meidia_id";
+  static final String VMM_LYRIC_KEY = "vivomusicmix.extra.key.lyric";
+  // lrc_change 节流：歌词变化立即发，相同歌词 25s 内不重发。
+  private static final Object sVivoLrcLock = new Object();
+  private static String sVivoLrcLastLyric;
+  private static long sVivoLrcLastSentAt;
+
+  /// 原子随身听 lrc_change 是否需要发送：歌词变化立即发，相同歌词 25s 节流兜底
+  /// （覆盖"车机/组件在播放开始后才连上"的情况）。
+  static boolean shouldSendVivoLrcChange(String wholeLrc) {
+    synchronized (sVivoLrcLock) {
+      long now = SystemClock.elapsedRealtime();
+      if (wholeLrc.equals(sVivoLrcLastLyric)
+          && now - sVivoLrcLastSentAt < 25_000L) {
+        return false;
+      }
+      sVivoLrcLastLyric = wholeLrc;
+      sVivoLrcLastSentAt = now;
+      return true;
+    }
+  }
+
   /**
    * Creates a new session. You must call {@link #release()} when finished with the session.
    *
@@ -4054,8 +4085,42 @@ public class MediaSessionCompat {
     @Override
     public void setMetadata(@Nullable MediaMetadataCompat metadata) {
       mMetadata = metadata;
-      mSessionFwk.setMetadata(
-          metadata == null ? null : (MediaMetadata) metadata.getMediaMetadata());
+      MediaMetadata fwkMetadata =
+          metadata == null ? null : (MediaMetadata) metadata.getMediaMetadata();
+      // MD3Music fork: 把 extras 里的 Vivo 车载歌词键提升到 framework MediaMetadata 顶层。
+      // media3 的 MediaMetadata.extras 在 compat.getMediaMetadata() 转换时不会展开为
+      // framework 顶层键，而 ucar 车机读的是顶层键（酷我做法）。无歌词时不写任何字段
+      // （负状态 = 车机永久退回单行），绝不写 LYRICS_LINE。
+      if (metadata != null && metadata.getExtras() != null) {
+        try {
+          Bundle extrasBundle = metadata.getExtras();
+          String wholeLrc = extrasBundle.getString(UCAR_LYRICS_WHOLE);
+          if (wholeLrc != null && !wholeLrc.isEmpty()) {
+            MediaMetadata.Builder fwkBuilder = new MediaMetadata.Builder(fwkMetadata);
+            fwkBuilder.putString(UCAR_LYRICS_WHOLE, wholeLrc);
+            fwkBuilder.putLong(UCAR_LYRICS_STATUS, 0L);
+            fwkBuilder.putLong(VMM_SUPPORT_EVENT, VMM_SUPPORT_EVENT_VALUE);
+            fwkMetadata = fwkBuilder.build();
+            // 同步发送原子随身听（vivomusicmix）lrc_change extras（framework extras，
+            // 字段照抄 vivo 官方拼写错误 meida / meidia）。歌词变化立即发，相同则 25s 节流。
+            if (shouldSendVivoLrcChange(wholeLrc)) {
+              Bundle atomicExtras = new Bundle();
+              atomicExtras.putString(
+                  VMM_ACTION_KEY, "vivomusicmix.extra.lrc_change");
+              String mediaIdFwk =
+                  fwkMetadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID);
+              if (mediaIdFwk != null) {
+                atomicExtras.putString(VMM_MEDIA_ID_KEY, mediaIdFwk);
+              }
+              atomicExtras.putString(VMM_LYRIC_KEY, wholeLrc);
+              setExtras(atomicExtras);
+            }
+          }
+        } catch (Throwable t) {
+          // 车载歌词注入失败不影响原 metadata 下发
+        }
+      }
+      mSessionFwk.setMetadata(fwkMetadata);
     }
 
     @Override

@@ -98,11 +98,13 @@
         <service
             android:name=".MD3MusicMediaSessionService"
             android:foregroundServiceType="mediaPlayback"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
-            <!-- MD3Music fork: 原子随身听（vivomusicmix）识别声明 -->
+            <!-- MD3Music fork: 原子随身听（vivomusicmix）识别声明。
+                 exported=true：原子随身听需要从外部绑定本服务拿会话 token（此前 false 绑不上，
+                 表现为无封面/无进度条/无歌曲信息/无歌词）。 -->
             <intent-filter>
                 <action android:name="com.vivo.musicwidgetmix.support.service" />
             </intent-filter>
