@@ -107,12 +107,13 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
-            <!-- MD3Music fork v17：移除 vivo support.service 声明（走 y2 通用控制器）。
-                 实测矩阵：c0 控制器的 bitmap 路径把封面降为 1x1（v12-v16，含单 bitmap
-                 真实测试）；y2 路径 bitmap 完整（音哩音哩验证）。歌词：y2 的 o 控制器
-                 读取 metadata 的 vivomusicmix.media.metadata.support_event 直接存入
-                 b3.a（无 fallback，缺失=0）——配合 hook 在所有更新写 31=7|8|16，
-                 歌词(bit8)+进度条(bit16) 全亮。 -->
+            <!-- MD3Music fork v18：恢复 vivo action（回 c0 合作控制器）。
+                 y2 的 onExtrasChanged 是空实现，不消费 lrc_change 歌词事件（v17 实测
+                 "暂未提供歌词"）；c0 消费 lrc_change（歌词正常）。封面修正改为
+                 metadata 去掉整段歌词大字符串 + artUri 换 http（见 hook/AudioPlayer）。 -->
+            <intent-filter>
+                <action android:name="com.vivo.musicwidgetmix.support.service" />
+            </intent-filter>
         </service>
         <service
             android:name=".FloatingLyricService"

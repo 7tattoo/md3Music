@@ -4227,7 +4227,12 @@ public class MediaSessionCompat {
             fwkBuilder.putLong(VMM_SUPPORT_EVENT, VMM_SUPPORT_EVENT_VALUE);
             fwkMetadata = fwkBuilder.build();
           }
-          if (wholeLrc != null && !wholeLrc.isEmpty()) {
+          // MD3Music fork v18：metadata 不再携带整段歌词（UCAR_LYRICS_WHOLE/LYRICS_STATUS
+          // 移除）。对照音哩音哩（metadata 1 bitmap + 11 键无大字符串，封面完整到达），
+          // 我们的 metadata bitmap+歌词大字符串 → 原子端封面被降为 1x1 平均色（v12-v17
+          // 全部实测）。歌词照走 lrc_change extras 事件（c0 控制器消费，已验证）。
+          if (false && wholeLrc != null && !wholeLrc.isEmpty()) {
+            // v18：metadata 歌词键停用（见上方注释）。保留分支结构便于回滚。
             MediaMetadata.Builder fwkBuilder = new MediaMetadata.Builder(fwkMetadata);
             fwkBuilder.putString(UCAR_LYRICS_WHOLE, wholeLrc);
             fwkBuilder.putLong(UCAR_LYRICS_STATUS, 0L);
