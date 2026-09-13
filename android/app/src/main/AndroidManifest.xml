@@ -107,12 +107,14 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
-            <!-- MD3Music fork v15：移除 vivo support.service 声明（实验）。
-                 原子按"是否声明此 action"选控制器：声明→c0 合作控制器（其封面 bitmap
-                 处理把封面降为 1x1 平均色→纯色封面，v12-v14 实测）；未声明→y2 通用
-                 控制器（音哩音哩 com.spotify.music 走此路径，封面完整到达，实测正常）。
-                 移除后原子经系统 MediaSessionManager 拿会话 token 走 y2；
-                 lrc_change 歌词 extras 是 framework 级事件，y2 下仍能收到。 -->
+            <!-- MD3Music fork v16：恢复 vivo support.service 声明（回 c0 合作控制器）。
+                 v15 实测：y2 通用控制器下原子自己算 support_event=23（7|16 无 bit 8）
+                 → 歌词区被隐藏，歌词丢失。c0 下原子原样读我们的 support_event=31
+                 （含 bit 8）→ 歌词正常。封面单 bitmap 假设（v14 意图）因 strip bug
+                 从未真正生效，v16 修复后走 c0 真正测试。 -->
+            <intent-filter>
+                <action android:name="com.vivo.musicwidgetmix.support.service" />
+            </intent-filter>
         </service>
         <service
             android:name=".FloatingLyricService"

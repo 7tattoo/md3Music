@@ -4176,6 +4176,15 @@ public class MediaSessionCompat {
                   || MediaMetadata.METADATA_KEY_DISPLAY_ICON.equals(k)) {
                 continue; // 只留 ALBUM_ART 一个 bitmap，防 bundle 过大被降为 1x1 平均色
               }
+              // MD3Music fork v16 修复：bitmap 键必须按 Bitmap 复制（v14/v15 的循环把
+              // ALBUM_ART 先 getString(=null) 再 putLong → IllegalArgumentException
+              // "ALBUM_ART key cannot be used to put a long" → 整个 strip 静默失败，
+              // 多 bitmap metadata 一直原样下发，单 bitmap 假设从未被真正测试过）。
+              android.graphics.Bitmap b = fwkMetadata.getBitmap(k);
+              if (b != null) {
+                stripped.putBitmap(k, b);
+                continue;
+              }
               String s = fwkMetadata.getString(k);
               if (s != null) {
                 stripped.putString(k, s);
