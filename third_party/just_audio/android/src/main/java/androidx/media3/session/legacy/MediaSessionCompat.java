@@ -4166,15 +4166,21 @@ public class MediaSessionCompat {
         // 平均色；单 bitmap（音哩音哩已验证）可完整到达。我们的通知封面不受影响（media3
         // 通知在本进程内用 artworkData 构建，不经此 hook）。
         try {
-          boolean hadExtraBmp =
-              fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) != null
+          boolean hadBmp =
+              fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) != null
+                  || fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) != null
                   || fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) != null;
-          if (hadExtraBmp) {
+          if (hadBmp) {
             MediaMetadata.Builder stripped = new MediaMetadata.Builder();
             for (String k : fwkMetadata.keySet()) {
-              if (MediaMetadata.METADATA_KEY_ART.equals(k)
+              if (MediaMetadata.METADATA_KEY_ALBUM_ART.equals(k)
+                  || MediaMetadata.METADATA_KEY_ART.equals(k)
                   || MediaMetadata.METADATA_KEY_DISPLAY_ICON.equals(k)) {
-                continue; // 只留 ALBUM_ART 一个 bitmap，防 bundle 过大被降为 1x1 平均色
+                // MD3Music fork v19：剥掉全部 bitmap（不只 ART/DISPLAY_ICON）。
+                // 实测矩阵：c0+bitmap(无论数量)→原子端封面降为 1x1 平均色（v12-v18）；
+                // 原子对 http URI 走自己 Glide 下载显示（kgka c0+无bitmap+http 已验证）。
+                // bitmap 路径在 vivo 上根本坏，必须全剥让原子走纯 URI 路径。
+                continue;
               }
               // MD3Music fork v16 修复：bitmap 键必须按 Bitmap 复制（v14/v15 的循环把
               // ALBUM_ART 先 getString(=null) 再 putLong → IllegalArgumentException
@@ -4198,7 +4204,7 @@ public class MediaSessionCompat {
               stripped.putLong(k, fwkMetadata.getLong(k));
             }
             fwkMetadata = stripped.build();
-            android.util.Log.i("MD3CarLyrics", "extra bitmaps stripped (kept ALBUM_ART only), uri="
+            android.util.Log.i("MD3CarLyrics", "artwork bitmaps stripped (uri-only, http kgka-style), uri="
                 + fwkMetadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI));
           }
         } catch (Throwable t) {

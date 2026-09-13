@@ -1670,6 +1670,10 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                 if (artUri.startsWith("https://")) {
                     artUri = "http://" + artUri.substring(8);
                 }
+                // MD3Music fork v19：/400/ → /480/，与 kgka 的 kugou flexible_cover {size}=480
+                // 完全一致（原子 p.q kugou 分支 replaceFirst("/480/","/800/") 期望 /480/）。
+                // kugou stdmusic CDN 同图支持 /400/ 与 /480/ 目录尺寸。
+                artUri = artUri.replaceFirst("/400/", "/480/");
                 mb.setArtworkUri(android.net.Uri.parse(artUri));
             }
             if (art != null) {

@@ -107,10 +107,10 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
-            <!-- MD3Music fork v18：恢复 vivo action（回 c0 合作控制器）。
-                 y2 的 onExtrasChanged 是空实现，不消费 lrc_change 歌词事件（v17 实测
-                 "暂未提供歌词"）；c0 消费 lrc_change（歌词正常）。封面修正改为
-                 metadata 去掉整段歌词大字符串 + artUri 换 http（见 hook/AudioPlayer）。 -->
+            <!-- MD3Music fork v19：c0 + 全剥 bitmap + http:/480 URI（完全复刻 kgka
+                 c0+无bitmap+http 的已验证配置）。v18 c0+单bitmap+httpURI 封面仍 1x1
+                 （bitmap 存在则原子强制走坏 bitmap 路径）。无 bitmap 时原子走自己的
+                 Glide 下载（kgka 实测正常，不写 covers/ 直接显示）。 -->
             <intent-filter>
                 <action android:name="com.vivo.musicwidgetmix.support.service" />
             </intent-filter>
