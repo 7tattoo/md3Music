@@ -4155,27 +4155,26 @@ public class MediaSessionCompat {
                 .build();
           }
         }
-        // MD3Music fork（封面 1x1 纯色根因修复）：剥掉发给 framework 的 metadata 中全部
-        // bitmap 键，只保留 artUri。实测证据（2026-09-13）：
-        // 1) 我们推 bitmap(400x400)+artUri → 原子端 covers/ 缓存把封面存成 1x1 像素 PNG
-        //    （97 字节，像素=各歌封面主色调）→ 控件显示 1x1 放大 = 纯色封面；
-        // 2) kgka（同样走酷狗 CDN，metadata 只发 artUri 无 bitmap）→ 封面正常，且原子端
-        //    播放期间不写任何 covers/ 文件（原子直接从 URI 加载显示）。
-        // 结论：vivo 跨进程链路对 metadata bitmap 的处理会把封面降为 1x1 平均色，
-        // artUri-only 让原子走自己的 Glide 下载完全绕开。我们自己的通知封面不受影响
-        // （media3 通知在本进程内用 artworkData 构建，不经此 hook）。
+        // MD3Music fork（封面 1x1 纯色根因修复 v14）：只保留 ALBUM_ART 一个 bitmap，
+        // 剥掉 ART/DISPLAY_ICON，保留 artUri。实测证据（2026-09-13）：
+        // 1) v12（ALBUM_ART+ART+DISPLAY_ICON 三个 400x400 bitmap ≈1.3MB bundle）→ 原子端
+        //    covers/ 把封面存成 1x1 像素 PNG（像素=各歌封面主色调）→ 显示 = 纯色封面；
+        // 2) 音哩音哩（com.spotify.music，原生 framework MediaSession，metadata 仅 1 个
+        //    ALBUM_ART bitmap、11 个键）→ 封面完整到达（原子端存 436KB 大图），显示正常；
+        // 3) v13（全剥 bitmap 只留 artUri）→ 原子端不写文件也不显示（URI-only 不被消费）。
+        // 结论：metadata bundle 携带多个大 bitmap（≈1.3MB）时 vivo 跨进程把封面降为 1x1
+        // 平均色；单 bitmap（音哩音哩已验证）可完整到达。我们的通知封面不受影响（media3
+        // 通知在本进程内用 artworkData 构建，不经此 hook）。
         try {
-          boolean hadBmp =
-              fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) != null
-                  || fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) != null
+          boolean hadExtraBmp =
+              fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART) != null
                   || fwkMetadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) != null;
-          if (hadBmp) {
+          if (hadExtraBmp) {
             MediaMetadata.Builder stripped = new MediaMetadata.Builder();
             for (String k : fwkMetadata.keySet()) {
-              if (MediaMetadata.METADATA_KEY_ALBUM_ART.equals(k)
-                  || MediaMetadata.METADATA_KEY_ART.equals(k)
+              if (MediaMetadata.METADATA_KEY_ART.equals(k)
                   || MediaMetadata.METADATA_KEY_DISPLAY_ICON.equals(k)) {
-                continue; // 剥掉 bitmap，防原子端降为 1x1 平均色（纯色封面）
+                continue; // 只留 ALBUM_ART 一个 bitmap，防 bundle 过大被降为 1x1 平均色
               }
               String s = fwkMetadata.getString(k);
               if (s != null) {
@@ -4190,7 +4189,7 @@ public class MediaSessionCompat {
               stripped.putLong(k, fwkMetadata.getLong(k));
             }
             fwkMetadata = stripped.build();
-            android.util.Log.i("MD3CarLyrics", "artwork bitmap stripped, uri kept="
+            android.util.Log.i("MD3CarLyrics", "extra bitmaps stripped (kept ALBUM_ART only), uri="
                 + fwkMetadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI));
           }
         } catch (Throwable t) {
