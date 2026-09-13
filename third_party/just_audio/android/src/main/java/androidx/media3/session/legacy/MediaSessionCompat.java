@@ -4218,11 +4218,19 @@ public class MediaSessionCompat {
           android.util.Log.i("MD3CarLyrics", "setMetadata hook: lrc="
               + (wholeLrc == null ? "null" : wholeLrc.length() + "chars")
               + " bundleKeys=" + extrasBundle.keySet().size());
+          // MD3Music fork v17：support_event=31 必须写进所有 metadata 更新（不只歌词
+          // 更新）。y2 的 o 控制器读 metadata 的 support_event 直接存入 b3.a（无
+          // fallback，缺失=0）：只在歌词更新写 31 时，原子处理到无该键的过渡更新会把
+          // b3.a 覆盖成 0 → 歌词(bit8)/进度(bit16) 全灭（v15 歌词丢失根因）。
+          {
+            MediaMetadata.Builder fwkBuilder = new MediaMetadata.Builder(fwkMetadata);
+            fwkBuilder.putLong(VMM_SUPPORT_EVENT, VMM_SUPPORT_EVENT_VALUE);
+            fwkMetadata = fwkBuilder.build();
+          }
           if (wholeLrc != null && !wholeLrc.isEmpty()) {
             MediaMetadata.Builder fwkBuilder = new MediaMetadata.Builder(fwkMetadata);
             fwkBuilder.putString(UCAR_LYRICS_WHOLE, wholeLrc);
             fwkBuilder.putLong(UCAR_LYRICS_STATUS, 0L);
-            fwkBuilder.putLong(VMM_SUPPORT_EVENT, VMM_SUPPORT_EVENT_VALUE);
             fwkMetadata = fwkBuilder.build();
             // 同步发送原子随身听（vivomusicmix）lrc_change extras（framework extras，
             // 字段照抄 vivo 官方拼写错误 meida / meidia）。歌词变化立即发，相同则 25s 节流。
