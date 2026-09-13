@@ -1,4 +1,4 @@
-package com.apple.android.music
+package com.md3music.md3music
 
 import android.app.Activity
 import android.content.ContentUris

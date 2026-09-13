@@ -1,4 +1,4 @@
-package com.apple.android.music
+package com.md3music.md3music
 
 /**
  * USB 音频驱动抛出的异常。

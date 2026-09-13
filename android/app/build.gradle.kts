@@ -17,7 +17,7 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.apple.android.music"
+    namespace = "com.md3music.md3music"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -28,7 +28,7 @@ android {
 
 
     defaultConfig {
-        applicationId = "com.apple.android.music"
+        applicationId = "com.md3music.md3music"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutter.versionCode
