@@ -1,0 +1,246 @@
+name: Build 10-in-1 Package Matrix Release
+
+# 10 合 1 包名矩阵构建（vivo 智能车载投屏滚动歌词适配版）
+# 触发：手动触发（workflow_dispatch），输入版本号
+# 产物：10 个不同包名的 arm64 APK，合并到一个 GitHub Release
+# 注意：tag 用 multi-* 前缀，避免与 main.yml 的 v* 触发模式冲突
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（例如 5.3.7）'
+        required: true
+        type: string
+        default: '5.3.7'
+      build_number:
+        description: 'versionCode（留空则按日期自动生成）'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.display }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: com.tencent.wecarflow
+            display: Tx爱趣听
+          - package: com.tencent.ibg.joox
+            display: Joox音乐
+          - package: com.spotify.music
+            display: Spotify声破天
+          - package: com.apple.android.music
+            display: AppleMusic
+          - package: com.luna.music.car
+            display: 汽水音乐车机版
+          - package: com.kugou.android.auto
+            display: 酷狗音乐车载版
+          - package: cn.kuwo.kwmusiccar
+            display: 酷我音乐车机版
+          - package: com.qidian.QDReader
+            display: 起点读书
+          - package: com.tencent.weread
+            display: 微信读书
+          - package: cn.aqzscn.stream_music
+            display: 音流
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "cmdline-tools;latest" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # ============================================================
+      # 包名替换：Dart 与 Android 两侧用同一替换，保证
+      # MethodChannel / Intent action / 组件名 / namespace 全部一致
+      # （AGP 按 namespace 生成 R 类，package 声明 sed 后与 namespace
+      # 一致即可编译，源码目录无需移动 —— 与 kgka 矩阵构建同款做法）
+      # ============================================================
+      - name: Set package name
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -e
+          echo "Package: ${PACKAGE}"
+          # build.gradle.kts 的 namespace + applicationId 也走同一替换
+          grep -rlZ -E "com\.(apple\.android\.music|md3music\.md3music)" \
+            --include="*.kt" --include="*.java" --include="*.xml" \
+            --include="*.pro" --include="*.dart" --include="*.kts" \
+            android/app lib/ 2>/dev/null | xargs -0 -r sed -i \
+            -e "s/com\.apple\.android\.music/${PACKAGE}/g" \
+            -e "s/com\.md3music\.md3music/${PACKAGE}/g"
+          echo "=== 替换后校验（应无残留）==="
+          ! grep -rn "com\.apple\.android\.music\|com\.md3music\.md3music" \
+            --include="*.kt" --include="*.java" --include="*.xml" \
+            --include="*.pro" --include="*.dart" --include="*.kts" \
+            android/app lib/ 2>/dev/null || true
+          echo "=== namespace/applicationId ==="
+          grep -E "namespace|applicationId" android/app/build.gradle.kts
+
+      - name: Update pubspec.yaml version
+        env:
+          VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -e
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER="$(date +%Y%m%d%H)"
+          fi
+          sed -i.bak -E "s/^version:.*/version: ${VERSION}+${BUILD_NUMBER}/" pubspec.yaml
+          rm -f pubspec.yaml.bak
+          grep -E '^(name|version):' pubspec.yaml
+          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> "$GITHUB_ENV"
+
+      # ============================================================
+      # 签名：下载持久化 release keystore（与 main.yml 同源）
+      # ============================================================
+      - name: Download release keystore
+        id: keystore
+        continue-on-error: true
+        run: |
+          set -e
+          if curl -fL --retry 3 -o android/app/release.keystore \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/keystore/release.keystore"; then
+            echo "keystore_available=true" >> "$GITHUB_OUTPUT"
+            ls -lh android/app/release.keystore
+          else
+            echo "WARN: keystore release 不存在，使用 debug keystore 兜底"
+            echo "keystore_available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate keystore.properties (for CI)
+        if: steps.keystore.outputs.keystore_available == 'true'
+        run: |
+          set -e
+          cat > android/keystore.properties <<EOF
+          storePassword=${KEYSTORE_PASSWORD:-android}
+          keyPassword=${KEY_PASSWORD:-android}
+          keyAlias=7tattoo
+          storeFile=release.keystore
+          EOF
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Flutter build APK (arm64)
+        run: |
+          flutter build apk --release --target-platform android-arm64 \
+            --dart-define=APP_VERSION=${{ inputs.version }} \
+            --build-name=${{ inputs.version }} \
+            --build-number=${{ env.BUILD_NUMBER }}
+
+      - name: Rename APK
+        env:
+          PACKAGE: ${{ matrix.package }}
+          DISPLAY: ${{ matrix.display }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          PKG_DASH="${PACKAGE//./-}"
+          # ASCII 安全文件名 + 中文名备注文件
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "md3Music_v${VERSION}_${PKG_DASH}_${DISPLAY}.apk"
+          ls -lh md3Music_*.apk
+          # 验证签名（应显示 7tattoo 证书，C=CN）
+          if [ -f android/app/release.keystore ]; then
+            unzip -o -q "md3Music_v${VERSION}_${PKG_DASH}_${DISPLAY}.apk" -d /tmp/apkcheck \
+              'META-INF/*' 2>/dev/null || true
+            echo "signed with keystore.properties (7tattoo)"
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apk-${{ matrix.package }}
+          path: md3Music_*.apk
+          retention-days: 30
+
+  release:
+    name: Create 10-in-1 Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apk-*
+          merge-multiple: true
+          path: ./apks
+
+      - name: List APKs
+        run: ls -lh ./apks/
+
+      - name: Create Release with all APKs
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: multi-${{ inputs.version }}
+          name: MD3Music v${{ inputs.version }} vivo 10合1
+          body: |
+            ## MD3Music v${{ inputs.version }} — vivo 智能车载投屏滚动歌词 10 合 1
+
+            10 个包名均已在实机测试支持 **vivo 智能车载投屏滚动歌词**。
+            其中 **AppleMusic** 与 **Spotify声破天** 两个包名另实测支持**原子通知控件歌词**。
+
+            | 包名 | 应用 | 车载投屏歌词 | 原子通知歌词 |
+            |---|---|---|---|
+            | com.tencent.wecarflow | Tx爱趣听 | ✅ | — |
+            | com.tencent.ibg.joox | Joox音乐 | ✅ | — |
+            | com.spotify.music | Spotify(声破天) | ✅ | ✅ |
+            | com.apple.android.music | AppleMusic | ✅ | ✅ |
+            | com.luna.music.car | 汽水音乐车机版 | ✅ | — |
+            | com.kugou.android.auto | 酷狗音乐车载版 | ✅ | — |
+            | cn.kuwo.kwmusiccar | 酷我音乐车机版 | ✅ | — |
+            | com.qidian.QDReader | 起点读书 | ✅ | — |
+            | com.tencent.weread | 微信读书 | ✅ | — |
+            | cn.aqzscn.stream_music | 音流 | ✅ | — |
+
+            全部为 **arm64-v8a** 专用包，7tattoo keystore 签名（对齐 + v1/v2/v3）。
+
+            安装提示：与已安装的同包名应用共存需卸载原版；覆盖安装同包名版本不受影响。
+          draft: false
+          prerelease: false
+          files: ./apks/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
