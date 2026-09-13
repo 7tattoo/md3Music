@@ -107,12 +107,12 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
-            <!-- MD3Music fork: 原子随身听（vivomusicmix）识别声明。
-                 exported=true：原子随身听需要从外部绑定本服务拿会话 token（此前 false 绑不上，
-                 表现为无封面/无进度条/无歌曲信息/无歌词）。 -->
-            <intent-filter>
-                <action android:name="com.vivo.musicwidgetmix.support.service" />
-            </intent-filter>
+            <!-- MD3Music fork v15：移除 vivo support.service 声明（实验）。
+                 原子按"是否声明此 action"选控制器：声明→c0 合作控制器（其封面 bitmap
+                 处理把封面降为 1x1 平均色→纯色封面，v12-v14 实测）；未声明→y2 通用
+                 控制器（音哩音哩 com.spotify.music 走此路径，封面完整到达，实测正常）。
+                 移除后原子经系统 MediaSessionManager 拿会话 token 走 y2；
+                 lrc_change 歌词 extras 是 framework 级事件，y2 下仍能收到。 -->
         </service>
         <service
             android:name=".FloatingLyricService"
