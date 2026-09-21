@@ -1,0 +1,28 @@
+{
+  "@@locale": "zh",
+
+  "appTitle": "MD3Music",
+  "settingsTab": "设置",
+  "commonCancel": "取消",
+  "commonBack": "返回",
+
+  "carModeTitle": "车机模式",
+  "carModeSubtitle": "任何界面常驻播放器面板，不再显示 MiniPlayer",
+  "carModeGroupLabel": "常驻播放器",
+  "carModeAutoEnable": "检测到车机屏幕时自动开启",
+  "carModeAutoEnableSubtitle": "匹配竖屏或方屏车机等车载屏幕时自动启用车机模式",
+  "carModePanelWidth": "面板宽度",
+  "carModePanelHeight": "面板高度",
+  "carModePanelPosition": "面板位置",
+  "carModeSideLeft": "左侧",
+  "carModeSideRight": "右侧",
+  "carModeNotActiveHint": "开启车机模式或检测到车机屏幕后生效",
+  "carModeExitTitle": "退出车机模式",
+  "carModeExitContent": "退出后播放器面板不再常驻显示，可随时在「设置 → 车机模式」重新开启。",
+  "carModeExitConfirm": "退出",
+
+  "languageSettingTitle": "语言",
+  "languageFollowSystem": "跟随系统",
+  "languageChinese": "中文",
+  "languageEnglish": "English"
+}

@@ -1,0 +1,28 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "MD3Music",
+  "settingsTab": "Settings",
+  "commonCancel": "Cancel",
+  "commonBack": "Back",
+
+  "carModeTitle": "Car Mode",
+  "carModeSubtitle": "Persistent player panel on any screen; MiniPlayer hidden",
+  "carModeGroupLabel": "Persistent player",
+  "carModeAutoEnable": "Auto-enable on car screen",
+  "carModeAutoEnableSubtitle": "Auto-enable when a vehicle (portrait or near-square) screen is detected",
+  "carModePanelWidth": "Panel width",
+  "carModePanelHeight": "Panel height",
+  "carModePanelPosition": "Panel position",
+  "carModeSideLeft": "Left",
+  "carModeSideRight": "Right",
+  "carModeNotActiveHint": "Takes effect after enabling Car Mode or detecting a car screen",
+  "carModeExitTitle": "Exit Car Mode",
+  "carModeExitContent": "The player panel will no longer dock after exiting. Re-enable anytime in Settings → Car Mode.",
+  "carModeExitConfirm": "Exit",
+
+  "languageSettingTitle": "Language",
+  "languageFollowSystem": "Follow system",
+  "languageChinese": "中文",
+  "languageEnglish": "English"
+}

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/car_mode_provider.dart';
+import '../../l10n/l10n_ext.dart';
 
 /// 弹出「退出车机模式」二次确认框；用户确认则关闭车机模式并返回 `true`，
 /// 取消（或点外部关闭）返回 `false`。
@@ -19,21 +20,22 @@ Future<bool> confirmExitCarMode(BuildContext context) async {
   // 在第一个 await 之前取好依赖，避免 await 之后再用 BuildContext
   // （use_build_context_synchronously）。
   final carMode = context.read<CarModeProvider>();
+  final l10n = context.l10n;
 
   final confirmed = await showDialog<bool>(
     context: context,
     useRootNavigator: true,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('退出车机模式'),
-      content: const Text('退出后播放器面板不再常驻显示，可随时在「设置 → 车机模式」重新开启。'),
+      title: Text(l10n.carModeExitTitle),
+      content: Text(l10n.carModeExitContent),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('取消'),
+          child: Text(l10n.commonCancel),
         ),
         FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('退出'),
+          child: Text(l10n.carModeExitConfirm),
         ),
       ],
     ),

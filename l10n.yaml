@@ -1,0 +1,8 @@
+# 标准 Flutter 国际化（gen_l10n）配置。
+# 模板用中文（中文是源语言/默认），英文为翻译文件；英文缺键自动回落到中文。
+arb-dir: lib/l10n
+template-arb-file: app_zh.arb
+output-localization-file: app_localizations.dart
+output-dir: lib/l10n/gen
+nullable-getter: false
+synthetic-package: false

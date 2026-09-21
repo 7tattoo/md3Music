@@ -909,6 +909,20 @@ class SettingsRepository {
     await prefs.setBool(_keyCloseLocalMusicComments, value);
   }
 
+  // ===== 界面语言 =====
+  /// 界面语言选择：'system'（跟随系统，默认）/ 'zh' / 'en'。
+  static const String _keyLanguage = 'settings_language';
+
+  Future<String> getLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyLanguage) ?? 'system';
+  }
+
+  Future<void> setLanguage(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLanguage, value);
+  }
+
   // ===== 车机模式 =====
   static const String _keyCarModeEnabled = 'settings_car_mode_enabled';
   static const String _keyCarModeAutoScreen = 'settings_car_mode_auto_screen';

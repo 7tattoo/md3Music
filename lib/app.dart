@@ -4,9 +4,14 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+// 标准国际化：全局 Material 组件文案（zh/en）+ 自动生成的 AppLocalizations
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import 'package:quick_actions/quick_actions.dart';
+
+import 'l10n/gen/app_localizations.dart';
+import 'providers/l10n_provider.dart';
 
 import 'core/layout/responsive_layout.dart';
 import 'core/layout/ui_density.dart';
@@ -169,6 +174,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CommentDisplayProvider()),
         // 车机模式（常驻播放器面板的开关 / 宽度 / 停靠位置）
         ChangeNotifierProvider(create: (_) => CarModeProvider()),
+        // 界面语言（跟随系统 / 中文 / English）
+        ChangeNotifierProvider(create: (_) => L10nProvider()),
         // 可选扩展：私有构建注入的额外 Provider（默认无）
         ...?extraProviders,
       ],
@@ -333,6 +340,17 @@ class _AppViewState extends State<_AppView> {
     return MaterialApp(
       title: 'MD3Music',
       debugShowCheckedModeBanner: false,
+      // 标准国际化：跟随系统语言，或在设置里手动切换 中文 / English。
+      // locale 为 null 时按系统区域 + supportedLocales 解析（仅支持 zh/en，
+      // 其他区域回落到模板语言 zh）。
+      locale: context.watch<L10nProvider>().locale,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        AppLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       // 同时传 theme 和 darkTheme，并根据 ThemeProvider.effectiveSeedColor
       // 动态生成（支持「莫奈色」开关切换系统主色）。
       // darkTheme 额外接收 useOledBlack 开关，开启时 surface 系列覆盖为纯黑。

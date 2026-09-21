@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # 标准国际化：Material 组件本地化 + 应用文案（ARB + gen_l10n）
+  flutter_localizations:
+    sdk: flutter
 
   cupertino_icons: ^1.0.8
   # just_audio 0.10.6 本地 fork：注入可拦截 AudioSink 的 RenderersFactory（USB 独占输出）

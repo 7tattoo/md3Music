@@ -33,6 +33,8 @@ import '../../core/services/diagnostic_exporter.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/motion_constants.dart';
 import '../../data/repositories/settings_repository.dart';
+import '../../l10n/l10n_ext.dart';
+import '../../providers/l10n_provider.dart';
 import '../onboarding/onboarding_page.dart';
 import '../onboarding/user_agreement_page.dart';
 import '../../providers/kugou_provider.dart';
@@ -1049,8 +1051,40 @@ class _SettingsPageState extends State<SettingsPage>
         context.watch<ThemeProvider>().themeMode != ThemeMode.light;
     return Column(
       children: [
-        // ① 明暗：主题模式 + 其从属的 OLED 纯黑（仅深色生效）
-        _buildGroupLabel('主题模式', colorScheme, first: true),
+        // ① 语言：跟随系统 / 中文 / English（改动立即全局生效）
+        _buildGroupLabel(context.l10n.languageSettingTitle, colorScheme, first: true),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          // 按钮顺序与 AppLanguage.index 一致（system=0, zh=1, en=2）。
+          child: Builder(builder: (context) {
+            final l = context.l10n;
+            return M3EToggleButtonGroup(
+              actions: [
+                M3EToggleButtonGroupAction(
+                  label: Text(l.languageFollowSystem),
+                  icon: const Icon(Icons.brightness_auto),
+                ),
+                M3EToggleButtonGroupAction(
+                  label: Text(l.languageChinese),
+                  icon: const Icon(Icons.translate),
+                ),
+                M3EToggleButtonGroupAction(
+                  label: Text(l.languageEnglish),
+                  icon: const Icon(Icons.language),
+                ),
+              ],
+              selectedIndex: context.watch<L10nProvider>().language.index,
+              onSelectedIndexChanged: (index) {
+                if (index == null) return;
+                HapticFeedback.lightImpact();
+                context.read<L10nProvider>().setLanguage(AppLanguage.values[index]);
+              },
+            );
+          }),
+        ),
+        const SizedBox(height: 4),
+        // ② 明暗：主题模式 + 其从属的 OLED 纯黑（仅深色生效）
+        _buildGroupLabel('主题模式', colorScheme),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           // 注意：按钮顺序(浅色/深色/跟随系统)与 ThemeMode.index(system=0,light=1,dark=2)
@@ -2017,18 +2051,19 @@ class _SettingsPageState extends State<SettingsPage>
   /// 见后续任务），所以这里的调整不会在页内实时预览，退出设置页后生效。
   Widget _buildCarModeSection(ColorScheme colorScheme) {
     final carMode = context.watch<CarModeProvider>();
+    final l10n = context.l10n;
     final ratioPercent = (carMode.panelRatio * 100).round();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildGroupLabel('常驻播放器', colorScheme, first: true),
+        _buildGroupLabel(l10n.carModeGroupLabel, colorScheme, first: true),
         // 独立总开关：默认关闭。开启后任何界面（设置页 / 登录页 / 引导页 /
         // 用户协议页除外）常驻一块播放器面板，且不再显示 MiniPlayer。
         // 这是**强制开启**开关：无论屏幕类型都启用。
         // search: 车机 车载 常驻 面板 大屏 副屏 副驾 miniplayer 迷你条
         SwitchListTile(
-          title: const Text('车机模式'),
-          subtitle: const Text('任何界面常驻播放器面板，不再显示 MiniPlayer'),
+          title: Text(l10n.carModeTitle),
+          subtitle: Text(l10n.carModeSubtitle),
           value: carMode.enabled,
           onChanged: (value) {
             HapticFeedback.lightImpact();
@@ -2039,8 +2074,8 @@ class _SettingsPageState extends State<SettingsPage>
         // 命中车机屏（短边/长边 ≥ 0.55，常见 16:9 车机即满足）即自动启用。
         // search: 车机 车载 自动 检测 屏幕 分辨率 识别 竖屏 方屏
         SwitchListTile(
-          title: const Text('检测到车机屏幕时自动开启'),
-          subtitle: const Text('匹配竖屏或方屏车机等车载屏幕时自动启用车机模式'),
+          title: Text(l10n.carModeAutoEnable),
+          subtitle: Text(l10n.carModeAutoEnableSubtitle),
           value: carMode.autoScreenEnabled,
           onChanged: (value) {
             HapticFeedback.lightImpact();
@@ -2048,7 +2083,7 @@ class _SettingsPageState extends State<SettingsPage>
           },
         ),
         _buildGroupLabel(
-          carMode.useBottomLayout ? '面板高度' : '面板宽度',
+          carMode.useBottomLayout ? l10n.carModePanelHeight : l10n.carModePanelWidth,
           colorScheme,
         ),
         Padding(
@@ -2064,7 +2099,9 @@ class _SettingsPageState extends State<SettingsPage>
                 children: [
                   Expanded(
                     child: Text(
-                      carMode.useBottomLayout ? '面板高度' : '面板宽度',
+                      carMode.useBottomLayout
+                          ? l10n.carModePanelHeight
+                          : l10n.carModePanelWidth,
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                   ),
@@ -2105,19 +2142,19 @@ class _SettingsPageState extends State<SettingsPage>
             ],
           ),
         ),
-        _buildGroupLabel('面板位置', colorScheme),
+        _buildGroupLabel(l10n.carModePanelPosition, colorScheme),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
           // search-item: 面板位置 | 车机 面板 左侧 右侧 停靠 位置
           child: M3EToggleButtonGroup(
-            actions: const [
+            actions: [
               M3EToggleButtonGroupAction(
-                label: Text('左侧'),
-                icon: Icon(Icons.align_horizontal_left),
+                label: Text(l10n.carModeSideLeft),
+                icon: const Icon(Icons.align_horizontal_left),
               ),
               M3EToggleButtonGroupAction(
-                label: Text('右侧'),
-                icon: Icon(Icons.align_horizontal_right),
+                label: Text(l10n.carModeSideRight),
+                icon: const Icon(Icons.align_horizontal_right),
               ),
             ],
             selectedIndex:
@@ -2137,7 +2174,7 @@ class _SettingsPageState extends State<SettingsPage>
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             child: Text(
-              '开启车机模式或检测到车机屏幕后生效',
+              l10n.carModeNotActiveHint,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
