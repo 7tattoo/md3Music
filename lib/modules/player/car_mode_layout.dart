@@ -2,6 +2,7 @@
 //
 // 「车机模式」开启后，任何界面的左侧（或右侧）常驻一块全屏播放器面板：
 //   * 面板宽 = 屏幕宽 × 占比，占比可在设置里无级调节（20%~50%，默认 30%）
+//   * 底部布局（竖屏 / 近方屏车机）下限放宽至 10%（见 kCarModePanelMinRatioBottom）
 //   * 面板不可收起，同时全站不显示 MiniPlayer
 //   * 设置页 / 登录页 / 引导页 / 用户协议页 不显示面板（见 car_mode_panel.dart）
 //
@@ -12,6 +13,13 @@ import 'dart:math' as math;
 
 /// 面板宽度占比下限（20%）。
 const double kCarModePanelMinRatio = 0.20;
+
+/// 底部布局（竖屏 / 近方屏车机）下的面板高度占比下限（10%）。
+///
+/// 底部面板横贯全宽，宽度不是瓶颈；竖屏/方屏车机屏高紧凑，20% 的下限会把
+/// 面板撑得过高、挤压主界面，因此放宽到 10%。物理下限
+/// [kCarModePanelMinHeight] 仍会托底，传输控件不会溢出。
+const double kCarModePanelMinRatioBottom = 0.10;
 
 /// 面板宽度占比上限（50%）。
 const double kCarModePanelMaxRatio = 0.50;
@@ -80,6 +88,14 @@ bool isPortraitOrSquareScreen(double width, double height) {
   return portrait || aspect >= kCarModePortraitOrSquareMinAspect;
 }
 
+/// 底部面板下缘避让区的固定兜底高度（dp）。
+///
+/// 车机端的「车联 dock 栏」多为系统级悬浮窗，绘制在 App 之上且**不产生
+/// WindowInsets**，MediaQuery.padding.bottom 为 0，SafeArea 挡不住它。
+/// 因此底部布局下面板与屏幕下缘之间恒定留出一块避让区：
+/// 取 max(系统安全区, 本兜底值)，两种 dock 形态都盖得住。
+const double kCarModeBottomDockClearance = 48.0;
+
 /// 底部面板高度的物理下限（dp）。
 ///
 /// 侧边面板靠 [kCarModePanelMinWidth] 托底保证传输控件不溢出；底部面板
@@ -136,15 +152,20 @@ double resolveCarModeRatioDelta({
 /// 规则与 [resolveCarModePanelWidth] 对称：占比夹进合法区间 → 乘屏高得到理想
 /// 高度 → 上限恒为 `屏高 × kCarModePanelMaxRatio` → 下限为
 /// [kCarModePanelMinHeight]（但不能突破上限）。
+///
+/// [minRatio]：高度占比下限。侧边/底部布局共用本函数时由调用方决定：
+/// 底部布局传 [kCarModePanelMinRatioBottom]（10%），其余场景用默认值
+/// [kCarModePanelMinRatio]（20%）。
 double resolveCarModePanelHeight({
   required double screenHeight,
   required double ratio,
+  double minRatio = kCarModePanelMinRatio,
 }) {
   final safeHeight = screenHeight.isFinite && screenHeight > 0
       ? screenHeight
       : 0.0;
   final clampedRatio = ratio.isFinite
-      ? ratio.clamp(kCarModePanelMinRatio, kCarModePanelMaxRatio)
+      ? ratio.clamp(minRatio, kCarModePanelMaxRatio)
       : kCarModePanelDefaultRatio;
   final maxHeight = safeHeight * kCarModePanelMaxRatio;
   final minHeight = math.min(kCarModePanelMinHeight, maxHeight);

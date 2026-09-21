@@ -184,16 +184,89 @@ void main() {
       );
     });
 
-    test('窄屏被物理下限托底：200 屏 20% → 140 而不是 40', () {
+    test('窄屏：物理下限不突破 50% 上限：200 屏 20% → 100', () {
+      // 200×0.2=40 → 想托底 140，但 50% 上限=100 → min(140,100)=100（既有语义）
       expect(
         resolveCarModePanelHeight(screenHeight: 200, ratio: 0.20),
-        closeTo(kCarModePanelMinHeight, 0.001),
+        closeTo(100.0, 0.001),
       );
     });
 
     test('屏高 0 / 负数不抛异常', () {
       expect(resolveCarModePanelHeight(screenHeight: 0, ratio: 0.30), 0.0);
       expect(resolveCarModePanelHeight(screenHeight: -10, ratio: 0.30), 0.0);
+    });
+  });
+
+  group('resolveCarModePanelHeight minRatio（底部 10% 下限）', () {
+    test('默认下限 20%：屏高 800、占比 0.15 → 夹回 160', () {
+      expect(
+        resolveCarModePanelHeight(screenHeight: 800, ratio: 0.15),
+        closeTo(160.0, 0.001),
+      );
+    });
+
+    test('底部下限 10%：屏高 800、占比 0.15 → 120（物理下限托底 140）', () {
+      // 800×0.15=120dp 低于物理下限 140dp → 托底 140（不突破 50% 上限 400）
+      expect(
+        resolveCarModePanelHeight(
+          screenHeight: 800,
+          ratio: 0.15,
+          minRatio: kCarModePanelMinRatioBottom,
+        ),
+        closeTo(kCarModePanelMinHeight, 0.001),
+      );
+      // 大屏验证 10% 下限本身生效：1600×0.15=240dp > 140dp 物理下限
+      expect(
+        resolveCarModePanelHeight(
+          screenHeight: 1600,
+          ratio: 0.15,
+          minRatio: kCarModePanelMinRatioBottom,
+        ),
+        closeTo(240.0, 0.001),
+      );
+    });
+
+    test('底部下限 10%：占比 0.05 → 夹回 10%（160）', () {
+      // 800×0.05=40dp 低于 10% 下限 → 夹回 80dp → 再被物理下限托到 140
+      expect(
+        resolveCarModePanelHeight(
+          screenHeight: 800,
+          ratio: 0.05,
+          minRatio: kCarModePanelMinRatioBottom,
+        ),
+        closeTo(kCarModePanelMinHeight, 0.001),
+      );
+      // 大屏：1600×0.05=80dp → 夹回 10%=160dp（> 140dp 物理下限，真实生效）
+      expect(
+        resolveCarModePanelHeight(
+          screenHeight: 1600,
+          ratio: 0.05,
+          minRatio: kCarModePanelMinRatioBottom,
+        ),
+        closeTo(160.0, 0.001),
+      );
+    });
+
+    test('物理下限仍托底：屏高 300、占比 0.10（30dp）→ 140', () {
+      expect(
+        resolveCarModePanelHeight(
+          screenHeight: 300,
+          ratio: 0.10,
+          minRatio: kCarModePanelMinRatioBottom,
+        ),
+        closeTo(kCarModePanelMinHeight, 0.001),
+      );
+    });
+  });
+
+  group('kCarModeBottomDockClearance', () {
+    test('兜底高度为正且不超过底部面板物理下限', () {
+      expect(kCarModeBottomDockClearance, greaterThan(0));
+      expect(
+        kCarModeBottomDockClearance,
+        lessThanOrEqualTo(kCarModePanelMinHeight),
+      );
     });
   });
 

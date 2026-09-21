@@ -2052,7 +2052,16 @@ class _SettingsPageState extends State<SettingsPage>
   Widget _buildCarModeSection(ColorScheme colorScheme) {
     final carMode = context.watch<CarModeProvider>();
     final l10n = context.l10n;
-    final ratioPercent = (carMode.panelRatio * 100).round();
+    // 滑条下限随布局切换：底部（竖屏/近方屏车机）10%，侧边 20%。
+    // 显示值同样按布局夹取：侧边布局下存量 0.12 若直接喂给滑条会触发
+    // value < min 断言。
+    final sliderMinRatio = carMode.useBottomLayout
+        ? kCarModePanelMinRatioBottom
+        : kCarModePanelMinRatio;
+    final ratioPercent =
+        (carMode.panelRatio.clamp(sliderMinRatio, kCarModePanelMaxRatio) *
+                100)
+            .round();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2119,8 +2128,12 @@ class _SettingsPageState extends State<SettingsPage>
                   haptic: M3EHapticFeedback.medium,
                   hapticConfig: M3EHapticConfig.discrete(),
                 ),
-                value: carMode.panelRatio * 100,
-                min: kCarModePanelMinRatio * 100,
+                value: carMode.panelRatio.clamp(
+                  sliderMinRatio,
+                  kCarModePanelMaxRatio,
+                ) * 100,
+                // 底部布局（竖屏/近方屏车机）下限 10%，侧边保持 20%。
+                min: sliderMinRatio * 100,
                 max: kCarModePanelMaxRatio * 100,
                 // 不传 divisions = 无级调节（M3ESlider.divisions 为 int?），
                 // 有档位吸附会破坏「无级」手感。

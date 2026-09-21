@@ -25,6 +25,42 @@ void main() {
     expect(await repo.getCarModePanelSide(), CarModePanelSide.right);
   });
 
+  test('repo 层按最宽区间夹取：0.12（底部布局合法值）不被抬高', () async {
+    SharedPreferences.setMockInitialValues({});
+    final repo = SettingsRepository();
+    // 0.12 低于侧边下限 20% 但高于底部下限 10%：repo 层必须原样保留，
+    // 精确夹取由 CarModeProvider.setPanelRatio 按布局负责。
+    await repo.setCarModePanelRatio(0.12);
+    expect(await repo.getCarModePanelRatio(), closeTo(0.12, 0.001));
+    // 明显越界（< 10%）仍夹回
+    await repo.setCarModePanelRatio(0.02);
+    expect(await repo.getCarModePanelRatio(), kCarModePanelMinRatioBottom);
+  });
+
+  testWidgets('provider 按布局夹取：底部布局 0.15 合法、侧边布局夹回 0.20',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final carMode = CarModeProvider();
+    try {
+      // 底部布局（车机屏 + 竖屏/近方屏）
+      carMode.updateScreenMetrics(isCar: true, portraitOrSquare: true);
+      await carMode.setPanelRatio(0.15);
+      expect(carMode.panelRatio, closeTo(0.15, 0.001));
+      expect(
+        await SettingsRepository().getCarModePanelRatio(),
+        closeTo(0.15, 0.001),
+      );
+
+      // 同一 provider 切到侧边布局：0.15 低于 20% → 夹回
+      carMode.updateScreenMetrics(isCar: true, portraitOrSquare: false);
+      await carMode.setPanelRatio(0.15);
+      expect(carMode.panelRatio, kCarModePanelMinRatio);
+    } finally {
+      carMode.dispose();
+      await tester.pump(const Duration(seconds: 5));
+    }
+  });
+
   testWidgets('provider 越界输入被夹回合法区间并落盘', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final carMode = CarModeProvider();

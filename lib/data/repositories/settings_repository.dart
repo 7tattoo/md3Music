@@ -957,20 +957,25 @@ class SettingsRepository {
     await prefs.setBool(_keyCarModeAutoScreen, value);
   }
 
-  /// 常驻播放器面板的宽度占比（0.20~0.50），默认 0.30。
-  /// 越界值一律夹回合法区间：手改 prefs / 历史脏数据也不会把面板撑爆。
+  /// 常驻播放器面板的宽度占比，默认 0.30。
+  ///
+  /// 合法区间取**最宽**范围（底部布局 10% ~ 50%，见
+  /// [kCarModePanelMinRatioBottom]）：本层只挡手改 prefs / 历史脏数据这类
+  /// 明显越界值；布局相关的精确下限（侧边 20% / 底部 10%）由
+  /// [CarModeProvider.setPanelRatio] 按当前布局夹取 —— 本层不知道布局形态，
+  /// 若在这里按 20% 夹会把底部布局存的 10%~20% 值在读回时错误抬高。
   Future<double> getCarModePanelRatio() async {
     final prefs = await SharedPreferences.getInstance();
     final value = prefs.getDouble(_keyCarModePanelRatio);
     if (value == null) return kCarModePanelDefaultRatio;
-    return value.clamp(kCarModePanelMinRatio, kCarModePanelMaxRatio);
+    return value.clamp(kCarModePanelMinRatioBottom, kCarModePanelMaxRatio);
   }
 
   Future<void> setCarModePanelRatio(double value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(
       _keyCarModePanelRatio,
-      value.clamp(kCarModePanelMinRatio, kCarModePanelMaxRatio),
+      value.clamp(kCarModePanelMinRatioBottom, kCarModePanelMaxRatio),
     );
   }
 

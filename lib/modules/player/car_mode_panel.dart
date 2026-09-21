@@ -3,6 +3,8 @@
 // 面板挂在 MaterialApp.builder 的根 Navigator **之外**（见 app.dart），
 // 这是硬要求：面板要同时覆盖所有 Navigator.push 出来的二级页面。
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -115,7 +117,12 @@ class _CarModePanelState extends State<CarModePanel>
           side: carMode.panelSide,
         );
     setState(() {
-      _dragRatio = next.clamp(kCarModePanelMinRatio, kCarModePanelMaxRatio);
+      // 底部布局下限放宽到 10%（见 kCarModePanelMinRatioBottom）；
+      // 物理下限 kCarModePanelMinHeight 在 resolveCarModePanelHeight 内托底。
+      _dragRatio = next.clamp(
+        kCarModePanelMinRatioBottom,
+        kCarModePanelMaxRatio,
+      );
     });
   }
 
@@ -132,6 +139,7 @@ class _CarModePanelState extends State<CarModePanel>
         ? resolveCarModePanelHeight(
             screenHeight: screenLength,
             ratio: _dragRatio,
+            minRatio: kCarModePanelMinRatioBottom,
           )
         : resolveCarModePanelWidth(
             screenWidth: screenLength,
@@ -199,12 +207,22 @@ class _CarModePanelState extends State<CarModePanel>
     final isLeft = carMode.panelSide == CarModePanelSide.left;
     final atBottom = carMode.useBottomLayout;
 
+    // 底部布局下面板与屏幕下缘之间的避让区高度：
+    // 优先取系统底部安全区（手势条 / 三大金刚），为 0 时兜底固定 48dp ——
+    // 车联 dock 栏多以系统悬浮窗绘在 App 之上、不产生 WindowInsets，
+    // 纯 SafeArea 挡不住，需要这块留白把面板控制区抬到 dock 之上。
+    final bottomSafeInset = atBottom
+        ? math.max(mq.padding.bottom, kCarModeBottomDockClearance)
+        : 0.0;
+
     // 真实内容尺寸：拖动中恒取冻结快照。
     // 宁可「拖动过程中面板尺寸不变」，也不要逐帧重排整个播放器。
     final contentLength = atBottom
         ? resolveCarModePanelHeight(
             screenHeight: mq.size.height,
             ratio: frozen ? _frozenRatio : carMode.panelRatio,
+            // 底部布局下限 10%：存量占比（如 0.12）不得在渲染时被抬高。
+            minRatio: kCarModePanelMinRatioBottom,
           )
         : resolveCarModePanelWidth(
             screenWidth: mq.size.width,
@@ -215,6 +233,7 @@ class _CarModePanelState extends State<CarModePanel>
         ? resolveCarModePanelHeight(
             screenHeight: mq.size.height,
             ratio: _dragging ? _dragRatio : carMode.panelRatio,
+            minRatio: kCarModePanelMinRatioBottom,
           )
         : resolveCarModePanelWidth(
             screenWidth: mq.size.width,
@@ -229,9 +248,9 @@ class _CarModePanelState extends State<CarModePanel>
             : '${(kCarModePanelDefaultRatio * 100).round()}%');
 
     final panel = SizedBox(
-      // 底部：横贯全宽、限定高度；侧边：限定宽度、撑满高度。
+      // 底部：横贯全宽、限定高度（含下缘避让区）；侧边：限定宽度、撑满高度。
       width: atBottom ? mq.size.width : contentLength,
-      height: atBottom ? contentLength : null,
+      height: atBottom ? contentLength + bottomSafeInset : null,
       // 只覆盖 size：宽 = 面板实际宽度、高不变（侧边），或 宽=全屏、高=面板高
       // （底部）。面板内的响应式判定必须按「面板实际尺寸」而不是屏幕尺寸 ——
       //   * ResponsiveLayout 用 LayoutBuilder（面板实际宽 → compact）
@@ -256,7 +275,13 @@ class _CarModePanelState extends State<CarModePanel>
             maxScaleFactor: 1.10,
           ),
         ),
-        child: const _CarModePlayerHost(),
+        child: Padding(
+          // 底部布局：把播放器内容抬到系统安全区 / 车联 dock 之上。
+          // 避让区与面板同底色（FullPlayer 的 Scaffold surface 延伸过来），
+          // 视觉上是面板的一部分，不是一条缝隙。
+          padding: EdgeInsets.only(bottom: atBottom ? bottomSafeInset : 0),
+          child: const _CarModePlayerHost(),
+        ),
       ),
     );
 
@@ -303,8 +328,9 @@ class _CarModePanelState extends State<CarModePanel>
               opacity: _scrimController,
               child: _CarModeDragScrim(
                 side: carMode.panelSide,
-                panelWidth: atBottom ? previewLength : previewLength,
-                panelHeight: atBottom ? previewLength : null,
+                panelWidth: previewLength,
+                // 底部：遮罩面板区含避让区，与真实面板总高一致。
+                panelHeight: atBottom ? previewLength + bottomSafeInset : null,
                 atBottom: atBottom,
                 percentLabel: percentLabel,
               ),
@@ -319,7 +345,10 @@ class _CarModePanelState extends State<CarModePanel>
         // 底部模式：把手是水平横条，沿面板上缘水平放置并在垂直方向拖动。
         atBottom
             ? Positioned(
-                top: mq.size.height - previewLength - _HorizHandle.hitHeight / 2,
+                top: mq.size.height -
+                    bottomSafeInset -
+                    previewLength -
+                    _HorizHandle.hitHeight / 2,
                 left: 0,
                 right: 0,
                 height: _HorizHandle.hitHeight,

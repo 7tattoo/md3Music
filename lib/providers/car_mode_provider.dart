@@ -174,10 +174,17 @@ class CarModeProvider extends ChangeNotifier {
 
   /// 更新面板宽度占比（越界值夹回合法区间）。
   ///
+  /// 下限按当前布局动态决定：底部布局（竖屏/近方屏车机，[useBottomLayout]）
+  /// 用 [kCarModePanelMinRatioBottom]（10%），侧边布局用
+  /// [kCarModePanelMinRatio]（20%）。
+  ///
   /// [persist] = false 用于拖动过程中的实时预览：只改内存 + 通知，不落盘，
   /// 避免拖动期间高频写 SharedPreferences；松手时用 [persist] = true 落盘。
   Future<void> setPanelRatio(double ratio, {bool persist = true}) async {
-    final next = ratio.clamp(kCarModePanelMinRatio, kCarModePanelMaxRatio);
+    final minRatio = useBottomLayout
+        ? kCarModePanelMinRatioBottom
+        : kCarModePanelMinRatio;
+    final next = ratio.clamp(minRatio, kCarModePanelMaxRatio);
     final changed = _panelRatio != next;
     if (changed) {
       _ratioTouched = true;
