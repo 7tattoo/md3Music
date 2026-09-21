@@ -42,6 +42,51 @@ enum CarModePanelSide {
       : CarModePanelSide.left;
 }
 
+/// 自动启用车机模式的屏幕长比阈值（短边 / 长边）。
+///
+/// 「检测到车机屏幕时自动开启」的命中条件：屏幕短边/长边 **大于等于** 该值
+/// 就视为车机屏并自动开启车机模式。
+///   * 常见 16:9 横屏车机 = 短/长 ≈ 0.5625，≥ 0.55，命中；
+///   * 方屏（如 880×860）≈ 0.98，命中；
+///   * 竖屏手机 ≈ 0.45~0.5，不命中（避免普通手机误触发）。
+/// 纯长比判断，与物理像素 / 逻辑像素无关（比值无量纲），可单测。
+const double kCarModeAutoEnableMinAspect = 0.55;
+
+/// 「竖屏或接近方屏」的屏幕长比阈值（短边 / 长边）。
+///
+/// 命中该判定的屏幕其常驻面板置于**底部**（横贯全宽、高度占比可调），
+/// 而不是左/右两侧。竖屏（高 > 宽）恒归入此类，与长比数值无关；
+/// 接近方屏（长比 ≥ 该值）同样归入，如 880×860（≈0.98）。
+const double kCarModePortraitOrSquareMinAspect = 0.8;
+
+/// 屏幕短边 / 长边（无量纲，介于 (0, 1]）。非法输入返回 0。
+double screenAspect(double width, double height) {
+  if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
+    return 0;
+  }
+  final w = width, h = height;
+  return w < h ? w / h : h / w;
+}
+
+/// 是否判定为「车机屏」：短边/长边 ≥ [kCarModeAutoEnableMinAspect]。
+bool isCarLikeScreen(double width, double height) =>
+    screenAspect(width, height) >= kCarModeAutoEnableMinAspect;
+
+/// 是否「竖屏或接近方屏」：竖屏（高>宽）或短/长边长比 ≥
+/// [kCarModePortraitOrSquareMinAspect]。此类屏幕面板置于底部。
+bool isPortraitOrSquareScreen(double width, double height) {
+  final aspect = screenAspect(width, height);
+  final portrait = height > width;
+  return portrait || aspect >= kCarModePortraitOrSquareMinAspect;
+}
+
+/// 底部面板高度的物理下限（dp）。
+///
+/// 侧边面板靠 [kCarModePanelMinWidth] 托底保证传输控件不溢出；底部面板
+/// 横贯全宽、限制的是高度，同样需要物理下限避免 `RenderFlex overflow`。
+/// 底部模式下 20% 会被该下限托底（屏高 < 700dp 时生效）。
+const double kCarModePanelMinHeight = 140.0;
+
 /// 由屏幕宽度与占比推导面板实际宽度（dp）。
 ///
 /// 规则（顺序不可调换）：
@@ -84,4 +129,44 @@ double resolveCarModeRatioDelta({
   if (!deltaX.isFinite) return 0.0;
   final signed = side == CarModePanelSide.left ? deltaX : -deltaX;
   return signed / screenWidth;
+}
+
+/// 由屏幕高度与占比推导底部面板实际高度（dp）。
+///
+/// 规则与 [resolveCarModePanelWidth] 对称：占比夹进合法区间 → 乘屏高得到理想
+/// 高度 → 上限恒为 `屏高 × kCarModePanelMaxRatio` → 下限为
+/// [kCarModePanelMinHeight]（但不能突破上限）。
+double resolveCarModePanelHeight({
+  required double screenHeight,
+  required double ratio,
+}) {
+  final safeHeight = screenHeight.isFinite && screenHeight > 0
+      ? screenHeight
+      : 0.0;
+  final clampedRatio = ratio.isFinite
+      ? ratio.clamp(kCarModePanelMinRatio, kCarModePanelMaxRatio)
+      : kCarModePanelDefaultRatio;
+  final maxHeight = safeHeight * kCarModePanelMaxRatio;
+  final minHeight = math.min(kCarModePanelMinHeight, maxHeight);
+  return (safeHeight * clampedRatio).clamp(minHeight, maxHeight);
+}
+
+/// 由拖动**位移增量**换算底部面板的高度占比增量（底部面板的垂直把手）。
+///
+/// [deltaY]：本次拖动事件相对上一次的指针位移（逻辑像素，向下为正）。
+/// [screenHeight]：屏幕逻辑高。
+/// [atBottom]：面板是否贴底放置 —— 贴底时指针向下移动会让面板**变高**，
+/// 贴顶时相反（本设计恒贴底，故恒为正号；保留参数以应对未来贴顶）。
+///
+/// 语义与 [resolveCarModeRatioDelta] 完全对齐：用增量而非绝对位置，避免
+/// 每次起拖都瞬间平移「按下点与分界线的差值」。不夹取，夹取由调用方负责。
+double resolveCarModeHeightDelta({
+  required double deltaY,
+  required double screenHeight,
+  required bool atBottom,
+}) {
+  if (!screenHeight.isFinite || screenHeight <= 0) return 0.0;
+  if (!deltaY.isFinite) return 0.0;
+  final signed = atBottom ? deltaY : -deltaY;
+  return signed / screenHeight;
 }

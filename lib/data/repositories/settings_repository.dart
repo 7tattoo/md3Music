@@ -911,12 +911,15 @@ class SettingsRepository {
 
   // ===== 车机模式 =====
   static const String _keyCarModeEnabled = 'settings_car_mode_enabled';
+  static const String _keyCarModeAutoScreen = 'settings_car_mode_auto_screen';
   static const String _keyCarModePanelRatio = 'settings_car_mode_panel_ratio';
   static const String _keyCarModePanelSide = 'settings_car_mode_panel_side';
 
   /// 「车机模式」开关，默认关闭。
   /// 开启后任何界面（设置页 / 登录页 / 引导页 / 用户协议页除外）常驻一块
   /// 全屏播放器面板，且全站不再显示 MiniPlayer。
+  /// 这是**强制开启**开关：无论屏幕是什么类型都启用。它与自动检测开关
+  /// （[_keyCarModeAutoScreen]）相互独立，任一命中即启用车机模式。
   Future<bool> getCarModeEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_keyCarModeEnabled) ?? false;
@@ -925,6 +928,19 @@ class SettingsRepository {
   Future<void> setCarModeEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyCarModeEnabled, value);
+  }
+
+  /// 「检测到车机屏幕时自动开启」开关，默认关闭。
+  /// 独立于「车机模式」总开关：开启后按屏幕长比自动判断（见
+  /// [isCarLikeScreen]），命中车机屏即自动启用常驻面板。
+  Future<bool> getCarModeAutoScreenEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyCarModeAutoScreen) ?? false;
+  }
+
+  Future<void> setCarModeAutoScreenEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyCarModeAutoScreen, value);
   }
 
   /// 常驻播放器面板的宽度占比（0.20~0.50），默认 0.30。

@@ -2023,7 +2023,8 @@ class _SettingsPageState extends State<SettingsPage>
       children: [
         _buildGroupLabel('常驻播放器', colorScheme, first: true),
         // 独立总开关：默认关闭。开启后任何界面（设置页 / 登录页 / 引导页 /
-        // 用户协议页除外）常驻一块播放器面板，且不再显示 MiniPlayer
+        // 用户协议页除外）常驻一块播放器面板，且不再显示 MiniPlayer。
+        // 这是**强制开启**开关：无论屏幕类型都启用。
         // search: 车机 车载 常驻 面板 大屏 副屏 副驾 miniplayer 迷你条
         SwitchListTile(
           title: const Text('车机模式'),
@@ -2034,38 +2035,75 @@ class _SettingsPageState extends State<SettingsPage>
             context.read<CarModeProvider>().setEnabled(value);
           },
         ),
-        _buildGroupLabel('面板宽度', colorScheme),
-        ListTile(
-          enabled: carMode.enabled,
-          title: const Text('面板宽度'),
-          subtitle: M3ESlider(
-            decoration: const M3ESliderDecoration(
-              // 显式给 hapticConfig：M3ESlider 在 divisions == null 时默认取
-              // M3EHapticConfig.continuous()（10ms 最小间隔 + 2% 阈值），
-              // 拖动中会以最高约 100 次/秒走 MethodChannel 触发 vibrate，
-              // 真机上马达饱和 + 通道洪泛。
-              haptic: M3EHapticFeedback.medium,
-              hapticConfig: M3EHapticConfig.discrete(),
-            ),
-            value: carMode.panelRatio * 100,
-            min: kCarModePanelMinRatio * 100,
-            max: kCarModePanelMaxRatio * 100,
-            // 不传 divisions = 无级调节（M3ESlider.divisions 为 int?），
-            // 有档位吸附会破坏「无级」手感。
-            label: '$ratioPercent%',
-            // 拖动中只改内存（persist: false），松手才落盘。
-            // 注意：divisions == null 时 M3ESlider 的 onChangeEnd 可能在按下
-            // 超过 100ms 后被 tap-cancel 提前触发一次（见 _DisplayScaleTile 的
-            // 注释）。这里提前落盘的只是一个 double，不影响手感，真正的终值
-            // 会在拖动结束时再落一次。
-            onChanged: (value) => context.read<CarModeProvider>().setPanelRatio(
-              value / 100,
-              persist: false,
-            ),
-            onChangeEnd: (value) =>
-                context.read<CarModeProvider>().setPanelRatio(value / 100),
+        // 自动检测开关：独立于上面的强制开关。开启后按屏幕长比自动判断，
+        // 命中车机屏（短边/长边 ≥ 0.55，常见 16:9 车机即满足）即自动启用。
+        // search: 车机 车载 自动 检测 屏幕 分辨率 识别 竖屏 方屏
+        SwitchListTile(
+          title: const Text('检测到车机屏幕时自动开启'),
+          subtitle: const Text('匹配竖屏或方屏车机等平屏时自动启用车机模式'),
+          value: carMode.autoScreenEnabled,
+          onChanged: (value) {
+            HapticFeedback.lightImpact();
+            context.read<CarModeProvider>().setAutoScreenEnabled(value);
+          },
+        ),
+        _buildGroupLabel(
+          carMode.useBottomLayout ? '面板高度' : '面板宽度',
+          colorScheme,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 标题随布局切换：侧边 =「面板宽度」（横贯左侧/右侧、只调宽），
+              // 底部 =「面板高度」（横贯全宽、只调高）。两者共用同一个占比值
+              // （panelRatio），通过 resolveCarModePanelWidth / Height 换算成
+              // 不同的物理尺寸。search: 面板宽度 面板高度 车机 底部
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      carMode.useBottomLayout ? '面板高度' : '面板宽度',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                  Text('$ratioPercent%', style: Theme.of(context).textTheme.bodyMedium ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // 滑条始终显示（两布局共用），拖动只改内存，松手落盘。
+              M3ESlider(
+                decoration: const M3ESliderDecoration(
+                  // 显式给 hapticConfig：M3ESlider 在 divisions == null 时默认取
+                  // M3EHapticConfig.continuous()（10ms 最小间隔 + 2% 阈值），
+                  // 拖动中会以最高约 100 次/秒走 MethodChannel 触发 vibrate，
+                  // 真机上马达饱和 + 通道洪泛。
+                  haptic: M3EHapticFeedback.medium,
+                  hapticConfig: M3EHapticConfig.discrete(),
+                ),
+                value: carMode.panelRatio * 100,
+                min: kCarModePanelMinRatio * 100,
+                max: kCarModePanelMaxRatio * 100,
+                // 不传 divisions = 无级调节（M3ESlider.divisions 为 int?），
+                // 有档位吸附会破坏「无级」手感。
+                label: '$ratioPercent%',
+                // 拖动中只改内存（persist: false），松手才落盘。
+                // 注意：divisions == null 时 M3ESlider 的 onChangeEnd 可能在
+                // 按下超过 100ms 后被 tap-cancel 提前触发一次（见
+                // _DisplayScaleTile 的注释）。这里提前落盘的只是一个 double，
+                // 不影响手感，真正的终值会在拖动结束时再落一次。
+                onChanged: (value) =>
+                    context.read<CarModeProvider>().setPanelRatio(
+                      value / 100,
+                      persist: false,
+                    ),
+                onChangeEnd: (value) => context
+                    .read<CarModeProvider>()
+                    .setPanelRatio(value / 100),
+              ),
+            ],
           ),
-          trailing: Text('$ratioPercent%'),
         ),
         _buildGroupLabel('面板位置', colorScheme),
         Padding(
@@ -2082,9 +2120,12 @@ class _SettingsPageState extends State<SettingsPage>
                 icon: Icon(Icons.align_horizontal_right),
               ),
             ],
-            selectedIndex: carMode.panelSide == CarModePanelSide.left ? 0 : 1,
+            selectedIndex:
+                carMode.useBottomLayout || carMode.panelSide == CarModePanelSide.left
+                ? 0
+                : 1,
             onSelectedIndexChanged: (index) {
-              if (index == null || !carMode.enabled) return;
+              if (index == null || !carMode.active) return;
               HapticFeedback.lightImpact();
               context.read<CarModeProvider>().setPanelSide(
                 index == 0 ? CarModePanelSide.left : CarModePanelSide.right,
@@ -2092,11 +2133,11 @@ class _SettingsPageState extends State<SettingsPage>
             },
           ),
         ),
-        if (!carMode.enabled)
+        if (!carMode.active)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             child: Text(
-              '开启车机模式后生效',
+              '开启车机模式或检测到车机屏幕后生效',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),

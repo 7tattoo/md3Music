@@ -142,4 +142,93 @@ void main() {
       );
     });
   });
+
+  group('screenAspect / isCarLikeScreen / isPortraitOrSquareScreen', () {
+    test('短边/长边：横屏 16:9 ≈ 0.5625', () {
+      expect(screenAspect(1920, 1080), closeTo(1080 / 1920, 0.001));
+    });
+
+    test('方屏 880×860 ≈ 0.977', () {
+      expect(screenAspect(880, 860), closeTo(860 / 880, 0.001));
+    });
+
+    test('竖屏手机长比 ≈ 0.46：不算车机屏', () {
+      expect(screenAspect(1080, 2340), closeTo(1080 / 2340, 0.001));
+      expect(isCarLikeScreen(1080, 2340), isFalse);
+    });
+
+    test('16:9 横屏车机（0.5625）判定为车机屏', () {
+      expect(isCarLikeScreen(1920, 1080), isTrue);
+    });
+
+    test('方屏 / 竖屏车机判定为车机屏', () {
+      expect(isCarLikeScreen(880, 860), isTrue);
+      expect(isCarLikeScreen(1080, 1920), isTrue);
+    });
+
+    test('竖屏或近方屏判定：竖屏手机不属于（长比 < 0.8 不为方屏）', () {
+      // 竖屏（高>宽）恒 true，与长比无关
+      expect(isPortraitOrSquareScreen(1080, 1920), isTrue);
+      // 近方屏横屏也 true
+      expect(isPortraitOrSquareScreen(880, 860), isTrue);
+      // 16:9 横屏：非竖屏且长比 0.5625 < 0.8 → false
+      expect(isPortraitOrSquareScreen(1920, 1080), isFalse);
+    });
+  });
+
+  group('resolveCarModePanelHeight', () {
+    test('默认 30%：屏高 800 → 240', () {
+      expect(
+        resolveCarModePanelHeight(screenHeight: 800, ratio: 0.30),
+        closeTo(240.0, 0.001),
+      );
+    });
+
+    test('窄屏被物理下限托底：200 屏 20% → 140 而不是 40', () {
+      expect(
+        resolveCarModePanelHeight(screenHeight: 200, ratio: 0.20),
+        closeTo(kCarModePanelMinHeight, 0.001),
+      );
+    });
+
+    test('屏高 0 / 负数不抛异常', () {
+      expect(resolveCarModePanelHeight(screenHeight: 0, ratio: 0.30), 0.0);
+      expect(resolveCarModePanelHeight(screenHeight: -10, ratio: 0.30), 0.0);
+    });
+  });
+
+  group('resolveCarModeHeightDelta', () {
+    test('贴底：向下拖 = 面板变高', () {
+      expect(
+        resolveCarModeHeightDelta(
+          deltaY: 80,
+          screenHeight: 800,
+          atBottom: true,
+        ),
+        closeTo(0.10, 0.001),
+      );
+    });
+
+    test('向上拖为负增量', () {
+      expect(
+        resolveCarModeHeightDelta(
+          deltaY: -80,
+          screenHeight: 800,
+          atBottom: true,
+        ),
+        lessThan(0),
+      );
+    });
+
+    test('非法输入返回 0', () {
+      expect(
+        resolveCarModeHeightDelta(
+          deltaY: 80,
+          screenHeight: 0,
+          atBottom: true,
+        ),
+        0.0,
+      );
+    });
+  });
 }
