@@ -2040,7 +2040,7 @@ class _SettingsPageState extends State<SettingsPage>
         // search: 车机 车载 自动 检测 屏幕 分辨率 识别 竖屏 方屏
         SwitchListTile(
           title: const Text('检测到车机屏幕时自动开启'),
-          subtitle: const Text('匹配竖屏或方屏车机等平屏时自动启用车机模式'),
+          subtitle: const Text('匹配竖屏或方屏车机等车载屏幕时自动启用车机模式'),
           value: carMode.autoScreenEnabled,
           onChanged: (value) {
             HapticFeedback.lightImpact();
