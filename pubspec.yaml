@@ -69,6 +69,8 @@ dev_dependencies:
   analyzer: ^10.2.0
 
 flutter:
+  # 开启 gen_l10n：构建时由 l10n.yaml 自动生成 AppLocalizations（zh/en）
+  generate: true
   uses-material-design: true
   assets:
     - assets/images/
