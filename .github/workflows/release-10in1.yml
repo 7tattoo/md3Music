@@ -19,6 +19,12 @@ on:
         type: string
         default: ''
 
+      ref:
+        description: '构建分支/tag（默认 feat/i18n）'
+        required: false
+        type: string
+        default: 'feat/i18n'
+
 permissions:
   contents: write
 
@@ -55,6 +61,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'feat/i18n' }}
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
