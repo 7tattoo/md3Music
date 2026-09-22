@@ -24,6 +24,7 @@ class CarModeProvider extends ChangeNotifier {
   bool _autoScreenEnabled = false;
   double _panelRatio = kCarModePanelDefaultRatio;
   CarModePanelSide _panelSide = CarModePanelSide.left;
+  double _dockClearanceDp = kCarModeBottomDockClearance;
   int _panelSuppressCount = 0;
 
   /// 当前屏幕是否判定为「车机屏」（短边/长边 ≥ 0.55，见 [isCarLikeScreen]）。
@@ -61,6 +62,24 @@ class CarModeProvider extends ChangeNotifier {
 
   /// 面板停靠位置（默认左侧）。
   CarModePanelSide get panelSide => _panelSide;
+
+  /// 底部面板的 dock 避让高度（dp）。见
+  /// [SettingsRepository.getCarModeDockClearance]。
+  double get dockClearanceDp => _dockClearanceDp;
+
+  Future<void> setDockClearance(double value, {bool persist = true}) async {
+    final clamped = value.isFinite
+        ? value.clamp(0.0, kCarModeDockClearanceMax)
+        : kCarModeBottomDockClearance;
+    if (clamped == _dockClearanceDp) return;
+    _dockClearanceDp = clamped;
+    _notifySafely();
+    // persist:false 用于拖动过程实时预览（与 setPanelRatio 同一模式），
+    // 避免拖动期间高频写 SharedPreferences；松手时 persist:true 落盘。
+    if (persist) {
+      await SettingsRepository().setCarModeDockClearance(clamped);
+    }
+  }
 
   /// 当前是否判定为车机屏（由 UI 注入，见 [updateScreenMetrics]）。
   bool get screenIsCar => _screenIsCar;
@@ -125,10 +144,12 @@ class CarModeProvider extends ChangeNotifier {
       final autoScreen = await repo.getCarModeAutoScreenEnabled();
       final ratio = await repo.getCarModePanelRatio();
       final side = await repo.getCarModePanelSide();
+      final clearance = await repo.getCarModeDockClearance();
       if (!_enabledTouched) _enabled = enabled;
       if (!_autoScreenTouched) _autoScreenEnabled = autoScreen;
       if (!_ratioTouched) _panelRatio = ratio;
       if (!_sideTouched) _panelSide = side;
+      _dockClearanceDp = clearance;
       _notifySafely();
     } catch (_) {
       // 读取失败保持默认（关闭），不影响启动。

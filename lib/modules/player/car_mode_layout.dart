@@ -96,12 +96,27 @@ bool isPortraitOrSquareScreen(double width, double height) {
 /// 取 max(系统安全区, 本兜底值)，两种 dock 形态都盖得住。
 const double kCarModeBottomDockClearance = 48.0;
 
+/// dock 避让高度的可设置上限（dp）：覆盖常见车机 dock 高度，防止误设
+/// 把面板挤到不可用。
+const double kCarModeDockClearanceMax = 160.0;
+
 /// 底部面板高度的物理下限（dp）。
 ///
 /// 侧边面板靠 [kCarModePanelMinWidth] 托底保证传输控件不溢出；底部面板
 /// 横贯全宽、限制的是高度，同样需要物理下限避免 `RenderFlex overflow`。
-/// 底部模式下 20% 会被该下限托底（屏高 < 700dp 时生效）。
+/// 高度低于该值时底部面板切换为细条（dock bar）模式渲染（见
+/// car_mode_panel.dart 的 `_CarModeDockBar`），FullPlayer 紧凑布局只在
+/// 高度 ≥ 本值时使用。
 const double kCarModePanelMinHeight = 140.0;
+
+/// 底部面板「细条模式」的物理下限（dp）。
+///
+/// 底部布局占比下限为 10%，但 [kCarModePanelMinHeight]（140dp，FullPlayer
+/// 紧凑布局的下限）会把小屏上的 10% 托底回 ~20%，等于 10% 形同虚设。
+/// 因此底部布局把物理下限放宽到本值，低于 [kCarModePanelMinHeight] 的
+/// 高度由细条模式（封面缩略图 + 曲名/歌手 + 上一首/播放/下一首）兜底渲染，
+/// 不再溢出。44dp 传输侧键 + 上下各 6dp 边距 ≈ 56dp。
+const double kCarModeDockBarMinHeight = 56.0;
 
 /// 由屏幕宽度与占比推导面板实际宽度（dp）。
 ///
@@ -156,10 +171,15 @@ double resolveCarModeRatioDelta({
 /// [minRatio]：高度占比下限。侧边/底部布局共用本函数时由调用方决定：
 /// 底部布局传 [kCarModePanelMinRatioBottom]（10%），其余场景用默认值
 /// [kCarModePanelMinRatio]（20%）。
+///
+/// [minPhysicalHeight]：物理下限。底部布局传 [kCarModeDockBarMinHeight]
+/// （56dp，细条模式托底），侧边/其余场景用默认 [kCarModePanelMinHeight]
+/// （140dp，FullPlayer 紧凑布局下限）。
 double resolveCarModePanelHeight({
   required double screenHeight,
   required double ratio,
   double minRatio = kCarModePanelMinRatio,
+  double minPhysicalHeight = kCarModePanelMinHeight,
 }) {
   final safeHeight = screenHeight.isFinite && screenHeight > 0
       ? screenHeight
@@ -168,7 +188,7 @@ double resolveCarModePanelHeight({
       ? ratio.clamp(minRatio, kCarModePanelMaxRatio)
       : kCarModePanelDefaultRatio;
   final maxHeight = safeHeight * kCarModePanelMaxRatio;
-  final minHeight = math.min(kCarModePanelMinHeight, maxHeight);
+  final minHeight = math.min(minPhysicalHeight, maxHeight);
   return (safeHeight * clampedRatio).clamp(minHeight, maxHeight);
 }
 

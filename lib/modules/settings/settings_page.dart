@@ -2155,6 +2155,62 @@ class _SettingsPageState extends State<SettingsPage>
             ],
           ),
         ),
+        // Dock 避让高度校准：仅底部布局（面板贴屏幕下缘）有意义 —— 车联
+        // dock 栏是系统悬浮窗、不产生 WindowInsets，SafeArea 挡不住，只能
+        // 由用户按 dock 实际高度校准（见 kCarModeBottomDockClearance 注释）。
+        // search-item: dock 避让高度 | 车机 车联 dock 避让 底部 空隙 高度
+        if (carMode.useBottomLayout) ...[
+          _buildGroupLabel(l10n.carModeDockClearance, colorScheme),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.carModeDockClearanceSubtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: M3ESlider(
+                        decoration: const M3ESliderDecoration(
+                          haptic: M3EHapticFeedback.medium,
+                          hapticConfig: M3EHapticConfig.discrete(),
+                        ),
+                        value: carMode.dockClearanceDp,
+                        min: 0,
+                        max: kCarModeDockClearanceMax,
+                        // 1dp 一档：整数值好读好记，档位 haptic 也与
+                        // M3EHapticConfig.discrete() 匹配。
+                        divisions: kCarModeDockClearanceMax.round(),
+                        label: '${carMode.dockClearanceDp.round()}dp',
+                        onChanged: (value) => context
+                            .read<CarModeProvider>()
+                            .setDockClearance(value, persist: false),
+                        onChangeEnd: (value) =>
+                            context.read<CarModeProvider>().setDockClearance(value),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 72,
+                      child: Text(
+                        carMode.dockClearanceDp <= 0
+                            ? l10n.carModeDockClearanceOff
+                            : '${carMode.dockClearanceDp.round()}dp',
+                        textAlign: TextAlign.end,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
         _buildGroupLabel(l10n.carModePanelPosition, colorScheme),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),

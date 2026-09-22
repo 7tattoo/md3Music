@@ -20,6 +20,9 @@
   "carModeExitTitle": "退出车机模式",
   "carModeExitContent": "退出后播放器面板不再常驻显示，可随时在「设置 → 车机模式」重新开启。",
   "carModeExitConfirm": "退出",
+  "carModeDockClearance": "Dock 避让高度",
+  "carModeDockClearanceSubtitle": "底部面板与屏幕下缘留出的空隙，用于避开车联 dock 栏；0 为不避让",
+  "carModeDockClearanceOff": "不避让",
 
   "languageSettingTitle": "语言",
   "languageFollowSystem": "跟随系统",

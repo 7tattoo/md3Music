@@ -20,6 +20,9 @@
   "carModeExitTitle": "Exit Car Mode",
   "carModeExitContent": "The player panel will no longer dock after exiting. Re-enable anytime in Settings → Car Mode.",
   "carModeExitConfirm": "Exit",
+  "carModeDockClearance": "Dock clearance height",
+  "carModeDockClearanceSubtitle": "Gap between the bottom panel and the screen edge to keep the car dock visible; 0 disables clearance",
+  "carModeDockClearanceOff": "No clearance",
 
   "languageSettingTitle": "Language",
   "languageFollowSystem": "Follow system",

@@ -927,6 +927,8 @@ class SettingsRepository {
   static const String _keyCarModeEnabled = 'settings_car_mode_enabled';
   static const String _keyCarModeAutoScreen = 'settings_car_mode_auto_screen';
   static const String _keyCarModePanelRatio = 'settings_car_mode_panel_ratio';
+  static const String _keyCarModeDockClearance =
+      'settings_car_mode_dock_clearance';
   static const String _keyCarModePanelSide = 'settings_car_mode_panel_side';
 
   /// 「车机模式」开关，默认关闭。
@@ -976,6 +978,26 @@ class SettingsRepository {
     await prefs.setDouble(
       _keyCarModePanelRatio,
       value.clamp(kCarModePanelMinRatioBottom, kCarModePanelMaxRatio),
+    );
+  }
+
+  /// 底部面板的 dock 避让高度（dp，逻辑像素）。
+  ///
+  /// 车联 dock 栏以系统悬浮窗绘在 App 之上、不产生 WindowInsets，用户在
+  /// 设置页按 dock 实际高度校准并持久化；默认 [kCarModeBottomDockClearance]
+  /// （48dp）。范围 0–160：0 = 不避让（贴屏幕底边），160 覆盖常见车机 dock。
+  Future<double> getCarModeDockClearance() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getDouble(_keyCarModeDockClearance);
+    if (value == null) return kCarModeBottomDockClearance;
+    return value.clamp(0.0, kCarModeDockClearanceMax);
+  }
+
+  Future<void> setCarModeDockClearance(double value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(
+      _keyCarModeDockClearance,
+      value.clamp(0.0, kCarModeDockClearanceMax),
     );
   }
 
