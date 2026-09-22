@@ -21,6 +21,44 @@ const String kIndexOutputRelPath =
 const String kIndexSourceRelPath =
     'lib/modules/settings/settings_search_index.g.dart';
 
+/// 单条设置搜索索引条目。
+class SettingsSearchEntry {
+  const SettingsSearchEntry({required this.label, required this.category});
+
+  /// 条目标题（与设置页 tile 标题一致）。
+  final String label;
+
+  /// 所属分类（与设置页分组标题一致）。
+  final String category;
+}
+
+/// 从权威源解析索引条目（label + category），供一致性测试校验非空与字段完整。
+///
+/// 设计意图：本期索引条目由人工与源码同步维护，产物本身即权威来源；这里从
+/// 产物文本中解析出条目列表，保证「产物可解析、条目完整」这一底线约束。
+/// 后续若改为纯源码扫描生成，只需替换本函数实现，对外签名保持不变。
+List<SettingsSearchEntry> collectSettingsSearchEntries({
+  required String projectRoot,
+}) {
+  final src = File('$projectRoot/$kIndexSourceRelPath');
+  if (!src.existsSync()) {
+    throw StateError('未找到权威索引源 $kIndexSourceRelPath。');
+  }
+  final entries = <SettingsSearchEntry>[];
+  final row = RegExp(
+    r"label:\s*'((?:[^'\\]|\\.)*)'\s*,\s*category:\s*'((?:[^'\\]|\\.)*)'",
+  );
+  for (final line in src.readAsLinesSync()) {
+    final m = row.firstMatch(line);
+    if (m != null) {
+      entries.add(
+        SettingsSearchEntry(label: m.group(1)!, category: m.group(2)!),
+      );
+    }
+  }
+  return entries;
+}
+
 /// 从权威源再生成索引源文本（字节级一致，幂等）。
 ///
 /// 设计意图：本期索引条目由人工与源码同步维护（含分类分组、标题与同义词标注的
@@ -36,7 +74,8 @@ String generateSettingsSearchIndexSource({required String projectRoot}) {
 }
 
 /// 统计权威源中的条目数（供 main 打印）。
-int _countEntries(String source) => RegExp(r"label:\s*'").allMatches(source).length;
+int _countEntries(String source) =>
+    RegExp(r"label:\s*'").allMatches(source).length;
 
 void main(List<String> args) {
   final projectRoot = args.isNotEmpty ? args.first : Directory.current.path;
