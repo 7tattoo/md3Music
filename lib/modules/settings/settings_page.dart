@@ -740,6 +740,8 @@ class _SettingsPageState extends State<SettingsPage>
   Widget _buildLyricSection(ColorScheme colorScheme) {
     final protocolActive = _lyricPushProtocol != 'none';
     return Column(
+      // start：默认 center 会把收缩包裹子项（按钮组等）在宽屏车机上整体居中错位
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ① 歌词推送：先选推送协议，再调该协议下的共用文本偏好
         _buildGroupLabel('歌词推送', colorScheme, first: true),
@@ -1050,6 +1052,8 @@ class _SettingsPageState extends State<SettingsPage>
     final canToggleOled =
         context.watch<ThemeProvider>().themeMode != ThemeMode.light;
     return Column(
+      // start：默认 center 会把收缩包裹子项（按钮组等）在宽屏车机上整体居中错位
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ① 语言：跟随系统 / 中文 / English（改动立即全局生效）
         _buildGroupLabel(context.l10n.languageSettingTitle, colorScheme, first: true),
@@ -1263,6 +1267,8 @@ class _SettingsPageState extends State<SettingsPage>
         _backgroundImagePath!.isNotEmpty &&
         File(_backgroundImagePath!).existsSync();
     return Column(
+      // start：默认 center 会把收缩包裹子项（按钮组等）在宽屏车机上整体居中错位
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // search: 背景 图片 壁纸
         SwitchListTile(
@@ -1508,6 +1514,8 @@ class _SettingsPageState extends State<SettingsPage>
   /// 两种风格均支持的频谱。专属项按其生效风格聚拢，避免灰显开关散落在各处。
   Widget _buildPlayerStyleSection(ColorScheme colorScheme) {
     return Column(
+      // start：默认 center 会把收缩包裹子项（按钮组等）在宽屏车机上整体居中错位
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ① 风格选择：决定下方哪些专属项可用
         _buildGroupLabel('播放页风格', colorScheme, first: true),
@@ -2257,6 +2265,8 @@ class _SettingsPageState extends State<SettingsPage>
 
   Widget _buildPlaybackSection(ColorScheme colorScheme) {
     return Column(
+      // start：默认 center 会把收缩包裹子项（按钮组等）在宽屏车机上整体居中错位
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ① 音质与音效
         _buildGroupLabel('音质与音效', colorScheme, first: true),
@@ -2725,6 +2735,8 @@ class _SettingsPageState extends State<SettingsPage>
   /// 缓存与数据（已并入原「在线音乐」二级页的内容）。
   Widget _buildCacheSection(ColorScheme colorScheme) {
     return Column(
+      // start：默认 center 会把收缩包裹子项（按钮组等）在宽屏车机上整体居中错位
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 原「在线音乐」页内容：本地 Rust 服务器状态与重启入口
         // search: 接口 本地服务器 api 在线音乐
@@ -2835,6 +2847,8 @@ class _SettingsPageState extends State<SettingsPage>
   /// 关于 section：版本（含构建期渲染引擎）→ 帮助 → 法律与许可。
   Widget _buildAboutSection(ColorScheme colorScheme) {
     return Column(
+      // start：默认 center 会把收缩包裹子项（按钮组等）在宽屏车机上整体居中错位
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ① 版本：先看当前版本，再去更新
         _buildGroupLabel('版本', colorScheme, first: true),
