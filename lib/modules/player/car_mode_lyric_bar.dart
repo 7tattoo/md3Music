@@ -157,6 +157,10 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
     final song = player.currentSong;
     final colorScheme = Theme.of(context).colorScheme;
 
+    // 紧凑档：面板高 <96dp（10% 档小屏）时压掉垂直余量，防两行文字 +
+    // 传输键在 1.1x 文字缩放下溢出（86dp: 22+18+1+2+32+8 ≈ 83 < 86 ✓）。
+    final tight = widget.height < 96;
+
     final transport = _TransportControls(
       player: player,
       keyHeight: widget.height < 85 ? 28 : (tight ? 32 : 34),
@@ -169,10 +173,7 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         // 2026-09-23 用户反馈：面板上下留白收紧到 3/2，封面吃满内容高度
-        // （上限 148，10% 档 86dp 面板 → 80dp 大封面）。
-        // 紧凑档：面板高 <96dp（10% 档小屏）时压掉垂直余量，防两行文字 +
-        // 传输键在 1.1x 文字缩放下溢出（86dp: 22+18+1+2+32+8 ≈ 83 < 86 ✓）。
-        final tight = widget.height < 96;
+        // （上限 148，10% 档 86dp 面板 → 80dp 大封面）。紧凑档 tight 见 build 顶部。
         final padV = tight ? 2.0 : 3.0;
         final artSize = math.min(
           math.min(widget.height - 2 * padV, width * 0.24),
