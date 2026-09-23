@@ -123,7 +123,9 @@ const double kCarModeDockBarMinHeight = 56.0;
 /// 歌词条布局 = 歌名/歌手两行 + 传输键行（34dp 触控高），低于本值放不下，
 /// 由 car_mode_panel.dart 回退旧细条 [_CarModeDockBar] 单行渲染。
 /// 更矮的屏上 10% 被 [kCarModeDockBarMinHeight]（56dp）托底时走此回退。
-const double kCarModeDockBarFallbackMin = 80.0;
+/// 2026-09-23 起歌词条带按 1.1x 缩放核算最低到 85dp 也能放（歌手行隐藏），
+/// 故下限从 80dp 放宽到 72dp：10%（86dp）始终走歌词条带。
+const double kCarModeDockBarFallbackMin = 72.0;
 
 /// 由屏幕宽度与占比推导面板实际宽度（dp）。
 ///

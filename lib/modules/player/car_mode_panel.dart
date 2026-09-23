@@ -253,17 +253,17 @@ class _CarModePanelState extends State<CarModePanel>
           );
     final percentLabel = atBottom
         ? (mq.size.height > 0
-            ? '${(previewLength / mq.size.height * 100).round()}%'
-            : '${(kCarModePanelDefaultRatio * 100).round()}%')
+              ? '${(previewLength / mq.size.height * 100).round()}%'
+              : '${(kCarModePanelDefaultRatio * 100).round()}%')
         : (mq.size.width > 0
-            ? '${(previewLength / mq.size.width * 100).round()}%'
-            : '${(kCarModePanelDefaultRatio * 100).round()}%');
+              ? '${(previewLength / mq.size.width * 100).round()}%'
+              : '${(kCarModePanelDefaultRatio * 100).round()}%');
 
     // 底部面板两档轻量布局：
     //   * 歌词条（CarModeLyricBar，2026-09-23）：内容高度 < 25% 屏高（且不足
     //     FullPlayer 物理下限 140dp 时也归此档）→ [大封面 | 歌名/歌手+传输键 |
     //     当前行+下一行歌词]。25% 及以上走原 FullPlayer 紧凑布局。
-    //   * 旧细条（_CarModeDockBar）：内容高度 < 80dp（更矮的屏上 10% 被 56dp
+    //   * 旧细条（_CarModeDockBar）：内容高度 < 72dp（更矮的屏上 10% 被 56dp
     //     托底）时歌词条两行文字 + 传输键放不下，回退旧单行布局。
     final lyricBarLimit = math.max(
       kCarModePanelMinHeight.toDouble(),
@@ -305,8 +305,8 @@ class _CarModePanelState extends State<CarModePanel>
         ),
         child: useLyricBar
             ? (compactBar
-                ? _CarModeDockBar(height: contentLength)
-                : CarModeLyricBar(height: contentLength))
+                  ? _CarModeDockBar(height: contentLength)
+                  : CarModeLyricBar(height: contentLength))
             : const _CarModePlayerHost(),
       ),
     );
@@ -371,7 +371,8 @@ class _CarModePanelState extends State<CarModePanel>
         // 底部模式：把手是水平横条，沿面板上缘水平放置并在垂直方向拖动。
         atBottom
             ? Positioned(
-                top: mq.size.height -
+                top:
+                    mq.size.height -
                     dockClearance -
                     previewLength -
                     _HorizHandle.hitHeight / 2,
@@ -383,13 +384,14 @@ class _CarModePanelState extends State<CarModePanel>
                   onDragStart: () => _onDragStart(carMode.panelRatio),
                   onDragDelta: _onDragVerticalDelta,
                   onDragEnd: _onDragEnd,
-                  onReset: () => context
-                      .read<CarModeProvider>()
-                      .setPanelRatio(kCarModePanelDefaultRatio),
+                  onReset: () => context.read<CarModeProvider>().setPanelRatio(
+                    kCarModePanelDefaultRatio,
+                  ),
                 ),
               )
             : Positioned(
-                left: (isLeft ? previewLength : mq.size.width - previewLength) -
+                left:
+                    (isLeft ? previewLength : mq.size.width - previewLength) -
                     _CarModeResizeHandle.hitWidth / 2,
                 top: 0,
                 bottom: 0,
@@ -399,9 +401,9 @@ class _CarModePanelState extends State<CarModePanel>
                   onDragStart: () => _onDragStart(carMode.panelRatio),
                   onDragDelta: _onDragDelta,
                   onDragEnd: _onDragEnd,
-                  onReset: () => context
-                      .read<CarModeProvider>()
-                      .setPanelRatio(kCarModePanelDefaultRatio),
+                  onReset: () => context.read<CarModeProvider>().setPanelRatio(
+                    kCarModePanelDefaultRatio,
+                  ),
                 ),
               ),
       ],
@@ -462,9 +464,8 @@ class _CarModePlayerHost extends StatelessWidget {
     return HeroControllerScope(
       controller: HeroController(),
       child: Navigator(
-        onGenerateRoute: (_) => MaterialPageRoute<void>(
-          builder: (_) => const _CarModePlayerBody(),
-        ),
+        onGenerateRoute: (_) =>
+            MaterialPageRoute<void>(builder: (_) => const _CarModePlayerBody()),
       ),
     );
   }
@@ -704,9 +705,7 @@ class _CarModeDragScrim extends StatelessWidget {
     // 分区感由叠在遮罩之上的把手细线提供。
     if (atBottom) {
       // 底部：上为主界面、下为播放器。
-      return Column(
-        children: [mainBlock, playerBlock],
-      );
+      return Column(children: [mainBlock, playerBlock]);
     }
     return Row(
       children: side == CarModePanelSide.left
@@ -846,8 +845,8 @@ class _CarModeDockBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     if (song != null && song.artist.isNotEmpty)
                       Text(
@@ -855,29 +854,23 @@ class _CarModeDockBar extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                   ],
                 ),
               ),
               IconButton(
-                onPressed: playing || song != null
-                    ? player.previous
-                    : null,
+                onPressed: playing || song != null ? player.previous : null,
                 icon: const Icon(Icons.skip_previous_rounded),
                 tooltip: '上一曲',
               ),
               IconButton(
                 onPressed: song == null
                     ? null
-                    : () => playing
-                        ? player.pause()
-                        : player.resume(),
+                    : () => playing ? player.pause() : player.resume(),
                 icon: Icon(
-                  playing
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
+                  playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 ),
                 tooltip: playing ? '暂停' : '播放',
               ),

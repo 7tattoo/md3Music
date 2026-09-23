@@ -7,10 +7,13 @@
 //
 //   * 传输键从右侧移到歌名/歌手下方，文字上提消除竖向空白；
 //   * 封面调大到与右侧内容块对齐（上限 132dp，避免大高度下面板被封面塞满）；
-//   * 右侧旧控件位置让给歌词：默认「当前行 + 下一行」两行；当前行单行放不下
-//     时（会换行）只显示当前行（最多两行）。
+//   * 右侧旧控件位置让给歌词：默认「上一行 + 当前行 + 下一行」三行（当前行
+//     加粗，上/下行淡色）；当前行单行放不下时退回「当前行(≤2行) + 下一行」，
+//     高度不足时再逐级让位。
+//   * 2026-09-23 用户反馈调优：垂直留白 6→3/2、封面放大（h-2*padV，上限
+//     148）、矮屏（<85dp）隐藏歌手行。
 //
-// 高度仍不足（<80dp：更矮的屏上 10% 被 56dp 物理下限托底）时由调用方
+// 高度仍不足（<72dp：更矮的屏上 10% 被 56dp 物理下限托底）时由调用方
 // （car_mode_panel.dart）回退旧细条 _CarModeDockBar，本组件不处理。
 //
 // 歌词管线与 DesktopLyricService 同源：本地内嵌歌词（LocalLyricLoader）→
@@ -156,7 +159,8 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
 
     final transport = _TransportControls(
       player: player,
-      tight: widget.height < 96,
+      keyHeight: widget.height < 85 ? 28 : (tight ? 32 : 34),
+      iconSize: widget.height < 85 ? 20 : 22,
     );
 
     // 窄容器自适应：宽屏车机封面/文字列放大，手机竖屏（若手动开车机模式）
@@ -164,27 +168,29 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        // 2026-09-23 用户反馈：面板上下留白收紧到 3/2，封面吃满内容高度
+        // （上限 148，10% 档 86dp 面板 → 80dp 大封面）。
+        // 紧凑档：面板高 <96dp（10% 档小屏）时压掉垂直余量，防两行文字 +
+        // 传输键在 1.1x 文字缩放下溢出（86dp: 22+18+1+2+32+8 ≈ 83 < 86 ✓）。
+        final tight = widget.height < 96;
+        final padV = tight ? 2.0 : 3.0;
         final artSize = math.min(
-          math.min(widget.height - 12.0, width * 0.22),
-          132.0,
+          math.min(widget.height - 2 * padV, width * 0.24),
+          148.0,
         );
         final textColumnWidth = (math.min(
           240.0,
           width * 0.30,
         )).clamp(120.0, 240.0);
-        // 紧凑档：面板高 <96dp（10% 档小屏）时压掉垂直余量，防两行文字 +
-        // 传输键在 1.1x 文字缩放下溢出（86dp: 22+18+1+2+32+8 ≈ 83 < 86 ✓）。
-        final tight = widget.height < 96;
+        // 矮屏（10% 档，<85dp）隐藏歌手行：给歌词三行让位（用户草图 2026-09-23）。
+        final showArtist = widget.height >= 85;
 
         return Material(
           color: colorScheme.surface,
           child: InkWell(
             onTap: song == null ? null : () => openFullPlayer(context),
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: tight ? 4 : 6,
-              ),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: padV),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -220,7 +226,9 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(fontWeight: FontWeight.w600),
                         ),
-                        if (song != null &&
+                        // 矮屏（<85dp，10% 档）隐藏歌手行，给歌词三行让位。
+                        if (showArtist &&
+                            song != null &&
                             song.artist.isNotEmpty &&
                             song.artist != '未知艺术家') ...[
                           const SizedBox(height: 1),
@@ -260,12 +268,19 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
 /// 紧凑档传输键：36x36 触控区 + 22dp 图标（旧细条 44dp 键在 86dp 面板里
 /// 与两行文字叠加放不下，压缩一档）。
 class _TransportControls extends StatelessWidget {
-  const _TransportControls({required this.player, this.tight = false});
+  const _TransportControls({
+    required this.player,
+    this.keyHeight = 34,
+    this.iconSize = 22,
+  });
 
   final PlayerProvider player;
 
-  /// 紧凑档（面板高 <96dp）：触控高 32dp，防垂直溢出。
-  final bool tight;
+  /// 触控键高：normal 34 / tight 32 / veryTight(矮屏 10% 档) 28。
+  final double keyHeight;
+
+  /// 图标边长：veryTight 档缩到 20。
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -310,17 +325,18 @@ class _TransportControls extends StatelessWidget {
   }) {
     return IconButton(
       onPressed: onTap,
-      icon: Icon(icon, size: 22),
+      icon: Icon(icon, size: iconSize),
       color: color,
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
-      constraints: BoxConstraints.tightFor(width: 38, height: tight ? 32 : 34),
+      constraints: BoxConstraints.tightFor(width: 38, height: keyHeight),
     );
   }
 }
 
-/// 右侧歌词：默认「当前行 + 下一行」；当前行单行放不下时只显示当前行
-/// （最多两行后省略）。空态/加载态显示占位符。
+/// 右侧歌词（用户草图 2026-09-23）：默认「上一行(淡) + 当前行(粗) + 下一行
+/// (淡)」三行，按面板高度自适应降级为两行/单行；当前行单行放不下时给两行
+/// 并让出上一行。空态/加载态显示占位符。
 class _LyricPane extends StatelessWidget {
   const _LyricPane({
     required this.lines,
@@ -382,8 +398,14 @@ class _LyricPane extends StatelessWidget {
         ) ??
         TextStyle(fontWeight: FontWeight.w600, color: colorScheme.onSurface);
     final nextStyle =
-        Theme.of(context).textTheme.bodyMedium
-            ?.copyWith(color: colorScheme.onSurfaceVariant.withAlpha(200)) ??
+        Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurfaceVariant.withAlpha(200),
+        ) ??
+        TextStyle(color: colorScheme.onSurfaceVariant);
+    final prevStyle =
+        Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant.withAlpha(140),
+        ) ??
         TextStyle(color: colorScheme.onSurfaceVariant);
 
     return ValueListenableBuilder<Duration>(
@@ -392,6 +414,7 @@ class _LyricPane extends StatelessWidget {
         final posMs = position.inMilliseconds;
         final idx = _findLineIndex(lines, posMs);
         final current = idx >= 0 ? lines[idx].text.trim() : '';
+        final prev = idx >= 1 ? lines[idx - 1].text.trim() : '';
         final next = idx >= 0 && idx + 1 < lines.length
             ? lines[idx + 1].text.trim()
             : '';
@@ -409,22 +432,35 @@ class _LyricPane extends StatelessWidget {
         }
         return LayoutBuilder(
           builder: (context, constraints) {
-            final showNext = !_currentLineOverflows(
-              current,
-              constraints.maxWidth,
-              currentStyle,
-            );
+            final maxW = constraints.maxWidth;
+            // 高度约束来自 Row 交叉轴（面板高 - 垂直内边距）；无界时按两行退化。
+            final maxH = constraints.maxHeight;
+            final curWraps = _currentLineOverflows(current, maxW, currentStyle);
+            // 三行布局（用户草图 2026-09-23）：上一行(淡) + 当前行(粗) + 下一行(淡)。
+            // 当前行需折行时「上一行」让位；高度不足 80dp（含 1.1x 缩放余量）
+            // 时退回两行，仅保留当前行 + 下一行。
+            final showPrev = !curWraps && prev.isNotEmpty && maxH >= 80;
+            final showNext = next.isNotEmpty && !(curWraps && maxH < 76);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (showPrev) ...[
+                  Text(
+                    prev,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: prevStyle,
+                  ),
+                  const SizedBox(height: 2),
+                ],
                 Text(
                   current,
-                  maxLines: showNext ? 1 : 2,
+                  maxLines: curWraps ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
                   style: currentStyle,
                 ),
-                if (showNext && next.isNotEmpty) ...[
+                if (showNext) ...[
                   const SizedBox(height: 2),
                   Text(
                     next,
