@@ -260,14 +260,15 @@ class _CarModePanelState extends State<CarModePanel>
               : '${(kCarModePanelDefaultRatio * 100).round()}%');
 
     // 底部面板两档轻量布局：
-    //   * 歌词条（CarModeLyricBar，2026-09-23）：内容高度 < 25% 屏高（且不足
-    //     FullPlayer 物理下限 140dp 时也归此档）→ [大封面 | 歌名/歌手+传输键 |
-    //     当前行+下一行歌词]。25% 及以上走原 FullPlayer 紧凑布局。
+    //   * 歌词条（CarModeLyricBar，2026-09-23）：内容高度 < 35% 屏高（且不足
+    //     FullPlayer 物理下限 140dp 时也归此档）→ [当前行+下一行歌词 | 歌名/
+    //     歌手+传输键 | 大封面]（2026-09-23 晚用户要求镜像：歌词最左、封面
+    //     最右）。35% 及以上走原 FullPlayer 紧凑布局。
     //   * 旧细条（_CarModeDockBar）：内容高度 < 72dp（更矮的屏上 10% 被 56dp
     //     托底）时歌词条两行文字 + 传输键放不下，回退旧单行布局。
     final lyricBarLimit = math.max(
       kCarModePanelMinHeight.toDouble(),
-      mq.size.height * 0.25,
+      mq.size.height * 0.35,
     );
     final useLyricBar = atBottom && contentLength < lyricBarLimit;
     final compactBar = atBottom && contentLength < kCarModeDockBarFallbackMin;

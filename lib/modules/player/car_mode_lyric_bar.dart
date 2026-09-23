@@ -1,13 +1,15 @@
-// 车机模式底部面板「紧凑歌词条」（底部面板 10%~25% 高度档的新布局）。
+// 车机模式底部面板「紧凑歌词条」（底部面板 10%~35% 高度档的新布局）。
 //
-// 用户场景（2026-09-23）：竖屏/方屏车机把底部面板压到 10%~25% 时，旧细条
-// （_CarModeDockBar）封面小、控件挤在右侧、右半区大量留白。新布局：
+// 用户场景（2026-09-23）：竖屏/方屏车机把底部面板压到 10%~35% 时，旧细条
+// （_CarModeDockBar）封面小、控件挤在右侧、右半区大量留白。新布局（2026-09-23
+// 晚用户要求镜像后）：
 //
-//   [ 大封面 ] [ 歌名/歌手（上） + 传输键（下） ] [ 当前行 + 下一行歌词 ]
+//   [ 当前行 + 下一行歌词 ] [ 歌名/歌手（上） + 传输键（下） ] [ 大封面 ]
+//        最左、靠左对齐                  与封面并排              最右
 //
 //   * 传输键从右侧移到歌名/歌手下方，文字上提消除竖向空白；
-//   * 封面调大到与右侧内容块对齐（上限 132dp，避免大高度下面板被封面塞满）；
-//   * 右侧旧控件位置让给歌词：默认「上一行 + 当前行 + 下一行」三行（当前行
+//   * 封面靠右对齐（上限 148dp，避免大高度下面板被封面塞满）；
+//   * 左侧让给歌词：默认「上一行 + 当前行 + 下一行」三行（当前行
 //     加粗，上/下行淡色）；当前行单行放不下时退回「当前行(≤2行) + 下一行」，
 //     高度不足时再逐级让位。
 //   * 2026-09-23 用户反馈调优：垂直留白 6→3/2、封面放大（h-2*padV，上限
@@ -37,7 +39,7 @@ import '../../widgets/apple_lyrics/models/lyric_line.dart';
 import '../../widgets/smart_artwork_image.dart';
 import 'full_player_route.dart';
 
-/// 紧凑歌词条：底部面板 10%~25% 高度档的新布局（见文件头注释）。
+/// 紧凑歌词条：底部面板 10%~35% 高度档的新布局（见文件头注释）。
 class CarModeLyricBar extends StatefulWidget {
   const CarModeLyricBar({super.key, required this.height});
 
@@ -195,21 +197,12 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // —— 左：大封面 ——
-                  SizedBox(
-                    width: artSize,
-                    height: artSize,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: song == null
-                          ? ColoredBox(
-                              color: colorScheme.surfaceContainerHighest,
-                            )
-                          : SmartArtworkImage(
-                              artworkUri: song.artworkUri,
-                              size: artSize,
-                              borderRadius: 12,
-                            ),
+                  // —— 左：歌词（当前行 + 下一行，靠左对齐） ——
+                  Expanded(
+                    child: _LyricPane(
+                      lines: _lines,
+                      player: player,
+                      colorScheme: colorScheme,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -248,12 +241,21 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // —— 右：歌词（当前行 + 下一行） ——
-                  Expanded(
-                    child: _LyricPane(
-                      lines: _lines,
-                      player: player,
-                      colorScheme: colorScheme,
+                  // —— 右：大封面（靠右对齐） ——
+                  SizedBox(
+                    width: artSize,
+                    height: artSize,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: song == null
+                          ? ColoredBox(
+                              color: colorScheme.surfaceContainerHighest,
+                            )
+                          : SmartArtworkImage(
+                              artworkUri: song.artworkUri,
+                              size: artSize,
+                              borderRadius: 12,
+                            ),
                     ),
                   ),
                 ],
