@@ -271,10 +271,10 @@ void main() {
   });
 
   group('resolveCarModeHeightDelta', () {
-    test('贴底：向下拖 = 面板变高', () {
+    test('贴底：向上拖 = 面板变高（bottom-sheet 手势）', () {
       expect(
         resolveCarModeHeightDelta(
-          deltaY: 80,
+          deltaY: -80,
           screenHeight: 800,
           atBottom: true,
         ),
@@ -282,10 +282,10 @@ void main() {
       );
     });
 
-    test('向上拖为负增量', () {
+    test('向下拖为负增量（收起）', () {
       expect(
         resolveCarModeHeightDelta(
-          deltaY: -80,
+          deltaY: 80,
           screenHeight: 800,
           atBottom: true,
         ),
@@ -295,11 +295,7 @@ void main() {
 
     test('非法输入返回 0', () {
       expect(
-        resolveCarModeHeightDelta(
-          deltaY: 80,
-          screenHeight: 0,
-          atBottom: true,
-        ),
+        resolveCarModeHeightDelta(deltaY: 80, screenHeight: 0, atBottom: true),
         0.0,
       );
     });

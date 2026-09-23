@@ -205,8 +205,9 @@ double resolveCarModePanelHeight({
 ///
 /// [deltaY]：本次拖动事件相对上一次的指针位移（逻辑像素，向下为正）。
 /// [screenHeight]：屏幕逻辑高。
-/// [atBottom]：面板是否贴底放置 —— 贴底时指针向下移动会让面板**变高**，
-/// 贴顶时相反（本设计恒贴底，故恒为正号；保留参数以应对未来贴顶）。
+/// [atBottom]：面板是否贴底放置 —— 贴底面板的把手在**上缘**，指针**向上**
+/// 移动（deltaY<0）= 上缘上移 = 面板**变高**（标准 bottom-sheet 手势：
+/// 上滑展开、下滑收起）。贴顶时相反（本设计恒贴底；保留参数应对未来贴顶）。
 ///
 /// 语义与 [resolveCarModeRatioDelta] 完全对齐：用增量而非绝对位置，避免
 /// 每次起拖都瞬间平移「按下点与分界线的差值」。不夹取，夹取由调用方负责。
@@ -217,6 +218,6 @@ double resolveCarModeHeightDelta({
 }) {
   if (!screenHeight.isFinite || screenHeight <= 0) return 0.0;
   if (!deltaY.isFinite) return 0.0;
-  final signed = atBottom ? deltaY : -deltaY;
+  final signed = atBottom ? -deltaY : deltaY;
   return signed / screenHeight;
 }
