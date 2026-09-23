@@ -145,23 +145,8 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
     }
   }
 
-  // —— 行定位（与 DesktopLyricService._findLineIndex 同法） ——
-
-  int _findLineIndex(List<LyricLine> lines, int posMs) {
-    int lo = 0;
-    int hi = lines.length - 1;
-    int idx = -1;
-    while (lo <= hi) {
-      final mid = (lo + hi) >> 1;
-      if (lines[mid].startTime <= posMs) {
-        idx = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    return idx;
-  }
+  // —— 行定位 ——
+  // 二分查找 _findLineIndex 定义在 _LyricPane（唯一消费方）。
 
   @override
   Widget build(BuildContext context) {
@@ -194,7 +179,7 @@ class _CarModeLyricBarState extends State<CarModeLyricBar> {
         return Material(
           color: colorScheme.surface,
           child: InkWell(
-            onTap: song == null ? null : openFullPlayer,
+            onTap: song == null ? null : () => openFullPlayer(context),
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: 12,
@@ -346,6 +331,25 @@ class _LyricPane extends StatelessWidget {
   final List<LyricLine> lines;
   final PlayerProvider player;
   final ColorScheme colorScheme;
+
+  // —— 行定位（与 DesktopLyricService._findLineIndex 同法） ——
+
+  /// 二分定位：最后一个 startTime <= posMs 的行；无命中返回 -1。
+  static int _findLineIndex(List<LyricLine> lines, int posMs) {
+    int lo = 0;
+    int hi = lines.length - 1;
+    int idx = -1;
+    while (lo <= hi) {
+      final mid = (lo + hi) >> 1;
+      if (lines[mid].startTime <= posMs) {
+        idx = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return idx;
+  }
 
   bool _currentLineOverflows(String text, double maxWidth, TextStyle style) {
     if (text.isEmpty || maxWidth <= 0) return false;
