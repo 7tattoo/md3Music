@@ -118,6 +118,13 @@ const double kCarModePanelMinHeight = 140.0;
 /// 不再溢出。44dp 传输侧键 + 上下各 6dp 边距 ≈ 56dp。
 const double kCarModeDockBarMinHeight = 56.0;
 
+/// 紧凑歌词条（[CarModeLyricBar]）的物理下限（dp）。
+///
+/// 歌词条布局 = 歌名/歌手两行 + 传输键行（34dp 触控高），低于本值放不下，
+/// 由 car_mode_panel.dart 回退旧细条 [_CarModeDockBar] 单行渲染。
+/// 更矮的屏上 10% 被 [kCarModeDockBarMinHeight]（56dp）托底时走此回退。
+const double kCarModeDockBarFallbackMin = 80.0;
+
 /// 由屏幕宽度与占比推导面板实际宽度（dp）。
 ///
 /// 规则（顺序不可调换）：

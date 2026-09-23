@@ -13,6 +13,7 @@ import '../../providers/player_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/smart_artwork_image.dart';
 import 'car_mode_layout.dart';
+import 'car_mode_lyric_bar.dart';
 import 'full_player.dart';
 import 'full_player_am.dart';
 import 'full_player_route.dart';
@@ -258,9 +259,18 @@ class _CarModePanelState extends State<CarModePanel>
             ? '${(previewLength / mq.size.width * 100).round()}%'
             : '${(kCarModePanelDefaultRatio * 100).round()}%');
 
-    // 细条模式：底部面板内容高度低于 FullPlayer 物理下限（140dp）时，
-    // 改渲染轻量迷你条，而不是把 FullPlayer 硬塞进小空间（溢出/布局塌陷）。
-    final compactBar = atBottom && contentLength < kCarModePanelMinHeight;
+    // 底部面板两档轻量布局：
+    //   * 歌词条（CarModeLyricBar，2026-09-23）：内容高度 < 25% 屏高（且不足
+    //     FullPlayer 物理下限 140dp 时也归此档）→ [大封面 | 歌名/歌手+传输键 |
+    //     当前行+下一行歌词]。25% 及以上走原 FullPlayer 紧凑布局。
+    //   * 旧细条（_CarModeDockBar）：内容高度 < 80dp（更矮的屏上 10% 被 56dp
+    //     托底）时歌词条两行文字 + 传输键放不下，回退旧单行布局。
+    final lyricBarLimit = math.max(
+      kCarModePanelMinHeight.toDouble(),
+      mq.size.height * 0.25,
+    );
+    final useLyricBar = atBottom && contentLength < lyricBarLimit;
+    final compactBar = atBottom && contentLength < kCarModeDockBarFallbackMin;
     final panel = SizedBox(
       // 底部：横贯全宽、限定高度（含下缘避让区）；侧边：限定宽度、撑满高度。
       width: atBottom ? mq.size.width : contentLength,
@@ -293,8 +303,10 @@ class _CarModePanelState extends State<CarModePanel>
             maxScaleFactor: 1.10,
           ),
         ),
-        child: compactBar
-            ? _CarModeDockBar(height: contentLength)
+        child: useLyricBar
+            ? (compactBar
+                ? _CarModeDockBar(height: contentLength)
+                : CarModeLyricBar(height: contentLength))
             : const _CarModePlayerHost(),
       ),
     );
