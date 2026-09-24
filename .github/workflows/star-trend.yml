@@ -2,7 +2,7 @@ name: Update Star trend
 
 on:
   schedule:
-    - cron: "17 2 * * *"
+    - cron: "27 */2 * * *"
   workflow_dispatch:
 
 permissions:
