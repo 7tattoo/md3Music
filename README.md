@@ -17,7 +17,6 @@
   <a href="#-快速开始">构建指南</a> ·
   <a href="MCP_GUIDE.md">AI 代理接入</a> ·
   <a href="CONTRIBUTING.md">贡献指南</a> ·
-  <a href="#sponsor">赞助支持</a>
 </p>
 
 </div>
@@ -409,19 +408,9 @@ A: Rust 的 TLS 依赖（`ring` crate）需要交叉编译为 Android 平台的 
 A: 该开关仅在魅族 Flyme 机型上出现（由设备能力探测决定），其他品牌不显示。
 
 **Q: 切歌提示只能看MV**
-A: 登录过期，请重新登录
-
-***
+A: 登录过期或者没有登录
 
 <a id="sponsor"></a>
-
-## 💖 赞助支持
-
-如果 MD3Music 对你有帮助，欢迎自愿赞助，支持项目持续开发与维护。
-
-[GitHub Sponsors](https://github.com/sponsors/zzyoxm1) · [爱发电](https://afdian.com/a/md3Music)
-
-***
 
 ## 🤝 致谢
 
