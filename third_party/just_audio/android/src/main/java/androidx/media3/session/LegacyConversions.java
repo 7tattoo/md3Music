@@ -112,7 +112,13 @@ import java.util.concurrent.TimeoutException;
   // 与 legacy MediaSessionCompat.VMM_SUPPORT_EVENT_VALUE 同值（两包私有互不可
   // 见，改值必须同步）。
   static final String VMM_SUPPORT_EVENT_KEY = "vivomusicmix.media.metadata.support_event";
-  static final long VMM_SUPPORT_EVENT_VALUE = 2015L;
+  // MD3Music fork v64：能力位给满 4095（bit0~11 全开，对齐官方 QQ音乐/酷狗/本地音乐
+  // 白名单口径）。原值 2015 = 31|64|128|256|512|1024，缺 32（自定义颜色/互传）与 2048。
+  // 关键事实：原子的三类列表按钮（256 播放列表 / 512 喜欢列表 / 1024 本地列表）读的是
+  // 按包名白名单查出的能力值 e1.a(pkg)；白名单包返回 4095，非白名单包回退到
+  // support_event 本身 —— 所以非白名单包也必须给满 4095，三个列表按钮才点亮。
+  // 能力位与歌词内容解耦（无歌词的曲子同样要带），否则收藏/列表按钮会连带置灰。
+  static final long VMM_SUPPORT_EVENT_VALUE = 4095L;
 
   private static boolean isVivoFamily() {
     return "vivo".equalsIgnoreCase(Build.MANUFACTURER)
