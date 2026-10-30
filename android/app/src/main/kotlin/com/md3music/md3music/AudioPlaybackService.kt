@@ -1266,6 +1266,13 @@ class AudioPlaybackService : Service() {
                 override fun onToggleFavorite() {
                     handleAction(ACTION_TOGGLE_FAVORITE)
                 }
+                // MD3Music fork v64：原子随身听 ❤️ 收藏（岛经 setRating 发 HeartRating，
+                // 带的是"目标态"而不是 toggle 意图）。不走通知栏 toggleFavorite 那条链
+                // —— 它依赖 navigator 上下文，后台引擎（App 未起界面）下取不到就静默
+                // 失败，表现为岛上点红心毫无反应。
+                override fun onSetFavorite(favorite: Boolean) {
+                    dispatchVivoMixRating(favorite)
+                }
                 // MD3Music fork v45：原子随身听循环模式切换（岛 PLAY_MODE 命令）。
                 override fun onPlayMode(mode: Int) {
                     dispatchVivoMixPlayMode(mode)
@@ -1563,6 +1570,21 @@ class AudioPlaybackService : Service() {
                 engine.dartExecutor.binaryMessenger,
                 "com.md3music.md3music/floating_lyric",
             ).invokeMethod("vivoMixPlayMode", mapOf("mode" to mode))
+        }
+    }
+
+    // MD3Music fork v64：岛 ❤️ 收藏目标态 → 转发 Dart（Dart 按目标态收藏/取消）。
+    // 与 dispatchVivoMixPlayMode 同链路：MethodChannel 打到 Flutter 引擎。
+    private fun dispatchVivoMixRating(favorite: Boolean) {
+        val engine = flutterEngine ?: staticFlutterEngine
+        if (engine == null) {
+            return
+        }
+        runOnMainThread {
+            MethodChannel(
+                engine.dartExecutor.binaryMessenger,
+                "com.md3music.md3music/floating_lyric",
+            ).invokeMethod("vivoMixRating", mapOf("favorite" to favorite))
         }
     }
 

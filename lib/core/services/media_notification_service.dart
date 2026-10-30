@@ -173,6 +173,12 @@ class MediaNotificationService {
           final mode = args?['mode'] as int?;
           if (mode != null) onVivoMixPlayMode?.call(mode);
           break;
+        // MD3Music fork v64：原子随身听 ❤️ 收藏（岛 setRating/HeartRating 的目标态）。
+        case 'vivoMixRating':
+          final args = call.arguments as Map<dynamic, dynamic>?;
+          final favorite = args?['favorite'] as bool?;
+          if (favorite != null) onVivoMixRating?.call(favorite);
+          break;
         case 'toggleDesktopLyric':
           onToggleDesktopLyric?.call();
           break;
@@ -342,6 +348,10 @@ class MediaNotificationService {
 
   /// MD3Music fork v45：原子随身听循环模式切换回调（mode 1=列表/2=单曲/3=随机）。
   static void Function(int mode)? onVivoMixPlayMode;
+
+  /// MD3Music fork v64：原子随身听 ❤️ 收藏回调（岛 setRating/HeartRating 目标态）。
+  /// true=收藏，false=取消收藏；由 VivoMixSync 按目标态落地，不做 toggle 猜测。
+  static void Function(bool favorite)? onVivoMixRating;
 
   // 桌面歌词（悬浮窗）相关
   static Future<bool> hasOverlayPermission() async {

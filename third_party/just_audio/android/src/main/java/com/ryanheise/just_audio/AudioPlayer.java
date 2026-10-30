@@ -1385,10 +1385,20 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                     final CustomActionListener listener = sCustomActionListener;
                     if (listener != null
                             && rating instanceof androidx.media3.common.HeartRating) {
-                        boolean want = ((androidx.media3.common.HeartRating) rating).isHeart();
+                        androidx.media3.common.HeartRating heart =
+                                (androidx.media3.common.HeartRating) rating;
+                        // MD3Music fork v64：岛发的是"目标态"（红心=true，取消=false）。
+                        // 未评级（isRated=false）不携带任何意图 → 直接忽略，避免误取消。
+                        if (!heart.isRated()) {
+                            return Futures.immediateFuture(
+                                    new SessionResult(SessionResult.RESULT_SUCCESS));
+                        }
+                        boolean want = heart.isHeart();
                         Boolean current = sVivoFavHeart;
-                        if (current == null || current != want) {
-                            listener.onToggleFavorite();
+                        // 镜像未知(null) → 按目标态直接设置；已知且一致 → no-op
+                        // （岛侧镜像过期时的保护，避免 toggle 语义误切）。
+                        if (current == null || current.booleanValue() != want) {
+                            listener.onSetFavorite(want);
                         }
                     }
                     return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
@@ -2106,6 +2116,10 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     public interface CustomActionListener {
         void onToggleDesktopLyric();
         void onToggleFavorite();
+        // MD3Music fork v64：vivo 原子随身听 ❤️ 收藏——岛经 setRating 发
+        // HeartRating，带的是"目标态"（true=收藏/false=取消）而不是 toggle 意图。
+        // 按目标态落地，避免 toggle 语义在岛侧镜像过期时误切（收藏了却取消不掉）。
+        void onSetFavorite(boolean favorite);
         // MD3Music fork（阶段·修复媒体卡片上一首/下一首）：
         // 原生 PREVIOUS/NEXT 命令拦截后回调，走 App 自有切歌逻辑。
         void onPrevious();
